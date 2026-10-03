@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,chmod,lstat,readFile,writeFile,mkdir,symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {fileURLToPath} from 'node:url';
 import {createDesktopArchive,startDesktopArchiveBridge} from './desktop-archive.mjs';
 import {desktopBridgeRequest} from './bridge-transport.mjs';
 import {createDesktopRelay} from './desktop-proxy.mjs';
@@ -107,7 +110,7 @@ test('installer preserves the selected CLI chain and refuses to stop a running C
   const chainedCli=join(runtimeRoot,'existing-cli'),nodePath=join(runtimeRoot,'node');
   await mkdir(app);for(const p of [chainedCli,nodePath])await writeFile(p,'#!/bin/sh\nexit 0\n',{mode:0o700});
   try{
-    const config=await installDesktopBridge({root,contextThreadId:contextId,app,chainedCli,nodePath});
+    const config=await installDesktopBridge({root,app,chainedCli,nodePath});
     assert((await readFile(config.proxy,'utf8')).includes(chainedCli));assert.equal((await lstat(config.proxy)).mode&0o777,0o700);
     const installed=await import(join(root,'runtime','desktop-archive.mjs'));
     assert.equal(typeof installed.startDesktopArchiveBridge,'function');
@@ -118,4 +121,26 @@ test('installer preserves the selected CLI chain and refuses to stop a running C
     const launches=[];assert.equal((await launchDesktopBridge(root,{run:(bin,args)=>{launches.push({bin,args});return '';}})).phase,'launching');
     assert(launches[1].args.includes('CODEX_CLI_PATH='+config.proxy));
   }finally{await rm(root,{recursive:true,force:true});await rm(runtimeRoot,{recursive:true,force:true});}
+});
+test('proxy starts without a configured task ID and waits for Desktop to load a context',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'kb-p-')),driver=join(root,'app-server'),socketPath=join(root,'desktop.sock');
+  await writeFile(driver,`#!${process.execPath}
+import readline from 'node:readline';
+for await (const line of readline.createInterface({input:process.stdin})){
+  const request=JSON.parse(line);
+  console.log(JSON.stringify({id:request.id,result:request.method==='thread/resume'?{thread:{id:request.params.threadId}}:{}}));
+}
+`,{mode:0o700});
+  const env={...process.env,KANBAN_REAL_CODEX:driver,KANBAN_BRIDGE_SOCKET:socketPath};delete env.KANBAN_CONTEXT_THREAD;
+  const child=spawn(process.execPath,[fileURLToPath(new URL('./desktop-proxy.mjs',import.meta.url)),'app-server'],{env,stdio:['pipe','pipe','pipe']});
+  const lines=[];let output='',diagnostic='';
+  child.stdout.on('data',data=>{output+=data;let end;while((end=output.indexOf('\n'))>=0){lines.push(JSON.parse(output.slice(0,end)));output=output.slice(end+1);}});
+  child.stderr.on('data',data=>diagnostic+=data);
+  t.after(async()=>{if(child.exitCode===null){const ended=once(child,'exit');child.stdin.end();child.kill();await ended;}await rm(root,{recursive:true,force:true});});
+  async function until(check){for(let i=0;i<100;i++){if(await check())return;assert.equal(child.exitCode,null,diagnostic);await new Promise(r=>setTimeout(r,20));}assert.fail('Proxy condition timed out: '+diagnostic);}
+  await until(async()=>!!(await lstat(socketPath).catch(()=>null)));
+  child.stdin.write(JSON.stringify({id:1,method:'initialize',params:{}})+'\n');await until(()=>lines.some(m=>m.id===1));
+  assert.equal((await desktopBridgeRequest(socketPath,'status')).connected,false);
+  child.stdin.write(JSON.stringify({id:2,method:'thread/resume',params:{threadId:contextId}})+'\n');await until(()=>lines.some(m=>m.id===2));
+  assert.equal((await desktopBridgeRequest(socketPath,'status')).connected,true);
 });

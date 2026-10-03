@@ -21,6 +21,7 @@ async function fixture(t){
   const plugin=join(packagePath,'plugins','codex-kanban'),launcher=join(plugin,'launch-mcp');
   await mkdir(plugin,{recursive:true});await mkdir(join(packagePath,'.agents/plugins'),{recursive:true});
   await writeFile(join(packagePath,'README.md'),'Install Codex Kanban');
+  await writeFile(join(packagePath,'Install Codex Kanban.command'),'#!/bin/sh\nexit 0\n',{mode:0o755});
   await writeFile(join(packagePath,'.agents/plugins/marketplace.json'),JSON.stringify({name:'codex-kanban',plugins:[{name:'codex-kanban',source:{source:'local',path:'./plugins/codex-kanban'}}]}));
   await writeFile(join(plugin,'plugin.json'),JSON.stringify(manifest));await writeFile(launcher,'#!/bin/sh\nexit 0\n',{mode:0o755});
   return {root,origin,seed,repository,packagePath,plugin,launcher};
@@ -33,6 +34,7 @@ test('shallow CI checkout publishes hidden metadata, executable launcher and his
   assert.equal(git(f.origin,'rev-parse','marketplace^'),before,'publication preserves marketplace history');
   assert.match(git(f.origin,'show','marketplace:.agents/plugins/marketplace.json'),/codex-kanban/);
   assert.match(git(f.origin,'ls-tree','marketplace','plugins/codex-kanban/launch-mcp'),/^100755/);
+  assert.match(git(f.origin,'ls-tree','marketplace','Install Codex Kanban.command'),/^100755/);
   assert(!git(f.origin,'ls-tree','-r','--name-only','marketplace').includes('obsolete.txt'));
   assert.equal(git(f.repository,'rev-parse','HEAD'),head);assert.equal(git(f.repository,'status','--porcelain'),'');
   assert.equal(git(f.repository,'worktree','list','--porcelain').split('worktree ').length,2);
