@@ -1,8 +1,14 @@
-# Codex 看板 0.4.33
+# Codex 看板 0.4.40
 
-界面统一使用英文；用户任务名称、摘要及自定义分组保留原文。参考 Linear 的深色任务工作台：紧凑侧边栏、按原生分组排列的卡片、看板／列表切换和右侧详情面板。`index.html` 可直接打开；支持搜索、主机筛选、排序和分组折叠。本机任务点击卡片可通过官方 `codex://threads/<thread-id>` 链接打开聊天，卡片右下角的更多按钮展开任务操作菜单，可从中查看详情。无法生成有效直达链接的任务保留复制打开指令及剪贴板失败后的文本框。
+无项目的卡片不显示 Set project 占位文字；悬停卡片或键盘聚焦时只显示淡色文件夹按钮，提示 Set project，点击继续打开项目菜单。菜单展开期间保留按钮，预留按钮尺寸避免卡片跳动；触屏也可通过右下角 ⋯ → Project 设置。有项目时保留文件夹图标及项目名称。
 
-界面只使用原生分组，移除 Runtime status 筛选／分组与独立的 Local workflow。侧栏只保留 All tasks、Unread replies、Pinned tasks；页头合并为当前视图名称、结果数量和刷新图标，不再重复展示标题、面包屑、常驻说明和页脚统计。本机卡片隐藏重复的 Local 标签，其他主机继续显示。读取时间、运行快照时间和覆盖范围可在刷新图标提示中查看；刷新图标主动读取最新分组，不重新加载页面或清除当前 Undo 入口。连接失败、只读状态、主机不可用和读取缺口仍有明确提示。
+头部左侧显示标题、结果数量和未读收件箱；未读总数用蓝色数字角标显示，不随搜索或主机筛选变化，零未读隐藏角标但保留切换入口，超过 99 用 99+ 显示且提示保留实际数量。点击收件箱切换仅未读／全部，开启时高亮。标题和数量按实际文字宽度排列，保留 10px 间距。切换时两处宽度均以 160ms 线性过渡，标题同步淡入淡出，收件箱随文字宽度平滑移动；使用等宽数字。测量独立文字层，避免把动画中的容器宽度作为目标；隐藏状态不写入零宽度。连续切换由 CSS 从当前过渡状态反向衔接，减少动态效果时取消过渡。宽屏搜索独立居中；Board／List 合为完整分段控件，Options 以独立按钮和间距区分。Host、Sort、Theme 和 Refresh tasks 收入 Options；删除常驻排序说明，拖动提示仅在 Manual order 选中时于面板内展示。主机标签和 Clear filters 放在搜索下方，清除筛选保留排序及布局。点击外部、焦点移出或 Esc 关闭面板；Esc 返回触发按钮。面板展开期间暂停轮询应用及快照过期重绘；刷新主动关闭面板并在 Options 上显示进度。窄屏搜索独占一行，极窄屏布局控件另起一行。
+
+Options 面板中的 Theme 提供 System、Light、Dark 三种模式，默认 System；localhost 跟随系统色彩偏好，侧栏 MCP App 优先跟随 Codex 主机主题通知。手动选择后固定主题；选择按浏览器来源保存并同步同源标签页，存储不可用时仍可切换并提示。浅色与深色覆盖看板、列表、详情、菜单和 Undo 提示，并使用对应的状态色。看板内部侧栏及折叠按钮已移除，项目标签去掉徽章边框，筛选与布局控件减少外框；分组项目视图保留为单个文件夹按钮，选中时高亮。列宽、拖放、快捷操作及原生写入规则保持原有实现。
+
+界面统一使用英文；用户任务名称、摘要及自定义分组保留原文。参考 Linear 的深色任务工作台：完整宽度的任务区域、按原生分组排列的卡片、看板／列表切换和右侧详情面板。`index.html` 可直接打开；支持搜索、主机筛选、排序和分组折叠。本机任务点击卡片可通过官方 `codex://threads/<thread-id>` 链接打开聊天，卡片右上角悬停显示 Pin／Archive，右下角 ⋯ 展开项目、分组及详情菜单。无法生成有效直达链接的任务保留复制打开指令及剪贴板失败后的文本框。
+
+界面只使用原生分组，移除 Runtime status 筛选／分组与独立的 Local workflow。移除看板内部侧边栏，只在标题旁提供未读收件箱按钮；默认展示全部任务，开启后仅显示未读任务，关闭后恢复全部任务，筛选在轮询及 Board／List 切换中保持。置顶任务继续放在 Pinned 分组；页头合并为当前视图名称、结果数量和常用操作，不再重复展示标题、面包屑、常驻说明和页脚统计。本机卡片隐藏重复的 Local 标签，其他主机继续显示。读取时间、运行快照时间和覆盖范围可在 Refresh tasks 按钮提示中查看；Refresh tasks 按钮主动读取最新分组，不重新加载页面或清除当前 Undo 入口。连接失败、只读状态、主机不可用和读取缺口仍有明确提示。
 
 详情的 Open chat 提前到标题下方；仅无法直接打开的任务显示 Copy open instruction。常用属性只保留主机、更新时间和项目，原生 Group 选择器保留；任务 ID、主机 ID、工作目录、分组来源及运行观察记录默认折叠在 Technical information 中。移除重复 Group 属性和底部 Close，右上角关闭、Esc 和点击遮罩继续可用。
 
@@ -14,9 +20,9 @@ Group 禁用时显示具体原因，包括项目归属无法核验、远程任�
 
 快捷键：`/` 聚焦搜索，`Cmd/Ctrl B` 切换看板和列表，`Esc` 关闭详情。原生跳转的最终行为由浏览器和 Codex 客户端处理，浏览器自动化无法验证自定义协议跳转。
 
-侧栏常规宽度为 176px，窄窗口继续使用 58px 图标栏。Board 的折叠分组缩为 48px 竖栏，保留名称、数量、展开按钮和原有排序／拖放入口；List 折叠分组仍占整行。
+Board 的每列独立滚动，保留列头；List 使用整页滚动。列滚动位置按原生分组保存，刷新、折叠和布局切换后恢复。折叠分组缩为 48px 竖栏，保留名称、数量、展开按钮和排序／拖放入口。
 
-卡片底部只保留时间、状态和一个更多操作入口，不为 Pin／Archive 占用标题或时间行宽度。菜单展开后以图标和文字显示可用的 Pin／Unpin、Archive 与 View details；远程或不可编辑任务只提供允许的操作。Board 和 List 使用相同菜单；支持 Enter／Space 展开、Tab 切换操作、Esc 关闭并回到入口，点击外部也会关闭，同一时间只展开一个菜单。靠近看板顶部时向下展开，避免列表首行菜单被裁切。Pin／Unpin 通过已连接的 Codex Desktop `move_thread_to_sidebar_section` 执行。Pin 使用 Desktop 保留的 pinned ID，Unpin 传 null 清除任务自身分组；每次均回读本机 section 和项目归属确认。未连接新桥接时不显示按钮，不退回独立写入通道。项目容器置顶与任务自身置顶分别识别，任务按钮不移动或取消置顶项目容器。
+Pin／Unpin 与 Archive 图标直接放在卡片右上角，默认隐藏，鼠标悬停或键盘焦点进入卡片时以 160ms 过渡显示；触屏保持可见。置顶图标使用实心样式，未置顶使用轮廓样式，远程或不可编辑的置顶任务仅显示只读标记。卡片左下角显示项目，非本机任务另显示主机图标，右下角显示时间及「⋯」操作菜单。Board 和 List 使用相同操作，图标具有操作提示和可访问名称。Pin／Unpin 通过已连接的 Codex Desktop `move_thread_to_sidebar_section` 执行。Pin 使用 Desktop 保留的 pinned ID，Unpin 传 null 清除任务自身分组；每次均回读本机 section 和项目归属确认。未连接新桥接时不显示按钮，不退回独立写入通道。项目容器置顶与任务自身置顶分别识别，任务按钮不移动或取消置顶项目容器。
 
 Pin／Unpin 在读取分组目录后、写入前再次核对任务自身分组；如果 Sidebar Flow 已移动任务，操作会停止并提示刷新，避免清除较新的分类。
 
@@ -80,6 +86,8 @@ node setup-desktop-bridge.mjs --context <existing-local-thread-id>
 
 已通过模拟 MCP、私有 socket、HTTP Archive／Undo 和安装器测试；隔离的真实 App Server 实验还复现了占用写入者拒绝，并通过同一写入连接完成归档和恢复，未启动模型任务、未更改现有用户任务。该实验的 Desktop MCP 分发部分仍为模拟，真实客户端工具授权及侧边栏即时刷新必须在使用启动器后另行验收。私有 socket 若因异常退出残留，应在确认代理已退出后清理该目录内的 desktop.sock；安装器不会替换仍在运行的连接。
 
+卡片右下角使用「⋯」打开就地菜单，提供 Pin／Unpin、Project、Section、View details 和 Archive；原有右上角 Pin／Archive 快捷按钮保留。Project 和 Section 悬停时在旁边展开，保留点击、触屏和方向键操作；悬停不抢键盘焦点，移向子菜单时保留短暂缓冲。子菜单自动向可用的一侧展开并限制在视口内，窄屏提供 Back。直接选择并保存，当前项带选中标记，不打开详情；不可写项目和分组置灰并说明原因。项目列表底部提供带文件夹移除图标的「Remove from 项目名」，无归属时隐藏移除项；详情选择器也可移除。HTTP 使用 null 表示清除，转换为原生协议的空 projectId，写前核对来源、写后回读确认；原生项目目录可用时，包括 null 在内的项目字段为权威，旧快照不会恢复已移除归属；只有明确不支持项目目录的旧读取器回退桌面快照。目录临时失败保留上一份界面数据。工作目录与自身分组不改变。图标按原生菜单的文件夹移动、文件夹移除、斜向图钉、列表及归档样式绘制。菜单支持方向键、Home／End、Esc 及 Tab，点击外部、滚动看板或切换布局时关闭。菜单打开时暂缓轮询刷新，避免打断选择。此菜单使用已有接口，不直接调用 Codex 原生菜单，也未增加 Rename、Unread、Fork 或 Share。
+
 ## 使用
 
 需要 macOS、Node.js 22 或更新版本，以及已安装的 Codex Desktop。独立网页预览使用 Node 内置模块；MCP 插件的开发和测试需要安装 SDK 与构建依赖，安装包已内置所需运行库。首次克隆后，在项目目录执行以下命令；已有 snapshot.json 时不要覆盖它：
@@ -88,7 +96,7 @@ node setup-desktop-bridge.mjs --context <existing-local-thread-id>
 cp -n snapshot.example.json snapshot.json
 ```
 
-空快照也可读取本机任务与原生分组；连接客户端桥接后可持续读取本机运行状态。项目标签和其他主机信息需由宿主工具补充。snapshot.json、生成页面、截图和本机连接配置均不提交到 GitHub。
+空快照也可读取本机任务与原生分组；连接客户端桥接后可持续读取本机运行状态。本机项目目录和归属由原生 API 读取，其他主机信息由宿主工具补充。snapshot.json、生成页面、截图和本机连接配置均不提交到 GitHub。
 
 ```sh
 node refresh-local.mjs
@@ -96,11 +104,11 @@ node --test *.test.mjs
 node serve.mjs
 ```
 
-本地预览：<http://127.0.0.1:8876>。服务器仅监听本机；PR 查询通过 gh 访问 GitHub，只提供仓库、分支或提交 SHA，不发送任务标题与摘要。同源检查和请求限制保留。需要当前官方 Codex CLI，以及本机元数据读取权限。常驻只读 App Server 只调用初始化、分组与任务读取；显式 Archive／Undo 使用只增加 `thread/archive` 与 `thread/unarchive` 的连接；Pin／Unpin、跨组拖动与详情修改复用 Desktop 桥接，只读连接负责前后验证，允许三个流程分组、Pinned 及清除自身分组。独立写入控制器仍作为隔离测试基础，不是 HTTP 分组写入的回退通道。不开始模型任务，也不修改 Sidebar Flow 配置。更新运行状态时，让 Codex 使用 `list_threads` 重新保存带采集时间的 snapshot.json；服务会在下一次读取时载入该快照。
+本地预览：<http://127.0.0.1:8876>。服务器仅监听本机；PR 查询通过 gh 访问 GitHub，只提供仓库、分支或提交 SHA，不发送任务标题与摘要。同源检查和请求限制保留。需要当前官方 Codex CLI，以及本机元数据读取权限。常驻只读 App Server 只调用初始化、项目、分组与任务读取；项目选择与移除使用仅开放 thread/metadata/update 的独立连接，写前检查目标与原归属，写后回读确认，不修改 cwd、运行状态或项目容器；显式 Archive／Undo 使用只增加 `thread/archive` 与 `thread/unarchive` 的连接；Pin／Unpin、跨组拖动与详情修改复用 Desktop 桥接，只读连接负责前后验证，允许三个流程分组、Pinned 及清除自身分组。独立写入控制器仍作为隔离测试基础，不是 HTTP 分组写入的回退通道。不开始模型任务，也不修改 Sidebar Flow 配置。更新运行状态时，让 Codex 使用 `list_threads` 重新保存带采集时间的 snapshot.json；服务会在下一次读取时载入该快照。
 
 ## 插件范围
 
-此版本提供本地 STDIO MCP App。`open_board` 注册全局 sidebar 入口，UI 资源为 `ui://kanban/board/v1.html`，MIME 为 `text/html;profile=mcp-app`。看板通过 MCP Apps SDK 的宿主 bridge 调用工具，iframe 不请求 localhost API。六个工具只对 App 可见；写操作还需要当前服务签发的 action token。HTTP 与 MCP 复用服务实现；写锁、回读和 Undo registry 在同一服务实例内共享，独立进程之间不互通。
+此版本提供本地 STDIO MCP App。`open_board` 注册全局 sidebar 入口，UI 资源为 `ui://kanban/board/v1.html`，MIME 为 `text/html;profile=mcp-app`。看板通过 MCP Apps SDK 的宿主 bridge 调用工具，iframe 不请求 localhost API。七个工具只对 App 可见；写操作还需要当前服务签发的 action token。HTTP 与 MCP 复用服务实现；写锁、回读和 Undo registry 在同一服务实例内共享，独立进程之间不互通。
 
 插件的 `logo/composerIcon` 配置用于插件展示。侧栏入口从 MCP 工具或服务的 `icons` 读取图标；服务通过内嵌 PNG 提供 Kanban 图标，无需外部网络或访问本机文件路径。
 
@@ -118,7 +126,7 @@ npm run test:ui
 
 浏览器宿主同时模拟 Codex 强制透明的 body 背景；`KANBAN_TEST_HOST_THEME=light npm run test:ui` 用浅色宿主验证看板自身深色底色，不受透明画布影响。
 
-`test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、六个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
+`test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、七个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
 
 本机安装：
 
@@ -130,7 +138,7 @@ codex plugin add codex-kanban@codex-kanban-local
 
 `prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备成功后保留上一份安装包；发布失败时恢复旧包，marketplace 文件通过最后一次原子替换发布。它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex 看板」。CLI 安装成功不能替代入口点击验收。
 
-插件的用户数据默认在 `$CODEX_HOME/kanban/snapshot.json`（未设置 CODEX_HOME 时为 `~/.codex/kanban/snapshot.json`），可用 `KANBAN_DATA_DIR` 指定目录。缺少快照仍可读取本机任务与分组；项目目录、其他主机和备用运行快照由宿主 `list_threads` / `list_projects` 更新。服务不写插件缓存。MCP 和原 localhost 网页的本地偏好属于不同存储来源，不自动迁移；iframe 存储不可用时沿用现有错误提示。
+插件的用户数据默认在 `$CODEX_HOME/kanban/snapshot.json`（未设置 CODEX_HOME 时为 `~/.codex/kanban/snapshot.json`），可用 `KANBAN_DATA_DIR` 指定目录。缺少快照仍可读取本机任务与分组；项目目录从原生 API 读取；其他主机和备用运行快照由宿主 `list_threads` / `list_projects` 更新。服务不写插件缓存。MCP 和原 localhost 网页的本地偏好属于不同存储来源，不自动迁移；iframe 存储不可用时沿用现有错误提示。
 
 归档与 Undo 令牌绑定 MCP 服务实例。刷新数据保留恢复入口，丢失动作响应时下次读取可恢复 Undo；一个 UI 恢复成功后，其他 UI 下次刷新移除相应入口。关闭整个 MCP 服务后，使用客户端归档列表恢复。请求取消或服务关闭都会取消尚在预检中的操作，不执行写入；已经派发的写入继续回读确认，不自动重试。多 UI 操作共用互斥锁，覆盖动作后的回读。
 

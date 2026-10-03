@@ -7,6 +7,16 @@ import {AppBridge} from '@modelcontextprotocol/ext-apps/app-bridge';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {createMcpFetch} from './mcp-ui-transport.mjs';
 
+test('MCP transport forwards project assignment and removal with the current app token',async()=>{
+  const calls=[],fetch=createMcpFetch({callServerTool:async params=>{calls.push(params);return {structuredContent:{projectId:params.arguments.projectId},content:[]};}},Promise.resolve());
+  for(const projectId of ['native-project',null]){
+    const response=await fetch('/api/project',{method:'POST',headers:{'X-Kanban-Token':'token'},body:JSON.stringify({threadId:'fixture',hostId:'local',projectId,expectedProjectId:null})});
+    assert(response.ok);assert.equal((await response.json()).projectId,projectId);
+  }
+  assert(calls.every(call=>call.name==='set_project'&&call.arguments.actionToken==='token'));
+  assert.equal(calls.length,2);
+});
+
 test('real SDK handshake completes before app tools, including app error responses',async()=>{
   const app=new App({name:'kanban-fixture',version:'1'},{},{autoResize:false});
   const bridge=new AppBridge(null,{name:'fixture-host',version:'1'},{serverTools:{}},{hostContext:{displayMode:'fullscreen'}});
@@ -38,13 +48,29 @@ test('bridge waits for initialization, propagates failed handshake and rejects m
   const write=createMcpFetch({async callServerTool(_,opts){assert.equal(opts.timeout,180000);return {structuredContent:{archived:true},content:[]};}},Promise.resolve());
   assert.equal((await write('/api/archive',{method:'POST',headers:{'X-Kanban-Token':'token'},body:'{}'})).ok,true);
 });
+test('native host appearance arrives after initialization and stays current through SDK notifications',async()=>{
+  const app=new App({name:'theme-fixture',version:'1'},{},{autoResize:false});
+  const bridge=new AppBridge(null,{name:'theme-host',version:'1'},{serverTools:{}},{hostContext:{theme:'light'}});
+  const [host,ui]=InMemoryTransport.createLinkedPair();await bridge.connect(host);
+  const events=[],code=await readFile(new URL('./mcp-ui.mjs',import.meta.url),'utf8');
+  const syncCode=code.slice(code.indexOf('function syncHostTheme'),code.indexOf('app.onteardown'));
+  let release;const changed=new Promise(resolve=>release=resolve);
+  const ready=app.connect(ui);
+  const context=createContext({app,ready,CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},
+    window:{dispatchEvent(event){assert.equal(event.type,'kanban-host-theme');events.push(event.detail);if(event.detail==='dark')release();}}});
+  new Script(syncCode).runInContext(context);
+  try{
+    await ready;await Promise.resolve();assert.deepEqual(events,['light']);
+    await bridge.sendHostContextChange({theme:'dark'});await changed;assert.deepEqual(events,['light','dark']);
+  }finally{await app.close();await bridge.close();}
+});
 test('MCP UI can refresh on sandbox protocols and recover Undo without reloading',async()=>{
   const html=await readFile(new URL('./ui.html',import.meta.url),'utf8');
   const code=html.match(/async function refreshNativeBoard[\s\S]*?(?=async function moveNative)/)[0];
   let applied=0,recovered=0;
   const context=createContext({kanbanTransport:{},location:{protocol:'about:'},taskActionPending:()=>false,
-    nativeReads:0,nativeEpoch:0,nativePending:false,draggedKey:null,draggedGroup:null,
-    document:{hidden:false,activeElement:null},nativeToken:null,
+    nativeReads:0,nativeEpoch:0,nativePending:false,taskMenu:null,draggedKey:null,draggedGroup:null,
+    document:{hidden:false,activeElement:null,getElementById:()=>({open:false})},nativeToken:null,
     fetch:async()=>({ok:true,json:async()=>({csrf:'token',board:{tasks:[]},undoArchives:[{undoToken:'recover'}]})}),
     applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){}});
   const refresh=new Script(code+'\nrefreshNativeBoard').runInContext(context);await refresh();

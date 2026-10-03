@@ -7,6 +7,7 @@ import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
 import {desktopBridgeRequest} from './bridge-transport.mjs';
 import {readBoardRuntime} from './desktop-runtime.mjs';
 import {createGitStatusReader} from './git-status.mjs';
+import {setLocalProject} from './project.mjs';
 
 // Installed plugins keep user data outside the immutable plugin package.
 export function createBoardSource({snapshotPath=new URL('./snapshot.json',import.meta.url),openReader=openLocalReader,
@@ -35,7 +36,7 @@ const failure=(message,status)=>Object.assign(Error(message),{status});
 
 // HTTP and MCP share one write lock and one token-bound Undo registry.
 export function createKanbanService({getBoard,archiveTask=archiveLocalTask,restoreTask=restoreArchivedTask,
-  pinTask=null,moveTask=null,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
+  pinTask=null,moveTask=null,setProject=setLocalProject,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
   const csrf=randomUUID(),undoArchives=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
   const desktopStatus=async()=>{
     if(desktopBridgeSocket)try{return await bridgeRequest(desktopBridgeSocket,'status',{},1500);}catch{}
@@ -45,7 +46,7 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     let value=await getBoard();const status=await desktopStatus(),desktopArchiveConnected=status.connected===true,
       desktopGroupsConnected=desktopArchiveConnected&&status.groupActions===true;
     if(desktopArchiveConnected&&status.runtimeAvailable===true)value=await readBoardRuntime(value,desktopBridgeSocket,{request:bridgeRequest});
-    return {...value,sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,pinLocal:desktopGroupsConnected,
+    return {...value,sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,pinLocal:desktopGroupsConnected,projectLocal:value.sync?.projectCatalogConnected===true,
       moveTransport:desktopGroupsConnected?'desktop':null,desktopGroupsConnected,
       archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
   };
@@ -59,7 +60,7 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     async action(name,params,{signal:requestSignal}={}){
       if(closed)throw failure('The board connection is closed.',503);
       const signal=requestSignal?AbortSignal.any([requestSignal,lifetime.signal]):lifetime.signal;
-      if(!['move','pin','archive','unarchive'].includes(name))throw failure('Unknown task action.',400);
+      if(!['project','move','pin','archive','unarchive'].includes(name))throw failure('Unknown task action.',400);
       if(mutating)throw failure('Another task action is in progress.',409);
       const undo=name==='unarchive'?undoArchives.get(params?.undoToken):null;
       if(name==='unarchive'&&!undo)throw failure('Undo is no longer available here. Restore this task from Codex archived tasks.',409);
@@ -74,6 +75,10 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
             :restoreTask({threadId:undo.threadId,hostId:'local'},{signal});
           const current=await getBoard();
           checkCanceled();
+          if(name==='project'){
+            if(current.sync?.projectCatalogConnected!==true)throw failure('Local projects are unavailable. Refresh and try again.',503);
+            return setProject(params,current,{signal});
+          }
           archivedTask=current.tasks.find(t=>t.id===params?.threadId&&t.hostId==='local');
           const status=await desktopStatus();
           checkCanceled();
@@ -95,6 +100,9 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
         try{
           result=await write();
           if(name==='move'&&(result.threadId!==params.threadId||result.sectionId!==params.sectionId||typeof result.changed!=='boolean'))throw Error('Move not verified');
+          if(name==='project'){
+            if(result.threadId!==params.threadId||result.projectId!==params.projectId||typeof result.changed!=='boolean')throw Error('Project not verified');
+          }
           if(undo){
             if(result.restored!==true||result.threadId!==undo.threadId)throw Error('Restore not verified');
             undoArchives.delete(params.undoToken);

@@ -122,7 +122,7 @@ function detailUi(){
     DATA:{tasks:[pinned],sections:[...sections.map(s=>({sectionId:s.id,name:s.name})),{sectionId:'chats',name:'Tasks'}]},selectedTask:pinned,
     nativeConnected:true,nativeWritable:true,nativeToken:'csrf',nativePending:false,nativeMessage:'Connected',
     taskActionPending:()=>context.nativePending,taskKey:t=>t.hostId+':'+t.id,
-    updateRuntimeDetail(){},appendGitDetail(){},hostName:()=> 'Local',date:()=> 'Now'});
+    updateRuntimeDetail(){},updateProjectPicker(){},appendGitDetail(){},hostName:()=> 'Local',date:()=> 'Now'});
   new Script(html.match(/function nativeCanEditGroup\([\s\S]*?(?=function nativeNotice)/)[0]
     +html.match(/function updateDetailProperties\([\s\S]*?(?=function showDetail)/)[0]
     +html.match(/async function changeDetailGroup\([\s\S]*?(?=\$\('detail-native'\).onchange)/)[0]).runInContext(context);
@@ -156,7 +156,7 @@ test('project-inherited details and dragging allow task-only grouping while reta
   assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');assert.equal($('detail-native').disabled,false);
   assert.equal(context.nativeCanMove(project),true);assert.match($('native-edit-hint').textContent,/project stays in place/);
   assert.equal($('detail-native').children.filter(o=>o.textContent==='Ungrouped').length,1);
-  assert($('detail-meta').children.some(n=>n.tag==='dd'&&n.textContent==='Tools'));
+  assert.equal($('detail-title').textContent,project.title);
   assert.equal(project.nativeSectionId,'threads');assert.equal(project.localSectionId,null);
   const inheritedPin={...project,nativeSectionId:'local-pin',pinned:true,nativeTaskPinned:false};
   context.updateDetailProperties(inheritedPin);assert.equal(f.group(),'Pinned');assert.equal($('detail-native').value,'local-pin');

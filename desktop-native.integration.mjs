@@ -8,8 +8,9 @@ import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
 import {createDesktopRelay} from './desktop-proxy.mjs';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
-import {openLocalReader} from './local-read.mjs';
+import {openLocalReader,openLocalProjectEditor} from './local-read.mjs';
 import {archiveLocalTask} from './archive.mjs';
+import {setLocalProject} from './project.mjs';
 import {createKanbanServer} from './serve.mjs';
 import {createLocalBoard} from './local-board.mjs';
 
@@ -46,6 +47,9 @@ const desktopRpc=(method,params)=>new Promise((resolve,reject)=>{const id='deskt
 try{
   await desktopRpc('initialize',{clientInfo:{name:'kanban_isolated_desktop_archive_lab',version:'1'},capabilities:{experimentalApi:true}});
   const {project}=await desktopRpc('project/create',{idempotencyKey:randomUUID(),name:'Disposable Kanban project',roots:[{path:fixtureHome}]});
+  const secondRoot=await realpath(await mkdtemp(join(fixtureHome,'project-b-')));
+  const {project:secondProject}=await desktopRpc('project/create',{idempotencyKey:randomUUID(),name:'Disposable second Kanban project',roots:[{path:secondRoot}]});
+  assert.notEqual(project.id,secondProject.id);
   const {thread}=await desktopRpc('thread/start',{cwd:fixtureHome,ephemeral:false,projectId:project.id});
   assert.equal(thread.projectId,project.id);
   assert(/^[0-9a-f-]{36}$/.test(thread.id));
@@ -67,7 +71,15 @@ try{
   const socketPath=join(fixtureHome,'desktop.sock');
   stop=await startDesktopArchiveBridge({socketPath,ready:()=>relay.ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
     request:(method,params)=>relay.request(method,params)});
-  server=createKanbanServer({port:0,getBoard,desktopBridgeSocket:socketPath});
+  const projectWrites=[];
+  server=createKanbanServer({port:0,getBoard,desktopBridgeSocket:socketPath,setProject:(params,board,{signal})=>setLocalProject(params,board,{signal,open:async()=>{
+    const client=await openLocalProjectEditor();
+    return {...client,request(method,params){
+      assert(['project/list','thread/read','thread/metadata/update'].includes(method));
+      if(method==='thread/metadata/update')projectWrites.push(structuredClone(params));
+      return client.request(method,params);
+    }};
+  }})});
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
   const port=server.address().port;
   const base='http://127.0.0.1:'+port,get=await(await fetch(base+'/api/board')).json();assert.equal(get.board.sync.archiveTransport,'desktop');assert.equal(get.board.sync.moveTransport,'desktop');
@@ -79,6 +91,28 @@ try{
     const matches=existingSections.filter(s=>s.name===name);assert(matches.length<=1);
     flow[name]=matches[0]?.id??(await desktopRpc('threadSection/create',{name})).section.id;
   }
+  // Exercise the actual project endpoint with the App Server's initial project
+  // assignment. Keep a non-default section throughout to catch side effects.
+  await desktopRpc('thread/section/move',{threadId:thread.id,sectionId:flow['For Review']});
+  const beforeProject=(await nativeRpc('thread/read',{threadId:thread.id,includeTurns:true})).thread;
+  let expectedProjectId=beforeProject.projectId;
+  assert.equal(expectedProjectId,project.id);
+  for(const projectId of [null,project.id,secondProject.id,null,project.id]){
+    const writesBefore=projectWrites.length,response=await post('/api/project',{...params,projectId,expectedProjectId}),changed=await response.json();
+    assert.equal(response.status,200,JSON.stringify(changed));assert.equal(changed.projectId,projectId);assert.equal(changed.changed,true);
+    assert.equal(projectWrites.length,writesBefore+1);
+    assert.deepEqual(projectWrites.at(-1),{threadId:thread.id,projectId:projectId??''});
+    const after=(await nativeRpc('thread/read',{threadId:thread.id,includeTurns:true})).thread;
+    assert.equal(after.projectId,projectId);assert.equal(after.cwd,beforeProject.cwd);assert.deepEqual(after.section,beforeProject.section);
+    assert.deepEqual(after.status,beforeProject.status);assert.deepEqual(after.turns,beforeProject.turns);
+    assert.equal(changed.board.tasks[0].localProjectId,projectId);assert.equal(changed.board.tasks[0].projectId,projectId);
+    const polled=(await(await fetch(base+'/api/board')).json()).board.tasks[0];
+    assert.equal(polled.localProjectId,projectId);assert.equal(polled.projectId,projectId);
+    assert.equal(polled.localSectionId,flow['For Review']);expectedProjectId=projectId;
+  }
+  const same=await post('/api/project',{...params,projectId:project.id,expectedProjectId:project.id});
+  assert.equal(same.status,200);assert.equal((await same.json()).changed,false);assert.equal(projectWrites.length,5);
+  await desktopRpc('thread/section/move',{threadId:thread.id,sectionId:null});
   // Native group writes do not require taking over the active thread writer.
   let expectedSectionId=null;
   for(const name of ['For Later','In Progress','For Review']){
@@ -104,7 +138,7 @@ try{
   assert.equal(inherited.placementSource,'desktopProject');assert.equal(inherited.localSectionId,null);assert.equal(inherited.nativeSectionId,flow.Pinned);
   const reviewResponse=await post('/api/move',{...params,sectionId:flow['For Review'],expectedSectionId:null}),review=await reviewResponse.json();
   assert.equal(reviewResponse.status,200,JSON.stringify(review));assert.equal(review.board.tasks[0].localSectionId,flow['For Review']);
-  assert.equal(review.board.tasks[0].projectId,project.id);assert.equal(review.board.tasks[0].projectName,'Lab project');
+  assert.equal(review.board.tasks[0].projectId,project.id);assert.equal(review.board.tasks[0].projectName,project.name);
   const clearedResponse=await post('/api/move',{...params,sectionId:null,expectedSectionId:flow['For Review']}),cleared=await clearedResponse.json();
   assert.equal(clearedResponse.status,200,JSON.stringify(cleared));assert.equal(cleared.board.tasks[0].localSectionId,null);
   assert.equal(cleared.board.tasks[0].nativeSectionId,flow.Pinned);assert.equal(cleared.board.tasks[0].nativeTaskPinned,false);
@@ -117,7 +151,8 @@ try{
   assert.equal((await(await fetch(base+'/api/board')).json()).board.tasks[0].localSectionId,flow['For Later']);
   const archived=await(await post('/api/archive',params)).json();assert.equal(archived.archived,true);assert.equal(archived.board.tasks.length,0);
   const restored=await(await post('/api/unarchive',{undoToken:archived.undoToken})).json();assert.equal(restored.restored,true);assert.equal(restored.board.tasks[0].id,thread.id);
-  console.log(JSON.stringify({isolated:true,realAppServer:true,simulatedDesktopMcp:true,simulatedProjectSnapshot:true,realNativeProjectPreserved:true,occupiedWriterReproduced:true,desktopGroupTransportVerified:true,desktopRuntimeReadVerified:true,nativeGroupMovesVerified:true,desktopPinUnpinVerified:true,projectInheritedTaskMoveVerified:true,clearedTaskRestoresProjectPlacement:true,detailPinnedAndTasksMovesVerified:true,laterNativeMoveFollowed:true,bridgeArchiveVerified:true,bridgeUndoVerified:true,modelTurnsStarted:0}));
+  assert.equal(projectWrites.length,5);
+  console.log(JSON.stringify({isolated:true,realAppServer:true,simulatedDesktopMcp:true,simulatedProjectSnapshot:true,realNativeProjectPreserved:true,realNativeProjectSetChangeClearVerified:true,projectMetadataWrites:projectWrites.length,projectCwdSectionRuntimePreserved:true,occupiedWriterReproduced:true,desktopGroupTransportVerified:true,desktopRuntimeReadVerified:true,nativeGroupMovesVerified:true,desktopPinUnpinVerified:true,projectInheritedTaskMoveVerified:true,clearedTaskRestoresProjectPlacement:true,detailPinnedAndTasksMovesVerified:true,laterNativeMoveFollowed:true,bridgeArchiveVerified:true,bridgeUndoVerified:true,modelTurnsStarted:0}));
 }finally{
   if(server)await new Promise(r=>server.close(r));if(stop)await stop();relay.close();
   for(const p of pending.values())clearTimeout(p.timer);

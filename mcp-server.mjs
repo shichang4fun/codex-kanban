@@ -24,7 +24,7 @@ const result=payload=>({content:[{type:'text',text:payload.error??(payload.board
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.33',icons:boardIcons},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.40',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}
@@ -40,6 +40,7 @@ export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./d
     inputSchema:z.object({}).strict(),annotations:{readOnlyHint:true,openWorldHint:false},_meta:appOnly
   },read);
   const actions=[
+    ['set_project','project','Assign or remove a local task project without changing its working directory',{...taskFields,projectId:z.string().min(1).max(128).nullable(),expectedProjectId:z.string().min(1).max(128).nullable()}],
     ['move_task','move','Move task to a verified native group',{...taskFields,sectionId:z.string().nullable(),expectedSectionId:z.string().nullable()}],
     ['pin_task','pin','Pin or unpin a local task',{...taskFields,pinned:z.boolean()}],
     ['archive_task','archive','Archive a local task and issue a session-bound Undo token',taskFields],

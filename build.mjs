@@ -60,6 +60,7 @@ export function normalize(snapshot) {
     pinned: Boolean(task.pinnedIndex), sidebarOnly: task.sidebarOnly === true, placementSource: task.placementSource ?? null,
     nativeTaskPinned:typeof task.nativeTaskPinned==='boolean'?task.nativeTaskPinned:Boolean(task.pinnedIndex),
     localSectionId:task.localSectionId??null,
+    localProjectId:task.localProjectId??null,
     rawStatus: task.status, column: classify(task.status),
     runtimeStatusSource: task.runtimeStatusSource ?? 'desktopSnapshot', runtimeStatusStale: task.runtimeStatusStale === true,
     lastObservedStatus: task.lastObservedStatus, lastObservedAt: task.lastObservedAt,
@@ -70,7 +71,7 @@ export function normalize(snapshot) {
     runtimeCapturedAt: snapshot.capturedAt ?? null, runtimeSnapshotMaxAgeMs: 15000,
     sync: {runtimeLive: false},
     coverage: snapshot.sidebarCoverage ?? 'Latest 50 unpinned chats + all pinned chats; Codex tasks only',
-    unavailableHosts: snapshot.unavailableHosts ?? [], sections, tasks,
+    unavailableHosts: snapshot.unavailableHosts ?? [], projects:snapshot.projects??[], sections, tasks,
     sidebarUnresolved: allTasks.filter(task => task.sidebarOnly) };
 }
 

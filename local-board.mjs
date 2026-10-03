@@ -26,6 +26,20 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     return rows;
   }
   async function read(){
+    // Native project IDs differ from Desktop IDs. Match containers only by
+    // exact registered roots; never infer a project from a task's cwd or title.
+    let nativeProjects=null;
+    try{nativeProjects=await pages('project/list',{limit:100});
+      if(nativeProjects.some(p=>typeof p.id!=='string'||!p.id||typeof p.name!=='string'||!p.name.trim()||!Array.isArray(p.roots)||p.roots.some(r=>typeof r?.path!=='string'))
+        ||new Set(nativeProjects.map(p=>p.id)).size!==nativeProjects.length)throw Error('Invalid local project catalog.');
+    }catch(error){if(error.code===-32601)nativeProjects=null;else throw error;}
+    const projectCatalog=(nativeProjects??[]).map(p=>{
+      const matches=(desktopSnapshot.projects??[]).filter(d=>d.hostId==='local'&&typeof d.path==='string'&&p.roots.some(r=>r.path===d.path));
+      const unique=matches.length===1&&nativeProjects.filter(n=>n.roots.some(r=>r.path===matches[0].path)).length===1;
+      return {projectId:p.id,hostId:'local',label:p.name,...(unique?{desktopProjectId:matches[0].projectId}:{})};
+    });
+    const projectNames=[...(desktopSnapshot.projects??[]),...projectCatalog,
+      ...projectCatalog.filter(p=>p.desktopProjectId).map(p=>({...p,projectId:p.desktopProjectId}))];
     const nativeSections=await pages('threadSection/list',{limit:100});
     if(nativeSections.some(s=>typeof s.id!=='string'||typeof s.name!=='string')
       ||new Set(nativeSections.map(s=>s.id)).size!==nativeSections.length)throw Error('Invalid local group identifiers.');
@@ -44,14 +58,19 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     for(const t of byId.values()){
       if(typeof t.id!=='string'||t.section===undefined)throw Error('Local task is missing its group field.');
       const desktop=desktopTasks.get(`local:${t.id}`);
+      const nativeProject=projectCatalog.find(p=>p.projectId===t.projectId);
+      // A supported native catalog makes an explicit null authoritative too.
+      // Legacy Desktop associations remain a fallback only on older readers.
+      const projectId=t.projectId?(nativeProject?.desktopProjectId??t.projectId)
+        :nativeProjects!==null&&t.projectId!==undefined?null:desktop?.projectId??null;
       let destination;
       if(t.section!==null){
         destination=sections.find(s=>s.sectionId===t.section.id);
         if(!destination)throw Error('Local group changed during reading. Try again.');
-      }else if(desktop?.projectId){
+      }else if(projectId){
         // Project containers remain a Desktop concept. Use exact project keys,
         // never infer an association by title or folder name.
-        const parents=(desktopSnapshot.sections??[]).filter(s=>s.itemKeys.includes(`codex:project:${desktop.projectId}`));
+        const parents=(desktopSnapshot.sections??[]).filter(s=>s.itemKeys.includes(`codex:project:${projectId}`));
         const matches=parents.length===1?sections.filter(s=>s.name===parents[0].name):[];
         destination=matches.length===1?matches[0]:projectsSection;
       }else destination=tasksSection;
@@ -59,13 +78,13 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
       const pinned=destination.name==='Pinned';
       rows.push({...desktop,id:t.id,kind:'codex',hostId:'local',
         title:t.name??desktop?.title??'Untitled task',summary:desktop?.summary??t.preview??'',
-        cwd:t.cwd,updatedAt:t.updatedAt,projectId:desktop?.projectId??null,
+        cwd:t.cwd,updatedAt:t.updatedAt,projectId,localProjectId:t.projectId??null,
         isUnread:unreadState.known?unreadIds.has(t.id):desktop?.isUnread===true,
         unreadSource:unreadState.known?'desktopPersistedReadState':desktop?'desktopSnapshot':'unavailable',
         unreadCapturedAt:unreadState.known?unreadState.capturedAt:desktop?desktopSnapshot.capturedAt:null,
         pinnedIndex:pinned?(desktop?.pinnedIndex??1):undefined,
         nativeTaskPinned:pinned&&t.section!==null,localSectionId:t.section?.id??null,
-        placementSource:t.section!==null?'localThreadSection':desktop?.projectId?'desktopProject':'localDefault',
+        placementSource:t.section!==null?'localThreadSection':projectId?'desktopProject':'localDefault',
         // A separate reader cannot observe the active writer's execution state.
         status:desktop&&runtimeFresh?desktop.status:'unknown',runtimeStatusSource:desktop?'desktopSnapshot':'unavailable',
         runtimeStatusStale:!!desktop&&!runtimeFresh,lastObservedStatus:desktop?.status,lastObservedAt:desktop?desktopSnapshot.capturedAt:null});
@@ -79,13 +98,14 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     sections.push(tasksSection);
     if(projectsSection.itemKeys.length)sections.push(projectsSection);
     if(otherSection.itemKeys.length)sections.push(otherSection);
-    const board=normalize({threads:rows,pinnedThreads:[],sections,capturedAt,projects:desktopSnapshot.projects,
+    const board=normalize({threads:rows,pinnedThreads:[],sections,capturedAt,projects:projectNames,
       sidebarCoverage:'Latest 50 unarchived local tasks + all readable grouped tasks · Other hosts use a desktop snapshot · Runtime is read separately'});
     board.source='Official read-only local App Server grouping API';
     board.runtimeCapturedAt=desktopSnapshot.capturedAt??null;
     board.runtimeSnapshotFresh=runtimeFresh;
     board.runtimeSnapshotMaxAgeMs=runtimeSnapshotMaxAgeMs;
-    board.sync={connected:true,writable:false,scope:'localSections',runtimeLive:false,localUnreadConnected:unreadState.known};
+    board.projects=projectCatalog;
+    board.sync={connected:true,writable:false,scope:'localSections',runtimeLive:false,localUnreadConnected:unreadState.known,projectCatalogConnected:nativeProjects!==null};
     return board;
   }
   return {getBoard(){const next=queue.then(read);queue=next.catch(()=>{});return next;}};
