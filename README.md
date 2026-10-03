@@ -1,4 +1,4 @@
-# Codex 看板 0.4.29
+# Codex 看板 0.4.32
 
 界面统一使用英文；用户任务名称、摘要及自定义分组保留原文。参考 Linear 的深色任务工作台：紧凑侧边栏、按原生分组排列的卡片、看板／列表切换和右侧详情面板。`index.html` 可直接打开；支持搜索、主机筛选、排序和分组折叠。本机任务点击卡片可通过官方 `codex://threads/<thread-id>` 链接打开聊天，卡片右下角的更多按钮展开任务操作菜单，可从中查看详情。无法生成有效直达链接的任务保留复制打开指令及剪贴板失败后的文本框。
 
@@ -82,7 +82,7 @@ node setup-desktop-bridge.mjs --context <existing-local-thread-id>
 
 ## 使用
 
-需要 macOS、Node.js 22 或更新版本，以及已安装的 Codex Desktop。项目无第三方 npm 依赖。首次克隆后，在项目目录执行以下命令；已有 snapshot.json 时不要覆盖它：
+需要 macOS、Node.js 22 或更新版本，以及已安装的 Codex Desktop。独立网页预览使用 Node 内置模块；MCP 插件的开发和测试需要安装 SDK 与构建依赖，安装包已内置所需运行库。首次克隆后，在项目目录执行以下命令；已有 snapshot.json 时不要覆盖它：
 
 ```sh
 cp -n snapshot.example.json snapshot.json
@@ -100,9 +100,39 @@ node serve.mjs
 
 ## 插件范围
 
-plugin.json 和 skills/codex-kanban/SKILL.md 构成个人 skill 插件源码。桌面任务工具必须由宿主提供；插件不会自行获取其权限。此包尚未安装、未发布，也不是已经注册的原生 MCP 侧边栏扩展。
+此版本提供本地 STDIO MCP App。`open_board` 注册全局 sidebar 入口，UI 资源为 `ui://kanban/board/v1.html`，MIME 为 `text/html;profile=mcp-app`。看板通过 MCP Apps SDK 的宿主 bridge 调用工具，iframe 不请求 localhost API。六个工具只对 App 可见；写操作还需要当前服务签发的 action token。HTTP 与 MCP 复用服务实现；写锁、回读和 Undo registry 在同一服务实例内共享，独立进程之间不互通。
 
-当前可通过 Desktop 桥接轮询本机运行状态；持续事件订阅和原生 MCP App UI 入口尚未实现。分组写回需要显式连接 Desktop 桥接，独立读取进程仍只读。旧 native-sync／native-bridge 是未激活的桌面逻辑分组实验，不用于当前拖拽。
+开发与验证：
+
+```sh
+npm ci
+npm run build:plugin
+npm test
+npm run test:plugin-native
+npm run test:ui
+```
+
+`test:ui` 启动只含合成任务的浏览器宿主，终端打印实际端口，可验证 SDK 握手、置顶、分组、归档、Undo 和列表。该测试不操作真实任务，也不代表真实客户端 sidebar 验收。
+
+浏览器宿主同时模拟 Codex 强制透明的 body 背景；`KANBAN_TEST_HOST_THEME=light npm run test:ui` 用浅色宿主验证看板自身深色底色，不受透明画布影响。
+
+`test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、六个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
+
+本机安装：
+
+```sh
+npm run prepare:plugin
+codex plugin marketplace add "$HOME/.codex/kanban-plugin-marketplace"
+codex plugin add codex-kanban@codex-kanban-local
+```
+
+`prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备成功后保留上一份安装包；发布失败时恢复旧包，marketplace 文件通过最后一次原子替换发布。它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex 看板」。CLI 安装成功不能替代入口点击验收。
+
+插件的用户数据默认在 `$CODEX_HOME/kanban/snapshot.json`（未设置 CODEX_HOME 时为 `~/.codex/kanban/snapshot.json`），可用 `KANBAN_DATA_DIR` 指定目录。缺少快照仍可读取本机任务与分组；项目目录、其他主机和备用运行快照由宿主 `list_threads` / `list_projects` 更新。服务不写插件缓存。MCP 和原 localhost 网页的本地偏好属于不同存储来源，不自动迁移；iframe 存储不可用时沿用现有错误提示。
+
+归档与 Undo 令牌绑定 MCP 服务实例。刷新数据保留恢复入口，丢失动作响应时下次读取可恢复 Undo；一个 UI 恢复成功后，其他 UI 下次刷新移除相应入口。关闭整个 MCP 服务后，使用客户端归档列表恢复。请求取消或服务关闭都会取消尚在预检中的操作，不执行写入；已经派发的写入继续回读确认，不自动重试。多 UI 操作共用互斥锁，覆盖动作后的回读。
+
+插件与 HTTP 使用相同的 Desktop 能力检查、分组写入和运行状态读取。已启用的桥接每 5 秒读取本机真实运行状态，断线后 15 秒过期；没有桥接时保留桌面快照，禁用 Group／Pin 写入。sidebar 注册本身不授予桌面工具权限。真实 Desktop 写入与即时侧栏更新仍需现场验收。旧 native-sync／native-bridge 不用于当前拖拽。此包尚未公开发布。
 
 开发依据：
 - https://linear.app/docs/board-layout

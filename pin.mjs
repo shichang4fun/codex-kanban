@@ -2,11 +2,13 @@ import {openLocalPinner} from './local-read.mjs';
 
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const failure=(message,status=409)=>Object.assign(Error(message),{status});
-export async function pinLocalTask(params,board,{open=openLocalPinner}={}){
+export async function pinLocalTask(params,board,{open=openLocalPinner,signal}={}){
   const {threadId,hostId,pinned}=params??{};
   if(hostId!=='local'||typeof threadId!=='string'||!uuid.test(threadId)||typeof pinned!=='boolean')
     throw failure('Invalid local pin request.',400);
   if(!board.tasks.some(t=>t.hostId==='local'&&t.id===threadId&&!t.sidebarOnly))throw failure('This task is no longer in the board. Refresh and try again.');
+  const checkCanceled=()=>{if(signal?.aborted)throw failure('Pin change canceled before writing.',408);};
+  checkCanceled();
   const client=await open();
   try{
     const readTask=async()=>{
@@ -34,6 +36,7 @@ export async function pinLocalTask(params,board,{open=openLocalPinner}={}){
     const adjacent=await readTask();
     if((adjacent.section?.id??null)!==expectedSectionId)
       throw failure('This task has changed groups. Refresh and try again.');
+    checkCanceled();
     if(expectedSectionId!==sectionId)await client.request('thread/section/move',{threadId,sectionId});
     const verified=await readTask();
     if(verified?.id!==threadId||verified.section===undefined||(verified.section?.id??null)!==sectionId)

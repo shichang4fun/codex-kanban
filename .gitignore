@@ -5,6 +5,7 @@ index.html
 *-preview.png
 *-preview.jpg
 *.png
+!/assets/kanban-icon.png
 *.jpg
 *.zip
 
@@ -17,3 +18,4 @@ connection.json
 *.log
 .DS_Store
 coverage/
+dist/
