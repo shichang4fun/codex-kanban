@@ -1,0 +1,19 @@
+# User task data and generated UI
+snapshot.json
+local-group-snapshot.json
+index.html
+*-preview.png
+*-preview.jpg
+*.png
+*.jpg
+*.zip
+
+# Local runtime, configuration and credentials
+node_modules/
+.env
+.env.*
+connection.json
+*.sock
+*.log
+.DS_Store
+coverage/
