@@ -45,6 +45,8 @@ try{
   const entry=status.data?.find(server=>server.name.includes('codex-kanban'));
   if(!entry)console.log(diagnostic.slice(-2200));
   assert(entry,'Official App Server did not discover the installed MCP server.');
+  assert.equal(entry.serverInfo?.icons?.[0]?.mimeType,'image/png');
+  assert(entry.serverInfo.icons[0].src.startsWith('data:image/png;base64,'),'Sidebar server icon missing from App Server discovery.');
   assert.deepEqual(Object.values(entry.tools).map(tool=>tool.name).sort(),['archive_task','get_board','move_task','open_board','pin_task','undo_archive']);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility.length===1&&tool._meta.ui.visibility[0]==='app'));
   const open=Object.values(entry.tools).find(tool=>tool.name==='open_board');

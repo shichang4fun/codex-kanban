@@ -1,4 +1,4 @@
-# Codex 看板 0.4.32
+# Codex 看板 0.4.33
 
 界面统一使用英文；用户任务名称、摘要及自定义分组保留原文。参考 Linear 的深色任务工作台：紧凑侧边栏、按原生分组排列的卡片、看板／列表切换和右侧详情面板。`index.html` 可直接打开；支持搜索、主机筛选、排序和分组折叠。本机任务点击卡片可通过官方 `codex://threads/<thread-id>` 链接打开聊天，卡片右下角的更多按钮展开任务操作菜单，可从中查看详情。无法生成有效直达链接的任务保留复制打开指令及剪贴板失败后的文本框。
 
@@ -101,6 +101,8 @@ node serve.mjs
 ## 插件范围
 
 此版本提供本地 STDIO MCP App。`open_board` 注册全局 sidebar 入口，UI 资源为 `ui://kanban/board/v1.html`，MIME 为 `text/html;profile=mcp-app`。看板通过 MCP Apps SDK 的宿主 bridge 调用工具，iframe 不请求 localhost API。六个工具只对 App 可见；写操作还需要当前服务签发的 action token。HTTP 与 MCP 复用服务实现；写锁、回读和 Undo registry 在同一服务实例内共享，独立进程之间不互通。
+
+插件的 `logo/composerIcon` 配置用于插件展示。侧栏入口从 MCP 工具或服务的 `icons` 读取图标；服务通过内嵌 PNG 提供 Kanban 图标，无需外部网络或访问本机文件路径。
 
 开发与验证：
 

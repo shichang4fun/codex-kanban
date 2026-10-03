@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-kanban",
-  "version": "0.4.32",
+  "version": "0.4.33",
   "description": "A Codex sidebar MCP App with Desktop-owned groups, pinning, live runtime and archive Undo.",
   "extensions": {
     "com.openai": {

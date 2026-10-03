@@ -27,6 +27,10 @@ async function harness(options={}){
 test('MCP lists the sidebar entry, app-only tools and independent UI resource',async()=>{
   const f=await harness({getBoard:async()=>{throw Error('private diagnostic');}});
   try{
+    const icons=f.client.getServerVersion().icons;
+    assert.equal(icons.length,1);assert.equal(icons[0].mimeType,'image/png');
+    assert(icons[0].src.startsWith('data:image/png;base64,'));
+    assert.deepEqual(Buffer.from(icons[0].src.split(',')[1],'base64'),await readFile(new URL('./assets/kanban-icon.png',import.meta.url)));
     const tools=(await f.client.listTools()).tools;
     assert.equal(tools.length,6);
     assert(tools.every(t=>t._meta.ui.visibility.length===1&&t._meta.ui.visibility[0]==='app'));

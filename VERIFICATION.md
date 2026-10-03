@@ -197,3 +197,10 @@ Verified on 2026-10-04 with the bundled Codex CLI 0.160.0.
 - Added a square transparent PNG with a purple three-column Kanban glyph. The portable manifest references the packaged asset through both extensions.com.openai.interface.logo and composerIcon. The build includes the asset, and Git ignores continue excluding personal screenshots while explicitly retaining this icon.
 - All 166 tests pass, including installed-package checks for icon byte identity, PNG signature, square dimensions and official size limits. The official plugin-discovery lab also passes.
 - Installed 0.4.32 through the official CLI, preserving the previous prepared package. Installed icon, manifest version and MCP/service files match source; a read-only client discovers six tools and loads the board with zero task writes. No Desktop restart was performed; native icon appearance awaits client plugin reload or a normal restart.
+
+## Sidebar entry icon fix — 0.4.33
+
+- The user reported that the native sidebar entry still lacked the icon. Read-only inspection of the installed client's entrypoint resolver confirmed it uses MCP tool icons with a serverInfo.icons fallback. Version 0.4.32 provided only plugin logo/composerIcon; those fields alone do not supply this sidebar icon.
+- MCP initialization now supplies the packaged PNG as a data URI in serverInfo.icons. The current SDK preserves server icons, while its high-level registerTool configuration does not forward tool icons. The client's supported server-icon fallback avoids SDK internals and external image requests.
+- All 166 tests pass. The real SDK initialization checks the exact icon bytes, and the official plugin-discovery lab verifies that the real App Server exposes serverInfo.icons with image/png and the embedded data URI.
+- Updated the local official installation to 0.4.33. Existing older MCP processes were left running; the native client must reload the plugin or restart normally to receive the corrected metadata. This verifies metadata delivery, not an observed native-sidebar repaint.
