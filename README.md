@@ -1,5 +1,22 @@
 # Codex 看板 0.4.41
 
+从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
+
+## 快速安装
+
+当前支持 macOS 与安装在 `/Applications/ChatGPT.app` 的 Codex Desktop。无需克隆源码或安装 npm 依赖：
+
+```sh
+codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
+codex plugin add codex-kanban@codex-kanban
+```
+
+正常重启客户端后，从侧栏打开「Codex 看板」。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。实时运行状态、Pin 和分组修改需要按需配置 [Desktop 桥接](#客户端操作桥接)。
+
+发布者合并到 `main` 后，在 [Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 点击 **Run workflow** 即可发布新版；完整步骤见 [发布说明](#发布者一键发布新版)。
+
+## 功能与行为
+
 无项目的卡片不显示 Set project 占位文字；悬停卡片或键盘聚焦时只显示淡色文件夹按钮，提示 Set project，点击继续打开项目菜单。菜单展开期间保留按钮，预留按钮尺寸避免卡片跳动；触屏也可通过右下角 ⋯ → Project 设置。有项目时保留文件夹图标及项目名称。
 
 头部左侧显示标题、结果数量和未读收件箱；未读总数用蓝色数字角标显示，不随搜索或主机筛选变化，零未读隐藏角标但保留切换入口，超过 99 用 99+ 显示且提示保留实际数量。点击收件箱切换仅未读／全部，开启时高亮。标题和数量按实际文字宽度排列，保留 10px 间距。切换时两处宽度均以 160ms 线性过渡，标题同步淡入淡出，收件箱随文字宽度平滑移动；使用等宽数字。测量独立文字层，避免把动画中的容器宽度作为目标；隐藏状态不写入零宽度。连续切换由 CSS 从当前过渡状态反向衔接，减少动态效果时取消过渡。宽屏搜索独立居中；Board／List 合为完整分段控件，Options 以独立按钮和间距区分。Host、Sort、Theme 和 Refresh tasks 收入 Options；删除常驻排序说明，拖动提示仅在 Manual order 选中时于面板内展示。主机标签和 Clear filters 放在搜索下方，清除筛选保留排序及布局。点击外部、焦点移出或 Esc 关闭面板；Esc 返回触发按钮。面板展开期间暂停轮询应用及快照过期重绘；刷新主动关闭面板并在 Options 上显示进度。窄屏搜索独占一行，极窄屏布局控件另起一行。
@@ -142,7 +159,7 @@ npm run test:ui
 
 `test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、十二个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
 
-### GitHub marketplace 安装
+### GitHub 安装：两条命令
 
 发布包位于独立的 `marketplace` 分支，包含已构建 UI 与运行依赖，不需要克隆源码或运行 npm install。需要 macOS、安装于 `/Applications/ChatGPT.app` 的当前 ChatGPT Desktop（含 Codex）。启动器优先使用 PATH 上的 Node.js 22+，否则使用应用内置 Node；可通过 `KANBAN_NODE` 指定兼容的可执行文件。
 
@@ -153,7 +170,22 @@ codex plugin add codex-kanban@codex-kanban
 
 全局 `codex` 不可用时，可将命令中的 `codex` 替换为 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。重新加载 MCP 配置或正常重启客户端后，查看侧栏「Codex 看板」。已有本机版本 `codex-kanban@codex-kanban-local` 时，先禁用该副本，避免重复入口。GitHub 安装不会配置 Desktop 桥接；实时状态、Pin 与分组写入仍需按上面的桥接步骤设置。
 
-更新时执行 `codex plugin marketplace upgrade codex-kanban`，再执行 `codex plugin add codex-kanban@codex-kanban` 并重新加载 MCP 配置。构建分发包使用 `npm run package:marketplace`，输出 `dist/marketplace/`；只发布该目录到 `marketplace` 分支，不上传本机安装器生成的目录。该渠道不属于 OpenAI 官方公开目录。
+更新时执行以下命令，再重新加载 MCP 配置或正常重启客户端：
+
+```sh
+codex plugin marketplace upgrade codex-kanban
+codex plugin add codex-kanban@codex-kanban
+```
+
+这是自托管的 GitHub marketplace，不属于 OpenAI 官方公开目录。基础看板安装后即可使用，Desktop 桥接按需单独配置。
+
+### 发布者：一键发布新版
+
+合并代码到 `main` 后，打开 [Actions → Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml)，点击 **Run workflow**，选择 **main** 并运行。无需手动复制文件、切换分支或配置额外 token。
+
+工作流先安装依赖、执行全部测试，再构建分发包。测试通过后，仅将 `dist/marketplace/` 更新到 `marketplace` 分支，保留原有历史；隐藏的插件目录与启动器权限通过 tar 传递。构建任务只有读取权限，发布任务才拥有仓库内容写权限。重复发布相同内容不新增提交；主干变更或远端写入冲突会停止发布，重新运行即可。合并 `main` 本身不自动发布。
+
+仓库需要启用 GitHub Actions 并允许发布任务写入 `marketplace` 分支。成功后可查看 [分发包](https://github.com/shichang4fun/codex-kanban/tree/marketplace)，其 README 标明当前版本与安装命令。本机构建使用 `npm run package:marketplace`；不要发布本机安装器生成的私有目录。
 
 ### 本机开发安装
 
