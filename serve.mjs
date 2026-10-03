@@ -11,14 +11,16 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {desktopBridgeRequest} from './bridge-transport.mjs';
 import {readDesktopBridgeConfig} from './setup-desktop-bridge.mjs';
+import {createGitStatusReader} from './git-status.mjs';
 
 const port=Number(process.env.KANBAN_PORT??8876);
 let reading,reader;
+const gitStatus=createGitStatusReader();
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
 const board=()=>reading??=(async()=>{
   reader??=await openLocalReader();
   const [raw,unreadState]=await Promise.all([readFile(new URL('./snapshot.json',import.meta.url),'utf8'),readLocalUnread()]);
-  return createLocalBoard(reader,JSON.parse(raw),{unreadState}).getBoard();
+  return gitStatus.enrich(await createLocalBoard(reader,JSON.parse(raw),{unreadState}).getBoard());
 })().catch(error=>{reader?.close();reader=null;throw error;}).finally(()=>reading=null);
 export function createKanbanServer({port=8876,getBoard=board,archiveTask=archiveLocalTask,
   restoreTask=restoreArchivedTask,pinTask=pinLocalTask,moveTask=moveLocalTask,desktopBridgeSocket=null}={}){
