@@ -5,13 +5,12 @@ import {openLocalReader} from './local-read.mjs';
 import {createLocalBoard} from './local-board.mjs';
 import {readLocalUnread} from './desktop-unread.mjs';
 import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
-import {pinLocalTask} from './pin.mjs';
-import {moveLocalTask} from './move.mjs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {desktopBridgeRequest} from './bridge-transport.mjs';
+import {desktopBridgeRequest,bridgeError} from './bridge-transport.mjs';
 import {readDesktopBridgeConfig} from './setup-desktop-bridge.mjs';
 import {createGitStatusReader} from './git-status.mjs';
+import {readBoardRuntime} from './desktop-runtime.mjs';
 
 const port=Number(process.env.KANBAN_PORT??8876);
 let reading,reader;
@@ -23,17 +22,21 @@ const board=()=>reading??=(async()=>{
   return gitStatus.enrich(await createLocalBoard(reader,JSON.parse(raw),{unreadState}).getBoard());
 })().catch(error=>{reader?.close();reader=null;throw error;}).finally(()=>reading=null);
 export function createKanbanServer({port=8876,getBoard=board,archiveTask=archiveLocalTask,
-  restoreTask=restoreArchivedTask,pinTask=pinLocalTask,moveTask=moveLocalTask,desktopBridgeSocket=null}={}){
+  restoreTask=restoreArchivedTask,pinTask=null,moveTask=null,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
 const csrf=randomUUID(),undoArchives=new Map();let mutating=null;
-const desktopConnected=async()=>{
-  if(desktopBridgeSocket)try{return (await desktopBridgeRequest(desktopBridgeSocket,'status',{},1500)).connected===true;}catch{}
-  return false;
+const desktopStatus=async()=>{
+  if(desktopBridgeSocket)try{return await bridgeRequest(desktopBridgeSocket,'status',{},1500);}catch{}
+  return {connected:false};
 };
-const connectedBoard=async()=>{const value=await getBoard(),desktopArchiveConnected=await desktopConnected();
-  return {...value,sync:{...value.sync,writable:true,archiveLocal:true,pinLocal:true,archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
+const connectedBoard=async()=>{let value=await getBoard();const status=await desktopStatus(),desktopArchiveConnected=status.connected===true,
+  desktopGroupsConnected=desktopArchiveConnected&&status.groupActions===true;
+  if(desktopArchiveConnected&&status.runtimeAvailable===true)value=await readBoardRuntime(value,desktopBridgeSocket,{request:bridgeRequest});
+  return {...value,sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,pinLocal:desktopGroupsConnected,
+    moveTransport:desktopGroupsConnected?'desktop':null,desktopGroupsConnected,archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
 };
 return createServer(async(req,res)=>{
-  const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`];
+  const listeningPort=port===0?req.socket.localPort:port;
+  const origins=[`http://127.0.0.1:${listeningPort}`,`http://localhost:${listeningPort}`];
   if(!origins.includes('http://'+req.headers.host)||(req.headers.origin&&!origins.includes(req.headers.origin))
     ||['cross-site','same-site'].includes(req.headers['sec-fetch-site'])){res.writeHead(403).end('Forbidden');return;}
   try{
@@ -54,15 +57,22 @@ return createServer(async(req,res)=>{
         if(req.url==='/api/unarchive'&&!undo){json(res,409,{error:'Undo is no longer available here. Restore this task from Codex archived tasks.'});return;}
         let archiveTransport='local';
         mutating=(async()=>{
-          if(undo)return undo.transport==='desktop'?desktopBridgeRequest(desktopBridgeSocket,'archive',{threadId:undo.threadId,hostId:'local',archived:false}):restoreTask({threadId:undo.threadId,hostId:'local'});
+          if(undo)return undo.transport==='desktop'?bridgeRequest(desktopBridgeSocket,'archive',{threadId:undo.threadId,hostId:'local',archived:false}):restoreTask({threadId:undo.threadId,hostId:'local'});
           const current=await getBoard();
-          if(req.url==='/api/move')return moveTask(params,current);
-          if(req.url==='/api/pin')return pinTask(params,current);
-          if(!await desktopConnected())return archiveTask(params,current);
+          if(req.url==='/api/move'||req.url==='/api/pin'){
+            const status=await desktopStatus();
+            if(status.connected!==true||status.groupActions!==true)
+              throw bridgeError('Group changes require the updated Codex Kanban launcher. Launch Codex with it and open a local task.');
+            if(!current.tasks.some(t=>t.id===params?.threadId&&t.hostId==='local'&&!t.sidebarOnly)||params?.hostId!=='local')
+              throw bridgeError('This local task is no longer in the board. Refresh and try again.',409);
+            const action=req.url==='/api/move'?'move':'pin',handler=action==='move'?moveTask:pinTask;
+            return handler?handler(params,current):bridgeRequest(desktopBridgeSocket,action,params);
+          }
+          if((await desktopStatus()).connected!==true)return archiveTask(params,current);
           archiveTransport='desktop';
           if(!current.tasks.some(t=>t.id===params?.threadId&&t.hostId==='local'&&!t.sidebarOnly)||params?.hostId!=='local')
             throw Object.assign(Error('This local task is no longer in the board. Refresh and try again.'),{status:409});
-          return desktopBridgeRequest(desktopBridgeSocket,'archive',{threadId:params.threadId,hostId:'local',archived:true});
+          return bridgeRequest(desktopBridgeSocket,'archive',{threadId:params.threadId,hostId:'local',archived:true});
         })();
         let result;
         try{

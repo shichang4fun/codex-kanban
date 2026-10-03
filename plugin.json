@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-kanban",
-  "version": "0.4.28",
-  "description": "Unified Ungrouped view, draggable Pinned tasks, editable task groups, archive with Undo, and local workflow.",
+  "version": "0.4.29",
+  "description": "Desktop-owned group changes and pinning, native readback, archive with Undo, and local workflow.",
   "extensions": {
     "com.openai": {
       "interface": {

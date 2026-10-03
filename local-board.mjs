@@ -80,7 +80,7 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     if(projectsSection.itemKeys.length)sections.push(projectsSection);
     if(otherSection.itemKeys.length)sections.push(otherSection);
     const board=normalize({threads:rows,pinnedThreads:[],sections,capturedAt,projects:desktopSnapshot.projects,
-      sidebarCoverage:'Latest 50 unarchived local tasks + all readable grouped tasks · Other hosts and runtime status use a desktop snapshot'});
+      sidebarCoverage:'Latest 50 unarchived local tasks + all readable grouped tasks · Other hosts use a desktop snapshot · Runtime is read separately'});
     board.source='Official read-only local App Server grouping API';
     board.runtimeCapturedAt=desktopSnapshot.capturedAt??null;
     board.runtimeSnapshotFresh=runtimeFresh;

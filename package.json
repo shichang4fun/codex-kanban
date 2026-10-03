@@ -1,10 +1,12 @@
 {
   "name": "codex-kanban",
-  "version": "0.4.28",
+  "version": "0.4.29",
   "private": true,
   "description": "A local Codex task board with native groups, pinning and archive Undo.",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test": "node --test *.test.mjs",
     "refresh": "node refresh-local.mjs",

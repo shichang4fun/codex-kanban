@@ -79,3 +79,19 @@ test('a pinned project container does not imply that its task is individually pi
   f.row.section={id:'local-pinned',name:'Pinned'};
   assert.equal((await createLocalBoard(reader,f.desktop).getBoard()).tasks[0].nativeTaskPinned,true);
 });
+test('an individual group overrides project placement and clearing it restores project inheritance',async()=>{
+  const f=fixture();f.row.section=null;f.desktop.threads[0].projectId='tools';
+  f.desktop.projects=[{projectId:'tools',hostId:'local',label:'Tools'}];
+  f.desktop.sections=[{sectionId:'pinned',name:'Pinned',itemKeys:['codex:project:tools']}];
+  const reader={request:async(method)=>method==='threadSection/list'?{data:[{id:'local-pinned',name:'Pinned'},{id:'local-review',name:'For Review'}]}:{data:[f.row]}};
+  const controller=createLocalBoard(reader,f.desktop),before=structuredClone(f.desktop);
+  assert.equal((await controller.getBoard()).tasks[0].nativeSectionId,'local-pinned');
+  f.row.section={id:'local-review',name:'For Review'};
+  const moved=(await controller.getBoard()).tasks[0];
+  assert.equal(moved.nativeSectionId,'local-review');assert.equal(moved.placementSource,'localThreadSection');
+  assert.equal(moved.projectId,'tools');assert.equal(moved.projectName,'Tools');assert.equal(moved.pinned,false);
+  f.row.section=null;
+  const cleared=(await controller.getBoard()).tasks[0];
+  assert.equal(cleared.nativeSectionId,'local-pinned');assert.equal(cleared.placementSource,'desktopProject');
+  assert.equal(cleared.nativeTaskPinned,false);assert.deepEqual(f.desktop,before);
+});

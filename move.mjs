@@ -15,7 +15,9 @@ export async function moveLocalTask(params,board,{open=openLocalPinner,signal}={
     throw failure('Invalid local group request.',400);
   const task=board.tasks.find(t=>t.id===threadId&&t.hostId==='local'&&!t.sidebarOnly);
   if(!task)throw failure('This task is no longer in the board. Refresh and try again.');
-  if(!['localThreadSection','localDefault'].includes(task.placementSource))
+  const inheritedProject=task.placementSource==='desktopProject'&&task.localSectionId===null
+    &&typeof task.projectId==='string'&&task.projectId.length>0&&expectedSectionId===null;
+  if(!['localThreadSection','localDefault'].includes(task.placementSource)&&!inheritedProject)
     throw failure('Move this task from its project in Codex.');
   const checkCancellation=()=>{if(signal?.aborted)throw failure('Move cancelled before writing.');};
   checkCancellation();

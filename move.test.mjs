@@ -33,11 +33,28 @@ test('Tasks default membership uses null instead of the synthetic display group 
   const stale=fixture({section:null});await assert.rejects(moveLocalTask({...params,expectedSectionId:'chats'},{tasks:[task]},stale),/changed groups/);
   assert(!stale.calls.some(c=>c.method==='thread/section/move'));
 });
-test('remote, project-inherited, missing and malformed sources never open a writer',async()=>{
+test('remote, unverified project inheritance, missing and malformed sources never open a writer',async()=>{
   let opens=0;const open=async()=>{opens++;throw Error('Must not open');};
   for(const p of [{...params,hostId:'durable'},{...params,threadId:'bad'},{...params,expectedSectionId:undefined},{...params,sectionId:undefined},null])await assert.rejects(moveLocalTask(p,{tasks:[task]},{open}));
   for(const tasks of [[],[{...task,sidebarOnly:true}],[{...task,placementSource:'desktopProject',pinned:true}]])await assert.rejects(moveLocalTask(params,{tasks},{open}));
   assert.equal(opens,0);
+});
+test('a project-inherited task can enter For Review without moving or unpinning its project',async()=>{
+  const inherited={...task,placementSource:'desktopProject',localSectionId:null,nativeSectionId:'local-pin',projectId:'original-project',pinned:true,nativeTaskPinned:false};
+  const board={tasks:[inherited],sections:[{sectionId:'local-pin',name:'Pinned',itemKeys:['codex:project:original-project']}]};
+  const before=structuredClone(board),f=fixture({section:null});
+  assert.equal((await moveLocalTask({...params,sectionId:'local-review',expectedSectionId:null},board,f)).changed,true);
+  assert.deepEqual(f.calls.filter(c=>c.method==='thread/section/move'),[{method:'thread/section/move',params:{threadId:id,sectionId:'local-review'}}]);
+  assert.equal(f.thread.section.id,'local-review');assert.equal(f.thread.projectId,'original-project');assert.equal(f.thread.status,'active');
+  assert.deepEqual(board,before);assert(f.closed);
+  const stale=fixture({section:null,changeBeforeWrite:true});
+  await assert.rejects(moveLocalTask({...params,expectedSectionId:null},{tasks:[inherited]},stale),/changed groups/);
+  assert(!stale.calls.some(c=>c.method==='thread/section/move'));
+  for(const invalid of [{...inherited,projectId:null},{...inherited,localSectionId:undefined},{...inherited,sidebarOnly:true}]){
+    let opened=false;
+    await assert.rejects(moveLocalTask({...params,expectedSectionId:null},{tasks:[invalid]},{open:async()=>{opened=true;throw Error('Must not open');}}));
+    assert.equal(opened,false);
+  }
 });
 test('only supported real destinations are accepted; protected native tasks and stale sources do not move',async()=>{
   for(const options of [{ephemeral:true},{parent:'parent'},{section:'local-pin'},{changeBeforeWrite:true},{section:'local-review'}]){
@@ -67,7 +84,7 @@ test('unconfirmed or cancelled moves never repeat the write or claim success',as
 test('HTTP moves share action serialization, CSRF protection and authoritative subsequent polling',async()=>{
   let finish,started,section='local-later',writes=0;const began=new Promise(r=>started=r);
   const getBoard=async()=>({tasks:[{...task,localSectionId:section,nativeSectionId:section}],sections:sections.map(s=>({sectionId:s.id,name:s.name})),sync:{connected:true,scope:'localSections'}});
-  const server=createKanbanServer({port:8893,getBoard,moveTask:async p=>{writes++;started();await new Promise(r=>finish=r);section=p.sectionId;return {threadId:id,sectionId:section,changed:true};}});
+  const server=createKanbanServer({port:8893,getBoard,desktopBridgeSocket:'/fixture/desktop.sock',bridgeRequest:async()=>({connected:true,groupActions:true}),moveTask:async p=>{writes++;started();await new Promise(r=>finish=r);section=p.sectionId;return {threadId:id,sectionId:section,changed:true};}});
   await new Promise(r=>server.listen(8893,'127.0.0.1',r));
   try{
     const url='http://127.0.0.1:8893',get=await(await fetch(url+'/api/board')).json();assert.equal(get.board.sync.writable,true);
@@ -131,13 +148,30 @@ test('detail saves refresh displayed properties and failed saves revert to autho
   context.moveNative=async()=>{$('task-toast').textContent='Group changed again';return false;};
   $('detail-native').value='local-pin';await context.changeDetailGroup();assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');assert.equal($('native-edit-hint').textContent,'Group changed again');
 });
-test('project-default details use the merged group label without enabling inherited membership writes',()=>{
+test('project-inherited details and dragging allow task-only grouping while retaining the project label',()=>{
   const f=detailUi(),{context,$,pinned}=f;
   context.DATA.sections.push({sectionId:'threads',name:'Projects'});
-  const project={...pinned,nativeSectionId:'threads',localSectionId:null,pinned:false,projectName:'Tools',placementSource:'desktopProject'};
+  const project={...pinned,nativeSectionId:'threads',localSectionId:null,pinned:false,projectId:'tools',projectName:'Tools',placementSource:'desktopProject'};
   context.DATA.tasks=[project];context.updateDetailProperties(project);
-  assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');assert($('detail-native').disabled);
+  assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');assert.equal($('detail-native').disabled,false);
+  assert.equal(context.nativeCanMove(project),true);assert.match($('native-edit-hint').textContent,/project stays in place/);
   assert.equal($('detail-native').children.filter(o=>o.textContent==='Ungrouped').length,1);
   assert($('detail-meta').children.some(n=>n.tag==='dd'&&n.textContent==='Tools'));
   assert.equal(project.nativeSectionId,'threads');assert.equal(project.localSectionId,null);
+  const inheritedPin={...project,nativeSectionId:'local-pin',pinned:true,nativeTaskPinned:false};
+  context.updateDetailProperties(inheritedPin);assert.equal(f.group(),'Pinned');assert.equal($('detail-native').value,'local-pin');
+  assert.equal($('detail-native').disabled,false);assert.equal(context.nativeCanMove(inheritedPin),true);
+});
+test('group controls require the new Desktop capability even when native reads remain connected',()=>{
+  const f=detailUi(),{context,$,pinned}=f;
+  Object.assign(context,{expireRuntimeSnapshot(){},loadWorkflow(){},refreshSummary(){},render(){},document:{querySelector:()=>({})},Intl,Date});
+  new Script(html.match(/function applyNativeBoard\([\s\S]*?(?=async function refreshNativeBoard)/)[0]).runInContext(context);
+  const board={...context.DATA,capturedAt:'2026-10-03T18:00:00Z',sync:{connected:true,scope:'localSections',writable:true}};
+  context.applyNativeBoard(board);context.updateDetailProperties(pinned);
+  assert.equal(context.nativeConnected,true);assert.equal(context.nativeCanMove(pinned),false);assert.equal($('detail-native').disabled,true);
+  assert.match($('native-edit-hint').textContent,/updated Kanban launcher/);
+  context.applyNativeBoard({...board,sync:{...board.sync,moveWritable:true,pinLocal:true}});context.updateDetailProperties(pinned);
+  assert.equal(context.nativeCanMove(pinned),true);assert.equal($('detail-native').disabled,false);
+  context.applyNativeBoard({...board,sync:{...board.sync,moveWritable:false}});context.updateDetailProperties(pinned);
+  assert.equal(context.nativeCanMove(pinned),false);assert.equal($('detail-native').disabled,true);
 });

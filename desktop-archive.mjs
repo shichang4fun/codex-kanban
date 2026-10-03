@@ -1,6 +1,8 @@
 import {openLocalReader} from './local-read.mjs';
 import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
 import {startLocalBridge,bridgeError} from './bridge-transport.mjs';
+import {createDesktopGroups} from './desktop-groups.mjs';
+import {createDesktopRuntime} from './desktop-runtime.mjs';
 
 // Mutations run on the attached Desktop MCP connection. Exact-ID verification
 // still uses the official read-only local protocol; it never opens another writer.
@@ -36,9 +38,14 @@ export function createDesktopArchive({call,ready=()=>true,openReader=openLocalRe
 }
 export async function startDesktopArchiveBridge({socketPath,...options}){
   const controller=createDesktopArchive(options);
-  return startLocalBridge({socketPath,dispatch:(method,params,context)=>{
-    if(method==='status')return controller.status();
-    if(method==='archive')return controller.change(params,context);
-    throw bridgeError('This bridge only supports archive and restore.',400);
+  const groups=createDesktopGroups(options),runtime=typeof options.request==='function'?createDesktopRuntime(options):null;let busy=false;
+  return startLocalBridge({socketPath,dispatch:async(method,params,context)=>{
+    if(method==='status')return {...controller.status(),groupActions:true,runtimeAvailable:runtime!==null};
+    if(method==='runtime'&&runtime)return runtime.read(params,context);
+    if(!['archive','move','pin'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore and task group changes.',400);
+    if(busy)throw bridgeError('Another desktop task action is in progress.',409);
+    busy=true;
+    try{return await (method==='archive'?controller.change(params,context):groups[method](params,context));}
+    finally{busy=false;}
   }});
 }

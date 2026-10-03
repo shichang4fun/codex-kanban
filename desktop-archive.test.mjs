@@ -46,7 +46,7 @@ test('cancellation and duplicate requests cannot trigger additional archive call
   const first=service.change(params);await started;
   await assert.rejects(service.change(params),/in progress/);resolve();await first;assert.equal(f.calls.length,1);
 });
-test('private bridge allows only status, archive and restore; no native groups or model execution',async()=>{
+test('private bridge rejects arbitrary RPC and model execution while keeping verified task actions',async()=>{
   const root=await mkdtemp(join(tmpdir(),'kb-')),socketPath=join(root,'d.sock'),f=fixture();
   const stop=await startDesktopArchiveBridge({socketPath,...f.options});
   try{
@@ -86,13 +86,13 @@ test('HTTP Archive and token-scoped Undo travel through Desktop; failures keep t
     assert.equal((await post('/api/unarchive',{undoToken:archived.undoToken})).status,409);
   }finally{await new Promise(r=>server.close(r));await stop();await rm(root,{recursive:true,force:true});}
 });
-test('relay executes only the archive tool in the existing context and preserves Desktop messages',async()=>{
+test('relay restricts added tools in the existing context and preserves Desktop messages',async()=>{
   const server=[],desktop=[],relay=createDesktopRelay({toServer:m=>server.push(m),toDesktop:m=>desktop.push(m)});
   relay.fromDesktop({id:17,method:'initialize',params:{}});relay.fromServer({id:17,result:{}});assert(relay.ready);
   const promise=relay.call('set_thread_archived',{threadId:id,hostId:'local',archived:true},contextId),request=server.at(-1);
   assert.equal(request.params.threadId,contextId);assert.equal(request.params.arguments.threadId,id);assert.equal(request.method,'mcpServer/tool/call');
   relay.fromServer({id:request.id,result:{content:[{type:'text',text:'{}'}]}});await promise;
-  for(const tool of ['turn/start','send_message_to_thread','move_thread_to_sidebar_section'])await assert.rejects(relay.call(tool,{},contextId));
+  for(const tool of ['turn/start','send_message_to_thread','move_project_to_sidebar_section'])await assert.rejects(relay.call(tool,{},contextId));
   assert.deepEqual(desktop,[{id:17,result:{}}]);relay.close();
 });
 test('relay tracks only a successful Desktop-loaded context and does not change the archive target',async()=>{
@@ -109,6 +109,10 @@ test('installer preserves the selected CLI chain and refuses to stop a running C
   try{
     const config=await installDesktopBridge({root,contextThreadId:contextId,app,chainedCli,nodePath});
     assert((await readFile(config.proxy,'utf8')).includes(chainedCli));assert.equal((await lstat(config.proxy)).mode&0o777,0o700);
+    const installed=await import(join(root,'runtime','desktop-archive.mjs'));
+    assert.equal(typeof installed.startDesktopArchiveBridge,'function');
+    for(const file of ['desktop-groups.mjs','desktop-runtime.mjs','build.mjs','local-board.mjs'])
+      assert.equal((await readFile(join(root,'runtime',file),'utf8')),await readFile(new URL('./'+file,import.meta.url),'utf8'));
     const calls=[];const run=(bin,args)=>{calls.push({bin,args});return bin==='/bin/ps'?join(app,'Contents/MacOS/ChatGPT'):'';};
     assert.equal((await launchDesktopBridge(root,{run})).phase,'restart-required');assert.equal(calls.length,1);
     const launches=[];assert.equal((await launchDesktopBridge(root,{run:(bin,args)=>{launches.push({bin,args});return '';}})).phase,'launching');
