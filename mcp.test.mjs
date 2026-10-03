@@ -27,6 +27,12 @@ async function harness(options={}){
 test('MCP lists the sidebar entry, app-only tools and independent UI resource',async()=>{
   const f=await harness({getBoard:async()=>{throw Error('private diagnostic');}});
   try{
+    const icons=f.client.getServerVersion().icons;
+    assert.deepEqual(icons.map(icon=>icon.theme),['light','dark']);
+    for(const icon of icons){
+      assert.equal(icon.mimeType,'image/png');assert(icon.src.startsWith('data:image/png;base64,'));
+      assert.deepEqual(Buffer.from(icon.src.split(',')[1],'base64'),await readFile(new URL(`./assets/kanban-icon${icon.theme==='dark'?'-dark':''}.png`,import.meta.url)));
+    }
     const tools=(await f.client.listTools()).tools;
     assert.equal(tools.length,6);
     assert(tools.every(t=>t._meta.ui.visibility.length===1&&t._meta.ui.visibility[0]==='app'));
@@ -146,6 +152,9 @@ test('installed package runs outside its directory without node_modules and serv
     const presentation=manifest.extensions['com.openai'].interface;
     assert.equal(presentation.logo,'./assets/kanban-icon.png');
     assert.equal(presentation.composerIcon,presentation.logo);
+    assert.equal(presentation.logoDark,'./assets/kanban-icon-dark.png');
+    assert.equal(presentation.composerIconDark,presentation.logoDark);
+    assert.deepEqual(await readFile(join(installed.plugin,presentation.logoDark)),await readFile(new URL('./assets/kanban-icon-dark.png',import.meta.url)));
     const icon=await readFile(join(installed.plugin,presentation.logo));
     assert.deepEqual(icon,await readFile(new URL('./assets/kanban-icon.png',import.meta.url)));
     assert.equal(icon.subarray(0,8).toString('hex'),'89504e470d0a1a0a');

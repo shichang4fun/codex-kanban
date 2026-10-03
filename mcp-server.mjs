@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises';
-import {realpathSync} from 'node:fs';
+import {realpathSync,readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -13,13 +13,18 @@ export const defaultDataDir=()=>process.env.KANBAN_DATA_DIR??join(process.env.CO
 const taskFields={threadId:z.string().uuid(),hostId:z.literal('local')};
 const writeToken={actionToken:z.string().uuid()};
 const appOnly={ui:{visibility:['app']}};
+// Sidebar entries use MCP tool icons, then server icons; plugin logos are separate.
+const boardIcons=['light','dark'].map(theme=>({
+  src:`data:image/png;base64,${readFileSync(new URL(`./assets/kanban-icon${theme==='dark'?'-dark':''}.png`,import.meta.url)).toString('base64')}`,
+  mimeType:'image/png',theme
+}));
 const result=payload=>({content:[{type:'text',text:payload.error??(payload.board?`${payload.board.tasks.length} Codex tasks loaded.`:'Task action verified.')}],
   structuredContent:payload,...(payload.error?{isError:true}:{})});
 
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.32'},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.33',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}

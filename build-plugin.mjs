@@ -24,7 +24,7 @@ export async function buildPlugin(){
   const files=['mcp-server.mjs','kanban-service.mjs','local-read.mjs','local-board.mjs','build.mjs',
     'desktop-unread.mjs','desktop-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs',
     'git-status.mjs','archive.mjs','pin.mjs','move.mjs','bridge-transport.mjs','setup-desktop-bridge.mjs',
-    'plugin.json','mcp.json','launch-mcp','assets/kanban-icon.png'];
+    'plugin.json','mcp.json','launch-mcp','assets/kanban-icon.png','assets/kanban-icon-dark.png'];
   await Promise.all(files.map(file=>copyFile(join(root,file),join(plugin,file))));
   await chmod(join(plugin,'launch-mcp'),0o755);
   await copyFile(join(root,'skills','codex-kanban','SKILL.md'),join(plugin,'skills','codex-kanban','SKILL.md'));

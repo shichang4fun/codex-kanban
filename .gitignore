@@ -6,6 +6,7 @@ index.html
 *-preview.jpg
 *.png
 !/assets/kanban-icon.png
+!/assets/kanban-icon-dark.png
 *.jpg
 *.zip
 
