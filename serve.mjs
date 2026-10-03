@@ -9,9 +9,9 @@ import {desktopBridgeRequest} from './bridge-transport.mjs';
 
 const port=Number(process.env.KANBAN_PORT??8876);
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
-export function createKanbanServer({port=8876,getBoard,archiveTask,restoreTask,pinTask,moveTask,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
+export function createKanbanServer({port=8876,getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
 const source=getBoard?null:createBoardSource();
-const service=createKanbanService({getBoard:getBoard??source.getBoard,archiveTask,restoreTask,pinTask,moveTask,desktopBridgeSocket,bridgeRequest});
+const service=createKanbanService({getBoard:getBoard??source.getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,desktopBridgeSocket,bridgeRequest});
 const server=createServer(async(req,res)=>{
   const listeningPort=port===0?req.socket.localPort:port;
   const origins=[`http://127.0.0.1:${listeningPort}`,`http://localhost:${listeningPort}`];
@@ -21,7 +21,7 @@ const server=createServer(async(req,res)=>{
     if(req.url==='/api/board'&&req.method==='GET'){
       json(res,200,await service.read());return;
     }
-    if(['/api/move','/api/archive','/api/unarchive','/api/pin'].includes(req.url)&&req.method==='POST'){
+    if(['/api/project','/api/move','/api/archive','/api/unarchive','/api/pin'].includes(req.url)&&req.method==='POST'){
       const token=Buffer.from(req.headers['x-kanban-token']??''),expected=Buffer.from(service.csrf);
       if(token.length!==expected.length||!timingSafeEqual(token,expected)||req.headers['content-type']!=='application/json'){
         json(res,403,{error:'This action request is not allowed.'});return;

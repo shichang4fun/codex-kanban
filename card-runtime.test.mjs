@@ -15,11 +15,11 @@ const find=(root,name)=>root.querySelectorAll('.'+name)[0]??null;
 
 test('moving a pinned idle task into In Progress preserves unread without a running icon',()=>{
   const h=harness(runtimeFixture()),task=h.api.DATA.tasks[0];
-  assert(find(h.api.makeCard(task,'pin'),'pin'));
+  assert.equal(find(h.api.makeCard(task,'pin'),'card-pin').attributes['data-pinned'],'true');
   task.pinned=false;task.nativeTaskPinned=false;task.nativeSectionId='progress';
   const card=h.api.makeCard(task,'progress');
   assert.equal(card.dataset.groupId,'progress');assert.equal(find(card,'progress-ring'),null);
-  assert(find(card,'unread'));assert.equal(find(card,'pin'),null);
+  assert(find(card,'unread'));assert.equal(find(card,'card-pin'),null);
   assert.equal(task.column,'idle');assert.equal(task.isUnread,true);
 });
 test('unknown, unloaded, waiting, failed and stale or unavailable states never show a running icon',()=>{

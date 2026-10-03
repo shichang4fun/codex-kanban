@@ -13,7 +13,7 @@ export const fixture=()=>({capturedAt:new Date().toISOString(),runtimeCapturedAt
 
 // Exercise the entire browser script against only the nodes that exist in the
 // template, so a leftover reference to a removed control fails at startup.
-export function harness(board=fixture(),{animations=false}={}){
+export function harness(board=fixture(),{animations=false,dark=true,theme,storageFailure=false}={}){
   class Element {
     constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.attributes={};this.style={setProperty(){}};this.value='';this.hidden=false;this.open=false;this.listeners={};this.textContent='';this.animations=[];
       const classes=new Set();this.classList={add:(...names)=>names.forEach(n=>classes.add(n)),remove:(...names)=>names.forEach(n=>classes.delete(n)),contains:n=>classes.has(n),toggle:(n,on)=>{const next=on??!classes.has(n);next?classes.add(n):classes.delete(n);return next;}};
@@ -21,6 +21,7 @@ export function harness(board=fixture(),{animations=false}={}){
     append(...children){children.forEach(child=>{child.parentElement=this;this.children.push(child);});}
     replaceChildren(...children){this.children=[];this.append(...children);}
     setAttribute(key,value){this.attributes[key]=value;}
+    getAttribute(key){return this.attributes[key]??null;}
     removeAttribute(key){delete this.attributes[key];}
     addEventListener(key,listener){this.listeners[key]=listener;}
     closest(selector){return selector==='button'?this.parentElement:null;}
@@ -38,21 +39,24 @@ export function harness(board=fixture(),{animations=false}={}){
   }
   const nodes=new Map([...html.matchAll(/id="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
   nodes.get('board').parentElement=new Element();
+  nodes.get('view-options').append(...['view-options-trigger','host','order','theme','refresh'].map(id=>nodes.get(id)));
   nodes.get('host').value='all';nodes.get('order').value='recent';nodes.get('search').value='';
-  const nav=['all','unread','pinned'].map(filter=>{const button=new Element('button');button.dataset.filter=filter;const label=new Element();label.className='label';label.textContent=filter;button.append(label);if(filter!=='all')button.append(nodes.get('nav-'+filter));return button;});
   const storage=new Map([['codex-kanban.workflow.v1:local%3Alegacy','done'],['codex-kanban.group-order.v1:workflow','["done","todo"]']]);
+  if(theme!==undefined)storage.set('codex-kanban.theme.v1',theme);
   const writes=[],events={},intervals=[];
+  const themeMedia={matches:dark,addEventListener:(name,listener)=>events.mediaTheme=listener};
   const context=createContext({
-    document:{hidden:false,activeElement:null,getElementById:id=>{assert(nodes.has(id),'Missing DOM node: '+id);return nodes.get(id);},
+    document:{documentElement:new Element('html'),hidden:false,activeElement:null,getElementById:id=>{assert(nodes.has(id),'Missing DOM node: '+id);return nodes.get(id);},
       createElement:tag=>new Element(tag),createElementNS:(ns,tag)=>new Element(tag),
-      querySelectorAll:selector=>selector==='[data-filter]'?nav:[],addEventListener:(name,listener)=>events[name]=listener},
+      querySelectorAll:()=>[],addEventListener:(name,listener)=>events[name]=listener},
     window:{addEventListener:(name,listener)=>events[name]=listener},
-    location:{protocol:'file:',reload(){}},performance:{now:()=>1000},matchMedia:()=>({matches:!animations}),
-    localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>{writes.push(key);storage.set(key,value);}},
+    location:{protocol:'file:',reload(){}},performance:{now:()=>1000},matchMedia:query=>query==='(prefers-color-scheme: dark)'?themeMedia:{matches:!animations},
+    localStorage:{getItem:key=>{if(storageFailure)throw Error('Storage blocked');return storage.get(key)??null;},setItem:(key,value)=>{if(storageFailure)throw Error('Storage blocked');writes.push(key);storage.set(key,value);}},
     setInterval:listener=>intervals.push(listener),setTimeout:()=>1,clearTimeout(){},
-    navigator:{clipboard:{writeText:async()=>{throw Error('Clipboard denied');}}}
+    navigator:{clipboard:{writeText:async()=>{throw Error('Clipboard denied');}}},
+    fetch:(...args)=>context.fetchImpl(...args)
   });
   new Script(source.replace('/*__BOARD_DATA__*/null',JSON.stringify(board))).runInContext(context);
-  const api=new Script('({applyNativeBoard,showDetail,setFilter,setView,nativeNotice,render,nativeCanEditGroup,makeCard,expireRuntimeSnapshot,DATA})').runInContext(context);
-  return {api,nodes,storage,writes,events,intervals,context};
+  const api=new Script('({applyNativeBoard,showDetail,setFilter,setView,nativeNotice,render,nativeCanEditGroup,makeCard,expireRuntimeSnapshot,refreshNativeBoard,DATA})').runInContext(context);
+  return {api,nodes,storage,writes,events,intervals,context,themeMedia};
 }

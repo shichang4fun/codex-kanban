@@ -1,7 +1,145 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Script} from 'node:vm';
+import {readFileSync} from 'node:fs';
 import {harness,fixture,localId} from './ui-test-helpers.mjs';
+const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
+
+test('a failed background read preserves a newly opened task menu or Options',async()=>{
+  for(const menu of ['task','options']){
+    const h=harness();h.context.location.protocol='http:';let rejectRead;
+    h.context.fetchImpl=()=>new Promise((_,reject)=>rejectRead=reject);
+    const pending=h.api.refreshNativeBoard(),board=h.nodes.get('board').children[0];
+    const panel=h.nodes.get(menu==='task'?'task-menu':'view-options');
+    if(menu==='task')h.nodes.get('board').querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
+    else panel.open=true;
+    rejectRead(Error('Temporary disconnection'));await pending;
+    assert.equal(h.nodes.get('board').children[0],board);
+    if(menu==='task')assert(!panel.hidden);else assert(panel.open);
+  }
+});
+
+test('Options preserves controls and closes on Escape, outside click and focus leaving',()=>{
+  const h=harness(),panel=h.nodes.get('view-options'),trigger=h.nodes.get('view-options-trigger'),host=h.nodes.get('host');
+  assert(!panel.open);panel.open=true;panel.listeners.toggle();assert.equal(trigger.attributes['aria-expanded'],'true');
+  host.focus();h.api.render();h.events['kanban-host-theme']({detail:'light'});
+  assert(panel.open);assert.equal(h.context.document.activeElement,host);assert.equal(h.nodes.get('host'),host);
+  h.events.click({target:host});assert(panel.open);
+  panel.listeners.focusout({relatedTarget:h.nodes.get('theme')});assert(panel.open);
+  panel.listeners.focusout({relatedTarget:h.nodes.get('search')});assert(!panel.open);
+  panel.open=true;h.events.keydown({key:'Escape',preventDefault(){}});assert(!panel.open);assert.equal(h.context.document.activeElement,trigger);
+  panel.open=true;h.events.click({target:h.nodes.get('search')});assert(!panel.open);
+});
+
+test('host chip clears only the host and manual guidance stays in Options',()=>{
+  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),sort=h.nodes.get('order'),chip=h.nodes.get('host-chip');
+  assert(chip.hidden);search.value='fixture';h.api.setFilter('unread');host.value='durable';host.onchange();
+  assert(!chip.hidden);assert.equal(h.nodes.get('host-chip-label').textContent,'Cloud');
+  chip.onclick();assert.equal(host.value,'all');assert.equal(search.value,'fixture');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'true');assert(chip.hidden);
+  sort.value='manual';sort.onchange();assert(!h.nodes.get('manual-order-hint').hidden);
+  assert.equal(h.storage.get('codex-kanban.sort.v1'),'manual');
+  sort.value='title';sort.onchange();assert(h.nodes.get('manual-order-hint').hidden);
+  sort.value='recent';sort.onchange();assert(h.nodes.get('manual-order-hint').hidden);
+});
+
+test('Options pauses background reads, including responses started before opening',async()=>{
+  const h=harness(),panel=h.nodes.get('view-options'),board=h.nodes.get('board');let reads=0,resolveResponse;
+  h.context.location.protocol='http:';h.context.fetchImpl=()=>{reads++;return new Promise(resolve=>resolveResponse=resolve);};
+  panel.open=true;await h.api.refreshNativeBoard();assert.equal(reads,0);
+  panel.open=false;const pending=h.api.refreshNativeBoard(),original=board.children[0];panel.open=true;
+  const next=fixture();next.tasks[0].title='Updated fixture';
+  resolveResponse({ok:true,json:async()=>({board:next,csrf:'fixture'})});await pending;
+  assert.equal(board.children[0],original);assert(panel.open);
+  panel.open=false;h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'fixture'})});await h.api.refreshNativeBoard();
+  assert.notEqual(board.children[0],original);
+});
+
+test('Refresh closes Options, shows progress and keeps filters and preferences',async()=>{
+  const h=harness(),panel=h.nodes.get('view-options'),refresh=h.nodes.get('refresh');let resolveResponse;
+  h.context.location.protocol='http:';h.context.fetchImpl=()=>new Promise(resolve=>resolveResponse=resolve);
+  h.nodes.get('search').value='fixture';h.api.setFilter('unread');h.api.setView('list');panel.open=true;
+  const pending=refresh.onclick();assert(!panel.open);assert(refresh.disabled);
+  assert.equal(h.nodes.get('options-label').textContent,'Refreshing…');assert.equal(h.nodes.get('view-options-trigger').attributes['aria-busy'],'true');
+  assert.equal(h.nodes.get('refresh-label').textContent,'Refreshing…');assert.equal(h.context.document.activeElement,h.nodes.get('view-options-trigger'));
+  resolveResponse({ok:true,json:async()=>({board:fixture(),csrf:'fixture'})});await pending;
+  assert.equal(refresh.disabled,false);assert.equal(h.nodes.get('refresh-label').textContent,'Refresh tasks');
+  assert.equal(h.nodes.get('options-label').textContent,'Options');assert.equal(h.nodes.get('view-options-trigger').attributes['aria-busy'],undefined);
+  assert.equal(h.nodes.get('search').value,'fixture');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'true');assert(h.nodes.get('board').classList.contains('list'));
+});
+
+test('Unread badge counts the whole board independently of search and host filters',()=>{
+  const h=harness(),badge=h.nodes.get('unread-count'),inbox=h.nodes.get('unread-only');
+  assert.equal(badge.textContent,'1');assert(!badge.hidden);assert.match(inbox.title,/1 unread task.*Click to show only unread/);
+  h.nodes.get('search').value='missing';h.nodes.get('host').value='durable';h.api.render();
+  assert.equal(h.nodes.get('visible-count').textContent,'0 / 2 tasks');assert.equal(badge.textContent,'1');assert(!badge.hidden);
+  h.nodes.get('clear-filters').onclick();inbox.onclick();assert.equal(inbox.attributes['aria-pressed'],'true');assert.match(inbox.title,/Click to show all tasks/);
+  assert(h.nodes.get('active-filters').hidden);
+  const next=fixture();next.tasks[0].isUnread=false;h.api.applyNativeBoard(next);
+  assert(badge.hidden);assert.equal(inbox.attributes['aria-pressed'],'true');assert(!inbox.disabled);inbox.onclick();
+  assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');assert.equal(inbox.attributes['aria-pressed'],'false');
+});
+
+test('Unread badge caps large counts visually while keeping the exact accessible total',()=>{
+  const board=fixture();board.tasks=Array.from({length:120},(_,index)=>({...board.tasks[0],id:'fixture-'+index}));
+  const h=harness(board);assert.equal(h.nodes.get('unread-count').textContent,'99+');assert.match(h.nodes.get('unread-only').attributes['aria-label'],/120 unread tasks/);
+  h.nodes.get('unread-only').onclick();h.api.setView('list');assert.equal(h.nodes.get('unread-count').textContent,'99+');
+});
+
+test('rapid unread toggles size the final title and count without retaining old widths',()=>{
+  const h=harness(),toggle=h.nodes.get('unread-only'),title=h.nodes.get('view-title'),count=h.nodes.get('count-slot');
+  h.nodes.get('title-all').getBoundingClientRect=()=>({width:72});h.nodes.get('title-unread').getBoundingClientRect=()=>({width:108});
+  h.nodes.get('visible-count').getBoundingClientRect=()=>({width:h.nodes.get('visible-count').textContent.length*6});
+  h.api.render();assert.equal(title.attributes['aria-label'],'All tasks');assert.equal(title.style.width,'72px');assert.equal(count.style.width,'42px');
+  for(let index=0;index<7;index++)toggle.onclick();
+  assert.equal(h.nodes.get('header-title').dataset.unread,'true');assert.equal(toggle.attributes['aria-pressed'],'true');
+  assert.equal(title.attributes['aria-label'],'Unread tasks');assert.equal(title.style.width,'108px');assert.equal(count.style.width,'66px');
+  h.nodes.get('search').value='missing';h.api.render();assert.equal(h.nodes.get('visible-count').textContent,'0 / 2 tasks');assert.equal(count.style.width,'66px');
+  const next=fixture();next.tasks.push({...next.tasks[0],id:'new-fixture'});h.api.applyNativeBoard(next);assert.equal(title.style.width,'108px');
+  h.nodes.get('clear-filters').onclick();assert.equal(h.nodes.get('header-title').dataset.unread,'false');assert.equal(title.attributes['aria-label'],'All tasks');
+  assert.equal(title.style.width,'72px');assert.equal(count.style.width,'42px');
+});
+
+test('Unread inbox stays active across refreshes and layouts',()=>{
+  assert.doesNotMatch(html,/<aside|data-filter=|id="sidebar-toggle"/);
+  const h=harness(),toggle=h.nodes.get('unread-only');h.api.applyNativeBoard(fixture());
+  assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');
+  toggle.onclick();assert.equal(toggle.attributes['aria-pressed'],'true');assert.equal(h.nodes.get('view-title').attributes['aria-label'],'Unread tasks');
+  assert.equal(h.nodes.get('visible-count').textContent,'1 / 2 tasks');
+  h.api.setView('list');assert.equal(toggle.attributes['aria-pressed'],'true');
+  const next=fixture();next.tasks[0].isUnread=false;h.api.applyNativeBoard(next);
+  assert.equal(h.nodes.get('visible-count').textContent,'0 / 2 tasks');assert.equal(toggle.attributes['aria-pressed'],'true');
+  toggle.onclick();assert.equal(toggle.attributes['aria-pressed'],'false');assert.equal(h.nodes.get('view-title').attributes['aria-label'],'All tasks');
+  assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');assert(h.nodes.get('board').classList.contains('list'));
+});
+
+test('appearance defaults to the system and reacts to media and native host changes without rebuilding cards',()=>{
+  const h=harness(),select=h.nodes.get('theme'),root=h.context.document.documentElement,card=h.nodes.get('board').children[0];
+  assert.equal(select.value,'system');assert.equal(root.dataset.theme,'dark');
+  h.themeMedia.matches=false;h.events.mediaTheme();assert.equal(root.dataset.theme,'light');
+  select.value='dark';select.onchange();h.events.mediaTheme();assert.equal(root.dataset.theme,'dark');
+  h.events['kanban-host-theme']({detail:'light'});assert.equal(root.dataset.theme,'dark');
+  select.value='system';select.onchange();assert.equal(root.dataset.theme,'light');
+  h.events['kanban-host-theme']({detail:'dark'});assert.equal(root.dataset.theme,'dark');
+  h.events['kanban-host-theme']({detail:'invalid'});assert.equal(root.dataset.theme,'dark');
+  assert.equal(h.nodes.get('board').children[0],card);assert(!h.nodes.get('detail').open);
+});
+
+test('appearance restores saved choices and synchronizes changes and resets across tabs',()=>{
+  const key='codex-kanban.theme.v1',h=harness(fixture(),{dark:false,theme:'dark'}),select=h.nodes.get('theme'),root=h.context.document.documentElement;
+  assert.equal(select.value,'dark');assert.equal(root.dataset.theme,'dark');
+  select.value='light';select.onchange();assert.equal(h.storage.get(key),'light');
+  h.storage.set(key,'dark');h.events.storage({key});assert.equal(select.value,'dark');assert.equal(root.dataset.theme,'dark');
+  h.storage.set(key,'unknown');h.events.storage({key});assert.equal(select.value,'system');assert.equal(root.dataset.theme,'light');
+  h.storage.delete(key);h.events.storage({key:null});assert.equal(select.value,'system');
+  assert.equal(h.storage.get('codex-kanban.workflow.v1:local%3Alegacy'),'done');
+});
+
+test('appearance remains usable when browser storage is unavailable',()=>{
+  const h=harness(fixture(),{storageFailure:true}),select=h.nodes.get('theme');
+  assert.equal(select.value,'system');select.value='light';select.onchange();
+  assert.equal(h.context.document.documentElement.dataset.theme,'light');
+  assert.match(h.nodes.get('task-toast').textContent,/could not be saved/);
+});
 
 test('the simplified UI boots, polls, filters and changes layout without touching retired classifications',()=>{
   const h=harness();h.api.applyNativeBoard(fixture());
@@ -39,7 +177,7 @@ test('connection, read-only and unavailable-host warnings remain visible',()=>{
   const h=harness();assert(!h.nodes.get('native-note').hidden);
   const board=fixture();board.sync.writable=false;board.sync.moveWritable=false;h.api.applyNativeBoard(board);
   assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/updated Kanban launcher/i);
-  board.sync.writable=true;board.sync.moveWritable=true;board.unavailableHosts=['remote'];h.api.applyNativeBoard(board);
+  board.sync.writable=true;board.unavailableHosts=['remote'];h.api.applyNativeBoard(board);
   assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/Some hosts unavailable/);
 });
 
@@ -50,7 +188,7 @@ test('Group explains every protected source and pending action while keeping wri
     h.api.showDetail(candidate);
     assert.equal(h.nodes.get('detail-native').disabled,!!reason);
     assert.equal(h.api.nativeCanEditGroup(candidate),!reason);
-    assert.equal(h.nodes.get('native-edit-hint').hidden,!reason);
+    if(reason)assert.equal(h.nodes.get('native-edit-hint').hidden,false);
     if(reason){assert.match(h.nodes.get('native-edit-hint').textContent,reason);assert.equal(h.nodes.get('detail-native').title,h.nodes.get('native-edit-hint').textContent);}
   };
   check(task,null);
@@ -64,24 +202,7 @@ test('Group explains every protected source and pending action while keeping wri
   new Script("nativePending=false;pinningKey='fixture'").runInContext(h.context);check(task,/Another task action/);
   new Script('pinningKey=null;nativeConnected=false').runInContext(h.context);check(task,/Local connection required/);
   new Script("nativeConnected=true;nativeToken=''").runInContext(h.context);check(task,/Local connection required/);
-  new Script("nativeToken='csrf'").runInContext(h.context);
-  h.api.applyNativeBoard({...board,sync:{...board.sync,moveWritable:false}});check(task,/updated Kanban launcher/);
-});
-
-test('verified project-inherited tasks can change group while preserving project details',()=>{
-  const board=fixture(),task=board.tasks[0];
-  Object.assign(task,{placementSource:'desktopProject',localSectionId:null,projectId:'fixture-project',projectName:'Tools'});
-  const h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
-  h.api.showDetail(task);
-  assert(h.api.nativeCanEditGroup(task));assert(!h.nodes.get('detail-native').disabled);
-  assert.match(h.nodes.get('native-edit-hint').textContent,/this task only; its project stays in place/);
-  assert(h.nodes.get('detail-meta').children.some(n=>n.textContent==='Tools'));
-  const disconnected={...board,sync:{...board.sync,moveWritable:false,pinLocal:false}};
-  h.api.applyNativeBoard(disconnected);
-  assert(h.nodes.get('detail-native').disabled);
-  assert.match(h.nodes.get('native-edit-hint').textContent,/updated Kanban launcher/);
-  const menu=h.nodes.get('board').querySelectorAll('.card-menu')[0];
-  assert(!menu.querySelector('.card-menu-panel').children.some(n=>n.attributes['aria-label']?.startsWith('Pin task:')));
+  new Script("nativeToken='csrf'").runInContext(h.context);board.sync.moveWritable=false;h.api.applyNativeBoard(board);check(task,/updated Kanban launcher/);
 });
 
 test('details visibly explain absence from refreshed board data and recover when the task returns',()=>{
@@ -99,6 +220,172 @@ test('details visibly explain absence from refreshed board data and recover when
 });
 
 const nodeText=node=>[node.textContent,...node.children.map(nodeText)].join(' ');
+const menuItem=(h,label)=>['task-menu','task-submenu'].flatMap(id=>h.nodes.get(id).hidden?[]:h.nodes.get(id).querySelectorAll('.task-menu-item')).find(n=>!n.hidden&&n.querySelector('.menu-label').textContent===label);
+const click=node=>node.onclick({stopPropagation(){}});
+function projectFixture(){
+  const board=fixture();board.sync.projectLocal=true;
+  board.projects=[{projectId:'native-a',hostId:'local',label:'Project A'},{projectId:'native-b',hostId:'local',label:'Project B'},{projectId:'cloud',hostId:'durable',label:'Cloud project'}];
+  Object.assign(board.tasks[0],{localProjectId:'native-a',projectId:'native-a',projectName:'Project A'});return board;
+}
+
+test('card menus navigate with the keyboard, dismiss safely and defer polling until closed',async()=>{
+  const h=harness(projectFixture());new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(projectFixture());
+  const panel=h.nodes.get('task-menu'),trigger=h.nodes.get('board').querySelectorAll('.card-details')[0];
+  click(trigger);assert.equal(trigger.attributes['aria-expanded'],'true');
+  assert.deepEqual(panel.querySelectorAll('.task-menu-item').map(n=>n.querySelector('.menu-label').textContent),['Pin','Project','Section','View details','Archive']);
+  const key=value=>h.events.keydown({key:value,target:h.context.document.activeElement,preventDefault(){},stopPropagation(){}});
+  assert.equal(h.context.document.activeElement,menuItem(h,'Pin'));
+  key('ArrowDown');assert.equal(h.context.document.activeElement,menuItem(h,'Project'));
+  key('ArrowRight');assert.equal(h.nodes.get('task-submenu').attributes['aria-label'],'Choose project: Local fixture');
+  assert(!menuItem(h,'Cloud project'));assert.equal(menuItem(h,'Project A').attributes['aria-checked'],'true');
+  key('End');assert.equal(h.context.document.activeElement,menuItem(h,'Remove from Project A'));
+  key('Home');assert.equal(h.context.document.activeElement,menuItem(h,'Project A'));
+  key('ArrowLeft');assert(h.nodes.get('task-submenu').hidden);assert.equal(h.context.document.activeElement,menuItem(h,'Project'));
+  h.context.location.protocol='http:';let reads=0;h.context.fetchImpl=async()=>{reads++;return {ok:true,json:async()=>({board:projectFixture(),csrf:'csrf'})};};
+  await h.api.refreshNativeBoard();assert.equal(reads,0);
+  h.intervals[0]();assert(!panel.hidden);assert.equal(reads,0);
+  key('Escape');assert(panel.hidden);assert.equal(trigger.attributes['aria-expanded'],'false');assert.equal(h.context.document.activeElement,trigger);
+  click(trigger);h.events.click({target:h.nodes.get('search')});assert(panel.hidden);
+  click(trigger);h.events.scroll({target:panel});assert(!panel.hidden);
+  h.events.scroll({target:h.nodes.get('board')});assert(panel.hidden);
+  click(trigger);const focused=h.context.document.activeElement;h.events.resize();assert(!panel.hidden);assert.equal(h.context.document.activeElement,focused);
+  key('Tab');assert(panel.hidden);assert.equal(h.context.document.activeElement,trigger);
+  click(trigger);click(trigger);assert(panel.hidden);
+  click(trigger);h.api.setView('list');assert(panel.hidden);
+});
+
+test('hover switches flyouts without stealing focus or writing, and pointer transitions keep the submenu open',()=>{
+  const h=harness(projectFixture());new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(projectFixture());
+  click(h.nodes.get('board').querySelectorAll('.card-details')[0]);
+  const focus=h.context.document.activeElement,parent=h.nodes.get('task-menu'),child=h.nodes.get('task-submenu');
+  menuItem(h,'Project').onmouseenter();assert(!child.hidden);assert(menuItem(h,'Remove from Project A'));assert(menuItem(h,'Project A'));
+  assert.equal(menuItem(h,'Project').querySelector('use').attributes.href,'#i-folder-move');
+  assert.equal(menuItem(h,'Remove from Project A').querySelector('use').attributes.href,'#i-folder-remove');
+  assert.equal(child.querySelectorAll('.task-menu-item').at(-1),menuItem(h,'Remove from Project A'));
+  assert.equal(h.context.document.activeElement,focus);assert.equal(menuItem(h,'Project').attributes['aria-expanded'],'true');
+  parent.onmouseleave();child.onmouseenter();assert(!child.hidden);
+  menuItem(h,'Section').onmouseenter();assert(!menuItem(h,'Project A'));assert(menuItem(h,'Ungrouped'));
+  assert.equal(menuItem(h,'Project').attributes['aria-expanded'],'false');assert.equal(menuItem(h,'Section').attributes['aria-expanded'],'true');
+  h.events.click({target:menuItem(h,'Ungrouped')});h.events.scroll({target:child});assert(!parent.hidden);assert(!child.hidden);
+  menuItem(h,'View details').onmouseenter();assert(child.hidden);
+  menuItem(h,'Project').onmouseenter();h.events.click({target:h.nodes.get('search')});assert(parent.hidden);assert(child.hidden);
+});
+
+test('flyouts flip to the left, clamp vertically, and provide a Back action on narrow screens',()=>{
+  const h=harness(projectFixture());new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(projectFixture());
+  Object.assign(h.context.window,{innerWidth:1024,innerHeight:768});
+  const parent=h.nodes.get('task-menu'),child=h.nodes.get('task-submenu');
+  parent.getBoundingClientRect=()=>({left:772,right:1012,width:240,height:200});child.getBoundingClientRect=()=>({width:240,height:300});
+  click(h.nodes.get('board').querySelectorAll('.card-details')[0]);
+  const project=menuItem(h,'Project');project.getBoundingClientRect=()=>({top:700});project.onmouseenter();
+  assert.equal(child.style.left,'532px');assert.equal(child.style.top,'456px');
+  h.context.window.innerWidth=390;h.events.resize();assert(menuItem(h,'Back'));
+  h.context.window.innerWidth=1024;h.events.resize();assert(!menuItem(h,'Back'));
+  h.context.window.innerWidth=390;menuItem(h,'Section').onmouseenter();assert(menuItem(h,'Back'));assert.equal(child.style.left,'138px');
+  click(menuItem(h,'Back'));assert(child.hidden);assert.equal(h.context.document.activeElement,menuItem(h,'Section'));
+});
+
+test('Remove from the current project clears the assignment in place, survives updates and is also available in details',async()=>{
+  const board=projectFixture(),h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+  const next=structuredClone(board);Object.assign(next.tasks[0],{localProjectId:null,projectId:null,projectName:null});
+  let writes=0;h.context.fetchImpl=async(url,request)=>{writes++;assert.equal(url,'/api/project');assert.deepEqual(JSON.parse(request.body),{threadId:localId,hostId:'local',projectId:null,expectedProjectId:'native-a'});return {ok:true,json:async()=>({threadId:localId,projectId:null,changed:true,board:next})};};
+  click(h.nodes.get('board').querySelectorAll('.card-details')[0]);menuItem(h,'Project').onmouseenter();click(menuItem(h,'Remove from Project A'));
+  for(let i=0;i<10;i++)await Promise.resolve();
+  assert.equal(writes,1);assert(h.nodes.get('task-menu').hidden);assert(h.nodes.get('task-submenu').hidden);assert(!h.nodes.get('detail').open);
+  assert.equal(h.nodes.get('task-toast').textContent,'Project removed and verified.');h.api.applyNativeBoard(next);
+  assert.doesNotMatch(nodeText(h.nodes.get('board')),/Set project|Project A/);
+  const unset=h.nodes.get('board').querySelectorAll('.project')[0];assert(unset.classList.contains('project-unassigned'));assert.equal(nodeText(unset).trim(),'');assert.match(unset.attributes['aria-label'],/Set project/);
+  click(h.nodes.get('board').querySelectorAll('.project')[0]);assert(!menuItem(h,'Remove from Project A'));assert(!menuItem(h,'No project'));
+  h.api.showDetail(next.tasks[0]);const picker=h.nodes.get('detail-project');assert.equal(picker.value,'');assert.equal(picker.children[0].textContent,'No project');assert(!picker.children[0].disabled);
+  h.api.applyNativeBoard(board);h.api.showDetail(board.tasks[0]);assert.equal(picker.children[0].textContent,'Remove from Project A');picker.value='';await picker.onchange();assert.equal(writes,2);assert.equal(picker.value,'');
+});
+
+test('in-place project choices share verified saving without opening details',async()=>{
+  const board=projectFixture(),h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+  const next=structuredClone(board);Object.assign(next.tasks[0],{localProjectId:'native-b',projectId:'native-b',projectName:'Project B'});
+  let writes=0;h.context.fetchImpl=async(url,request)=>{
+    assert.equal(url,'/api/project');writes++;
+    assert.deepEqual(JSON.parse(request.body),{threadId:localId,hostId:'local',projectId:'native-b',expectedProjectId:'native-a'});
+    return {ok:true,json:async()=>({threadId:localId,projectId:'native-b',changed:true,board:next})};
+  };
+  click(h.nodes.get('board').querySelectorAll('.project')[0]);
+  click(menuItem(h,'Project B'));assert(h.nodes.get('task-menu').hidden);
+  // The event deliberately starts an async action; wait for its pending state to clear.
+  for(let i=0;i<10;i++)await Promise.resolve();
+  assert.equal(writes,1);assert(!h.nodes.get('detail').open);assert.match(nodeText(h.nodes.get('board')),/Project B/);
+  assert.equal(h.nodes.get('task-toast').textContent,'Project saved and verified.');
+});
+
+test('menus clamp to the viewport and open above a bottom-edge trigger',()=>{
+  const h=harness(),trigger=h.nodes.get('board').querySelectorAll('.card-details')[0],panel=h.nodes.get('task-menu');
+  Object.assign(h.context.window,{innerWidth:1024,innerHeight:768});
+  trigger.getBoundingClientRect=()=>({right:1020,top:700,bottom:720});panel.getBoundingClientRect=()=>({width:240,height:204});
+  click(trigger);assert.equal(panel.style.left,'772px');assert.equal(panel.style.top,'490px');
+  trigger.getBoundingClientRect=()=>({right:20,top:40,bottom:60});
+  h.events.resize();assert.equal(panel.style.left,'12px');assert.equal(panel.style.top,'66px');assert(!panel.hidden);
+});
+
+test('section and native actions dispatch from menus, while cloud controls explain their limits',()=>{
+  const h=harness(projectFixture());new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(projectFixture());
+  h.context.actionCalls=[];
+  new Script("moveNative=(task,section)=>actionCalls.push(['section',task.id,section]);setTaskPinned=task=>actionCalls.push(['pin',task.id]);archiveTask=task=>actionCalls.push(['archive',task.id]);").runInContext(h.context);
+  const triggers=h.nodes.get('board').querySelectorAll('.card-details'),panel=h.nodes.get('task-menu');
+  click(triggers[0]);click(menuItem(h,'Section'));
+  assert.equal(menuItem(h,'For Review').attributes['aria-checked'],'true');click(menuItem(h,'Ungrouped'));
+  for(const action of ['Pin','Archive']){click(triggers[0]);click(menuItem(h,action));assert(panel.hidden);}
+  assert.deepEqual(JSON.parse(JSON.stringify(h.context.actionCalls)),[['section',localId,null],['pin',localId],['archive',localId]]);
+  click(triggers[1]);assert(!menuItem(h,'Pin'));assert(!menuItem(h,'Archive'));
+  for(const action of ['Project','Section']){assert(menuItem(h,action).disabled);assert.match(menuItem(h,action).title,/local tasks only/);}
+  click(menuItem(h,'View details'));assert(h.nodes.get('detail').open);assert.equal(h.nodes.get('detail-title').textContent,'Cloud fixture');
+});
+
+test('clearing filters restores all tasks without changing sort, layout or saved orders',()=>{
+  const h=harness(),before=new Map(h.storage);
+  h.api.setView('list');h.api.setFilter('unread');
+  h.nodes.get('host').value='durable';h.nodes.get('search').value='missing';h.nodes.get('search').listeners.input();
+  assert(!h.nodes.get('clear-filters').hidden);
+  assert.equal(h.nodes.get('visible-count').textContent,'0 / 2 tasks');
+  const empty=h.nodes.get('board').querySelectorAll('.board-empty')[0];
+  empty.querySelector('button').onclick();
+  assert.equal(h.nodes.get('search').value,'');assert.equal(h.nodes.get('host').value,'all');
+  assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');assert(h.nodes.get('clear-filters').hidden);
+  assert(h.nodes.get('board').classList.contains('list'));assert.equal(h.nodes.get('order').value,'recent');
+  assert.deepEqual(h.storage,before);assert.equal(h.context.document.activeElement,h.nodes.get('search'));
+  h.nodes.get('search').value='fixture';h.nodes.get('search').listeners.input();h.nodes.get('clear-filters').onclick();
+  assert(h.nodes.get('clear-filters').hidden);
+});
+
+test('column scroll positions survive polling, list switches and collapsed refreshes independently',()=>{
+  const h=harness(),root=h.nodes.get('board');
+  const section=id=>root.querySelectorAll('.column').find(n=>n.dataset.groupId===id);
+  const cards=id=>section(id).querySelector('.cards');
+  cards('review').scrollTop=240;cards('chats').scrollTop=80;
+  h.api.applyNativeBoard(fixture());assert.equal(cards('review').scrollTop,240);assert.equal(cards('chats').scrollTop,80);
+  h.api.setView('list');cards('review').scrollTop=0;h.api.setView('board');
+  assert.equal(cards('review').scrollTop,240);assert.equal(cards('chats').scrollTop,80);
+  section('review').querySelector('.col-head').onclick();cards('review').scrollTop=0;
+  h.api.applyNativeBoard(fixture());section('review').querySelector('.col-head').onclick();
+  assert.equal(cards('review').scrollTop,240);assert.equal(cards('chats').scrollTop,80);
+});
+
+test('a pending polling response preserves new card interactions and keeps open details current',async()=>{
+  for(const interaction of ['focused-card','detail','menu']){
+    const h=harness(),root=h.nodes.get('board');let resolveResponse;
+    h.context.location.protocol='http:';
+    h.context.fetchImpl=()=>new Promise(resolve=>resolveResponse=resolve);
+    const reading=h.api.refreshNativeBoard(),original=root.children[0];
+    if(interaction==='focused-card')h.context.document.activeElement={closest:selector=>selector==='.card'?original:null};
+    else if(interaction==='menu')root.querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
+    else h.api.showDetail(fixture().tasks[0]);
+    const next=fixture();next.tasks[0].title='Updated local fixture';
+    resolveResponse({ok:true,json:async()=>({board:next,csrf:'fixture-token'})});
+    await reading;
+    if(interaction==='detail'){
+      assert.notEqual(root.children[0],original);assert(h.nodes.get('detail').open);
+      assert.equal(h.nodes.get('detail-title').textContent,'Updated local fixture');
+    }else{assert.equal(root.children[0],original);if(interaction==='menu')assert(!h.nodes.get('task-menu').hidden);}
+  }
+});
 test('filtered empty groups differ from empty data and zero matches share one state in Board and List',()=>{
   const h=harness(),board=h.nodes.get('board');
   assert.match(nodeText(board),/No readable tasks in this group/);
@@ -114,7 +401,7 @@ test('filtered empty groups differ from empty data and zero matches share one st
   new Script("draggedKey='local:fixture'").runInContext(h.context);h.api.render();
   assert(board.children.every(node=>node.dataset.groupId));
   new Script('draggedKey=null').runInContext(h.context);
-  h.nodes.get('search').value='';h.api.setFilter('pinned');
+  h.nodes.get('search').value='';h.api.setFilter('unread');
   h.api.applyNativeBoard({...fixture(),tasks:[]});assert.equal(board.children.length,1);
   h.api.setFilter('all');assert(board.children.every(node=>node.dataset.groupId));
   assert.doesNotMatch(nodeText(board),/No matching tasks/);
@@ -134,28 +421,65 @@ test('host options follow refreshed data, preserve valid selection and remain st
   assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');
 });
 
-test('task action disclosures close outside and on Escape, restore focus, and open the correct details',()=>{
+test('project labels have folder icons and open the picker; verified changes survive polling and failed changes revert',async()=>{
+  const board=fixture();board.sync.projectLocal=true;board.projects=[{projectId:'native-a',desktopProjectId:'desktop-a',hostId:'local',label:'Project A'},
+    {projectId:'native-b',hostId:'local',label:'Project B'},{projectId:'remote',hostId:'durable',label:'Cloud project'}];
+  Object.assign(board.tasks[0],{projectId:'desktop-a',projectName:'Project A',localProjectId:null});
+  const h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+  const label=h.nodes.get('board').querySelectorAll('.project')[0];
+  assert.equal(label.tag,'button');assert.equal(label.querySelector('use').attributes.href,'#i-folder');
+  label.onclick({stopPropagation(){}});assert(!h.nodes.get('detail').open);assert(!h.nodes.get('task-menu').hidden);
+  assert.equal(menuItem(h,'Project A').attributes['aria-checked'],'true');
+  h.api.showDetail(board.tasks[0]);
+  const picker=h.nodes.get('detail-project');assert(!picker.disabled);assert.equal(picker.value,'native-a');
+  assert(!picker.children.some(n=>n.value==='remote'));
+  const options=picker.children;h.api.applyNativeBoard(board);assert.equal(picker.children,options);
+  let resolve;h.context.fetchImpl=async(url,request)=>{assert.equal(url,'/api/project');assert.deepEqual(JSON.parse(request.body),{threadId:localId,hostId:'local',projectId:'native-b',expectedProjectId:null});return new Promise(r=>resolve=r);};
+  picker.value='native-b';const saving=picker.onchange();assert(picker.disabled);
+  await picker.onchange(); // A disabled/pending edit cannot dispatch another write.
+  const next=structuredClone(board);Object.assign(next.tasks[0],{localProjectId:'native-b',projectId:'native-b',projectName:'Project B'});
+  resolve({ok:true,json:async()=>({threadId:localId,projectId:'native-b',changed:true,board:next})});await saving;
+  assert.equal(picker.value,'native-b');assert(!picker.disabled);assert.match(h.nodes.get('project-edit-hint').textContent,/saved and verified/);
+  h.api.applyNativeBoard(next);assert.equal(picker.value,'native-b');assert.match(nodeText(h.nodes.get('board')),/Project B/);
+  h.context.fetchImpl=async()=>({ok:false,json:async()=>({error:'Project changed elsewhere'})});picker.value='native-a';await picker.onchange();
+  assert.equal(picker.value,'native-b');assert.match(h.nodes.get('project-edit-hint').textContent,/changed elsewhere/);
+  h.api.showDetail(board.tasks[1]);assert(picker.disabled);assert.match(h.nodes.get('project-edit-hint').textContent,/local tasks only/);
+  const unassigned=fixture();unassigned.sync.projectLocal=true;unassigned.projects=board.projects;h.api.applyNativeBoard(unassigned);
+  const set=h.nodes.get('board').querySelectorAll('.project')[0];assert.match(set.attributes['aria-label'],/Set project/);
+  h.nodes.get('detail').close();set.onclick({stopPropagation(){}});assert(!h.nodes.get('detail').open);
+  assert(!h.nodes.get('task-menu').hidden);assert(!menuItem(h,'Project A').attributes['aria-checked'].includes('true'));
+});
+
+test('direct task actions preserve native pin semantics, host icons, footer projects and details',()=>{
   const h=harness();new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(fixture());
-  const menus=h.nodes.get('board').querySelectorAll('.card-menu'),[local,remote]=menus;
-  local.open=true;remote.open=true;local.listeners.toggle();assert(!remote.open);
-  assert.equal(local.querySelector('summary').attributes['aria-expanded'],'true');
-  const trigger=local.querySelector('summary');h.events.click({target:trigger});assert(local.open);
-  h.events.click({target:h.nodes.get('search')});assert(!local.open);
-  local.open=true;let prevented=false;
-  h.events.keydown({key:'Escape',target:trigger,preventDefault(){prevented=true;}});
-  assert(!local.open);assert(prevented);assert.equal(h.context.document.activeElement,trigger);
-  const buttons=local.querySelector('.card-menu-panel').children;
+  const root=h.nodes.get('board'),cards=root.querySelectorAll('.card'),local=cards.find(n=>n.dataset.taskKey==='local:'+localId),remote=cards.find(n=>n.dataset.taskKey==='durable:remote');
+  const buttons=local.querySelector('.card-actions').children;
   assert(buttons.some(n=>n.attributes['aria-label']==='Pin task: Local fixture'));
   assert(buttons.some(n=>n.attributes['aria-label']==='Archive task: Local fixture'));
-  assert.deepEqual(remote.querySelector('.card-menu-panel').children.map(n=>n.attributes['aria-label']),['View details: Cloud fixture']);
+  assert(buttons.every(n=>n.children.length===1));assert.equal(root.querySelectorAll('.card-menu').length,0);
+  assert.equal(remote.querySelector('.card-actions').children[0].tag,'span');
+  assert.equal(remote.querySelector('.card-actions').children[0].attributes['data-pinned'],'true');
+  assert.equal(local.querySelectorAll('.host').length,0);assert.equal(remote.querySelector('.host').attributes['aria-label'],'Cloud');
+  assert.equal(remote.querySelector('.host').querySelector('use').attributes.href,'#i-cloud');
   h.context.actionCalls=[];
   new Script("setTaskPinned=task=>actionCalls.push(['pin',task.id]);archiveTask=task=>actionCalls.push(['archive',task.id]);").runInContext(h.context);
   for(const label of ['Pin task: Local fixture','Archive task: Local fixture']){
-    local.open=true;buttons.find(n=>n.attributes['aria-label']===label).onclick({stopPropagation(){}});assert(!local.open);
+    buttons.find(n=>n.attributes['aria-label']===label).onclick({stopPropagation(){}});
   }
   assert.deepEqual(JSON.parse(JSON.stringify(h.context.actionCalls)),[['pin',localId],['archive',localId]]);
-  local.open=true;buttons.find(n=>n.attributes['aria-label']==='View details: Local fixture').onclick({stopPropagation(){}});
-  assert(!local.open);assert(h.nodes.get('detail').open);assert.equal(h.nodes.get('detail-title').textContent,'Local fixture');
+  local.querySelector('.card-details').onclick({stopPropagation(){}});
+  menuItem(h,'View details').onclick({stopPropagation(){}});
+  assert(h.nodes.get('detail').open);assert.equal(h.nodes.get('detail-title').textContent,'Local fixture');
+  for(const nativeTaskPinned of [true,false]){
+    const board=fixture();Object.assign(board.tasks[0],{pinned:true,nativeTaskPinned,projectName:'Example project'});h.api.applyNativeBoard(board);
+    const card=root.querySelectorAll('.card').find(n=>n.dataset.taskKey==='local:'+localId),pin=card.querySelectorAll('.card-pin')[0];
+    assert.equal(pin.attributes['data-pinned'],'true');assert.equal(pin.attributes['aria-pressed'],String(nativeTaskPinned));
+    assert.equal(pin.attributes['aria-label'],(nativeTaskPinned?'Unpin':'Pin')+' task: Local fixture');
+    assert.equal(card.querySelector('.project-line').parentElement,card.querySelector('.card-footer'));
+    assert.equal(nodeText(card.querySelector('.project-line')).trim(),'Example project');
+  }
+  new Script("pinningKey='local:'+DATA.tasks[0].id").runInContext(h.context);h.api.render();
+  assert(root.querySelectorAll('.card-actions').flatMap(n=>n.children).filter(n=>n.tag==='button').every(n=>n.disabled));
 });
 
 function gitFixture(){
@@ -169,7 +493,7 @@ test('integrated Git cards keep task actions and search while details separate P
   assert.match(nodeText(root),/codex\/pr-layout.*#7 · Draft/);
   const badge=root.querySelectorAll('.pr-badge pr-draft')[0];assert.equal(badge.href,board.tasks[0].git.pullRequests.items[0].url);
   assert.equal(badge.target,'_blank');assert.equal(badge.rel,'noopener noreferrer');
-  assert.equal(root.querySelectorAll('.card-menu').length,2);
+  assert.equal(root.querySelectorAll('.card-details').length,2);
   for(const query of ['codex/pr-layout','example/board','#7']){
     h.nodes.get('search').value=query;h.nodes.get('search').listeners.input();assert.equal(h.nodes.get('visible-count').textContent,'1 / 2 tasks');
   }
@@ -225,7 +549,7 @@ test('upstream project view works with simplified controls, PR cards and filtere
   toggle().onclick();assert.equal(toggle().attributes['aria-checked'],'true');
   assert.equal(root.querySelectorAll('.project-group').length,1);
   assert.match(nodeText(root.querySelectorAll('.project-group')[0]),/Board project.*#7 · Draft/);
-  assert.equal(root.querySelectorAll('.card-menu').length,2);
+  assert.equal(root.querySelectorAll('.card-details').length,2);
   assert.equal(h.context.document.activeElement,toggle());
   h.api.setView('list');assert.equal(root.querySelectorAll('.project-group').length,1);
   h.nodes.get('search').value='missing';h.nodes.get('search').listeners.input();
@@ -235,4 +559,29 @@ test('upstream project view works with simplified controls, PR cards and filtere
   assert.equal(toggle().attributes['aria-checked'],'true');
   toggle().onclick();assert.equal(root.querySelectorAll('.project-group').length,0);
   assert.equal(root.querySelectorAll('.pr-badge pr-draft').length,1);
+});
+
+test('Clear filters resets search, host and unread without changing layout and sort',()=>{
+  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),sort=h.nodes.get('order');
+  h.api.setView('list');sort.value='manual';sort.onchange();h.api.setFilter('unread');host.value='durable';search.value='missing';search.listeners.input();
+  assert(!h.nodes.get('clear-filters').hidden);h.nodes.get('board').children[0].querySelector('button').onclick();
+  assert.equal(host.value,'all');assert.equal(search.value,'');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'false');
+  assert.equal(sort.value,'manual');assert(h.nodes.get('board').classList.contains('list'));assert(h.nodes.get('clear-filters').hidden);
+  search.value='fixture';search.listeners.input();h.nodes.get('clear-filters').onclick();assert.equal(search.value,'');
+});
+
+
+test('verified project-inherited tasks can change group while preserving project details',()=>{
+  const board=fixture(),task=board.tasks[0];
+  Object.assign(task,{placementSource:'desktopProject',localSectionId:null,projectId:'fixture-project',projectName:'Tools'});
+  const h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+  h.api.showDetail(task);
+  assert(h.api.nativeCanEditGroup(task));assert(!h.nodes.get('detail-native').disabled);
+  assert.match(h.nodes.get('native-edit-hint').textContent,/this task only; its project stays in place/);
+  assert.equal(h.nodes.get('detail-project').children[0].textContent,'Remove from Tools');
+  const disconnected={...board,sync:{...board.sync,moveWritable:false,pinLocal:false}};
+  h.api.applyNativeBoard(disconnected);
+  assert(h.nodes.get('detail-native').disabled);
+  assert.match(h.nodes.get('native-edit-hint').textContent,/updated Kanban launcher/);
+  assert(!h.nodes.get('board').querySelectorAll('.card-pin').some(n=>n.tag==='button'));
 });

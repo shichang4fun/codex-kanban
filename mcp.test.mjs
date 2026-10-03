@@ -16,6 +16,20 @@ import {preparePlugin} from './install-plugin.mjs';
 const id='11111111-1111-4111-8111-111111111111';
 const task={id,hostId:'local',title:'Fixture task',cwd:'/fixture'};
 const board=()=>({tasks:[task],sections:[],sync:{connected:true}});
+
+test('MCP project changes require the app token, preserve null clearing and verify the target',async()=>{
+  let writes=0,projectId='project-a';
+  const f=await harness({getBoard:async()=>({tasks:[{...task,localProjectId:projectId}],sections:[],sync:{connected:true,projectCatalogConnected:true}}),
+    setProject:async(params,_board,{signal})=>{assert(!signal.aborted);writes++;projectId=params.projectId;return {threadId:id,projectId,changed:true};}});
+  try{
+    const initial=(await f.client.callTool({name:'get_board',arguments:{}})).structuredContent;
+    assert(initial.board.sync.projectLocal);
+    const params={threadId:id,hostId:'local',projectId:null,expectedProjectId:'project-a'};
+    assert.equal((await f.client.callTool({name:'set_project',arguments:{...params,actionToken:'99999999-9999-4999-8999-999999999999'}})).structuredContent.status,403);assert.equal(writes,0);
+    const response=await f.client.callTool({name:'set_project',arguments:{...params,actionToken:initial.csrf}});
+    assert(!response.isError);assert.equal(response.structuredContent.projectId,null);assert.equal(response.structuredContent.board.tasks[0].localProjectId,null);assert.equal(writes,1);
+  }finally{await f.close();}
+});
 async function harness(options={}){
   const service=createKanbanService({getBoard:async()=>board(),...options});
   const app=createKanbanMcp({service,readUi:async()=>'<html>Fixture UI</html>'});
@@ -34,7 +48,7 @@ test('MCP lists the sidebar entry, app-only tools and independent UI resource',a
       assert.deepEqual(Buffer.from(icon.src.split(',')[1],'base64'),await readFile(new URL(`./assets/kanban-icon${icon.theme==='dark'?'-dark':''}.png`,import.meta.url)));
     }
     const tools=(await f.client.listTools()).tools;
-    assert.equal(tools.length,6);
+    assert.equal(tools.length,7);
     assert(tools.every(t=>t._meta.ui.visibility.length===1&&t._meta.ui.visibility[0]==='app'));
     assert.deepEqual(tools[0]._meta['openai/ui'].entrypoints,[{type:'global'}]);
     assert.equal(tools[0]._meta.ui.resourceUri,boardResourceUri);
@@ -124,7 +138,7 @@ test('missing plugin snapshot still reads local tasks, and close releases the re
   const root=await mkdtemp(join(tmpdir(),'kanban-data-'));let closes=0;
   const source=createBoardSource({snapshotPath:join(root,'snapshot.json'),allowMissingSnapshot:true,readUnread:async()=>({known:false}),
     openReader:async()=>({close(){closes++;},async request(method){
-      if(method==='threadSection/list')return {data:[]};
+      if(method==='threadSection/list'||method==='project/list')return {data:[]};
       return {data:[{id,name:'Local fixture',ephemeral:false,parentThreadId:null,section:null,updatedAt:1,cwd:'/fixture'}]};
     }})});
   try{const value=await source.getBoard();assert.equal(value.tasks[0].id,id);assert.equal(value.tasks[0].column,'unknown');}

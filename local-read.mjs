@@ -32,7 +32,7 @@ async function openLocalMetadata({executable=officialCli,timeoutMs=20000}={},wri
       if(message.error){
         const writerBusy=operation.method==='thread/archive'&&message.error.message?.includes('already has an active writer');
         operation.reject(writerBusy?Object.assign(Error('This task is in use by Codex. Archive it in Codex, then refresh this board.'),{status:409})
-          :Error('Local metadata RPC failed ('+message.error.code+')'));
+          :Object.assign(Error('Local metadata RPC failed ('+message.error.code+')'),{code:message.error.code}));
       }else operation.resolve(message.result);
     }
   });
@@ -54,6 +54,7 @@ export const openLocalReader=options=>openLocalMetadata(options);
 // Each explicit action gets only its required writes; task execution is never allowed.
 export const openLocalArchiver=options=>openLocalMetadata(options,new Set(['thread/archive','thread/unarchive']));
 export const openLocalPinner=options=>openLocalMetadata(options,new Set(['thread/section/move']));
+export const openLocalProjectEditor=options=>openLocalMetadata(options,new Set(['thread/metadata/update']));
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   let reader;

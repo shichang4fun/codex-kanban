@@ -3,6 +3,7 @@ const routes={
   '/api/board':['GET','get_board'],
   '/api/move':['POST','move_task'],
   '/api/pin':['POST','pin_task'],
+  '/api/project':['POST','set_project'],
   '/api/archive':['POST','archive_task'],
   '/api/unarchive':['POST','undo_archive']
 };
