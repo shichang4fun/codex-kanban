@@ -18,7 +18,7 @@ function harness(storage=new Map()){
   const context=createContext({DATA:data,$:id=>nodes[id],taskKey:key,currentGroups:()=>[],nativeStage:t=>t.group,workflowStage:t=>t.workflow,
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>{if(blocked)throw Error('quota exceeded');storage.set(k,v);}},
     announce:text=>message=text,render:()=>renders++});
-  const api=new Script(helpers+'\n({orderedTasks,moveTaskOrder,taskOrderKey,restoreSortPreference,changeSort})').runInContext(context);
+  const api=new Script(helpers+'\n({orderedTasks,moveTaskOrder,taskOrderKey,restoreSortPreference,changeSort,setProjectView:(value,groupId="review")=>projectViews.set(projectViewKey(groupId),value)})').runInContext(context);
   return {api,data,nodes,storage,block:()=>blocked=true,renders:()=>renders,message:()=>message};
 }
 const ids=rows=>Array.from(rows,key);
@@ -45,6 +45,17 @@ test('before and after moves preserve hidden tasks and never change memberships 
   assert.equal(h.api.moveTaskOrder('local:b','local:p'),false);
   assert.equal(h.api.moveTaskOrder('local:b','missing'),false);
   assert.equal(h.api.moveTaskOrder('local:b','local:b'),false);
+});
+test('project view reorders only within the same project and preserves flat order',()=>{
+  const h=harness();h.data.tasks[0].projectId='one';h.data.tasks[1].projectId='one';h.data.tasks[2].projectId='one';
+  h.api.orderedTasks(review(h),'review');h.api.setProjectView(true);
+  h.data.tasks.push({id:'q',hostId:'local',group:'pinned',projectId:'two',updatedAt:1});
+  assert.equal(h.api.moveTaskOrder('local:q','local:p'),true,'another group remains flat and can reorder across projects');
+  assert.equal(h.api.moveTaskOrder('cloud:a','local:a'),false);
+  assert.equal(h.api.moveTaskOrder('local:b','local:a'),true);
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:b','local:a','cloud:a']);
+  h.api.setProjectView(false);assert.equal(h.api.moveTaskOrder('cloud:a','local:b'),true);
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['cloud:a','local:b','local:a']);
 });
 test('group and mode namespaces are independent and same task IDs on different hosts stay distinct',()=>{
   const h=harness();h.api.orderedTasks(review(h),'review');h.api.moveTaskOrder('cloud:a','local:a');

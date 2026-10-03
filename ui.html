@@ -67,7 +67,7 @@
 .list .column.group-drop-after::after{top:auto;bottom:-10px}
 .workflow .empty{min-height:125px;display:flex;flex-direction:column;justify-content:center}
 .workflow .col-head .state-ring{animation:none;background:none;border-color:var(--color)}
-.workflow .done>.col-head .state-ring{background:var(--color)}
+.workflow .done .col-head .state-ring{background:var(--color)}
 .list .column{min-width:740px}
 .workflow.list .empty{min-height:0;display:block}
 .workflow-edit{display:flex;align-items:center;gap:15px;margin:23px 0;padding-top:20px;border-top:1px solid var(--line);font-size:11px}
@@ -117,6 +117,30 @@
 .card.task-drop-before::before,.card.task-drop-after::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--accent);pointer-events:none;z-index:3}
 .card.task-drop-before::before{top:-5px}.card.task-drop-after::after{bottom:-5px}
 .list .card.task-drop-before::before{top:0}.list .card.task-drop-after::after{bottom:0}
+.col-header{display:flex;align-items:center;gap:8px;margin-bottom:13px}
+.col-header .col-head{flex:1;min-width:0;padding:0}
+.col-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-toggle{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;border:1px solid var(--line);border-radius:5px;padding:4px 6px;color:var(--muted)}
+.project-toggle .icon{width:12px;height:12px}
+.list .col-header{margin:0;padding:12px 14px;background:#24252b;border-radius:7px 7px 0 0}
+.list .col-header .col-head{background:transparent;padding:0}
+.list .column.collapsed .col-header{border-radius:7px}
+.project-toggle[aria-checked=true]{color:var(--ink)}
+.switch-track{width:24px;height:14px;border-radius:7px;background:var(--line);padding:2px;flex-shrink:0}
+.switch-track::before{content:"";display:block;width:10px;height:10px;border-radius:50%;background:var(--muted);transition:transform 160ms ease}
+.project-toggle[aria-checked=true] .switch-track{background:var(--accent)}
+.project-toggle[aria-checked=true] .switch-track::before{background:var(--ink);transform:translateX(10px)}
+.project-group{min-width:0}
+.project-group+.project-group{margin-top:8px}
+.project-head{display:flex;align-items:center;gap:6px;margin:0 0 8px;padding:4px 1px;color:var(--muted);font-size:11px;font-weight:500}
+.project-head .icon{width:13px;height:13px}
+.project-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.project-count{margin-left:auto;color:var(--dim);font-size:10px;font-weight:400}
+.project-cards{display:flex;flex-direction:column;gap:8px}
+.list .project-group+.project-group{margin-top:0;border-top:1px solid var(--line)}
+.list .project-head{margin:0;padding:8px 14px;background:var(--side);border-bottom:1px solid var(--line)}
+.list .project-cards{gap:0}
+.list .project-group:not(:last-child) .card:last-child{border-radius:0}
 @media(max-width:1100px){.workflow-note{padding-left:22px;padding-right:22px}}
 @media(max-width:760px){.workflow-note{padding-left:16px;padding-right:16px}.filters #grouping{max-width:100%}}
 </style>
@@ -486,6 +510,7 @@ function orderedTasks(items,groupId,mode=$('grouping').value){
 function moveTaskOrder(sourceKey,targetKey,after=false){
   const source=DATA.tasks.find(t=>taskKey(t)===sourceKey),target=DATA.tasks.find(t=>taskKey(t)===targetKey);
   if(!source||!target||sourceKey===targetKey||taskGroup(source)!==taskGroup(target))return false;
+  if(readProjectView(taskGroup(source))&&projectKey(source)!==projectKey(target))return false;
   const groupId=taskGroup(source),items=DATA.tasks.filter(t=>taskGroup(t)===groupId).sort((a,b)=>(b.updatedAt??0)-(a.updatedAt??0)||taskKey(a).localeCompare(taskKey(b)));
   const ordered=orderedTasks(items,groupId).map(taskKey),saved=readTaskOrder(groupId);
   const keys=[...saved,...ordered.filter(key=>!saved.includes(key))];
@@ -500,9 +525,38 @@ function changeSort(){
   try{localStorage.setItem(sortStorageKey,$('order').value);}catch{announce('Sort preference could not be saved in this browser.');}
   render();
 }
+const projectViewStoragePrefix='codex-kanban.project-view.v2:';
+const projectViews=new Map();
+function projectViewKey(groupId,mode=$('grouping').value){return projectViewStoragePrefix+encodeURIComponent(mode)+':'+encodeURIComponent(groupId);}
+function projectKey(task){return task.projectId?JSON.stringify([task.hostId,task.projectId]):'';}
+function projectGroups(items){
+  const groups=new Map();
+  for(const task of items){
+    const key=projectKey(task);
+    if(!groups.has(key))groups.set(key,{key,name:key?task.projectName||'Unnamed project':'No project',items:[]});
+    const group=groups.get(key);
+    if(key&&task.projectName)group.name=task.projectName;
+    group.items.push(task);
+  }
+  return [...groups.values()].sort((a,b)=>Number(!a.key)-Number(!b.key));
+}
+function readProjectView(groupId,mode=$('grouping').value){
+  const key=projectViewKey(groupId,mode);
+  if(!projectViews.has(key)){
+    let enabled=false;try{enabled=localStorage.getItem(key)==='true';}catch{}
+    projectViews.set(key,enabled);
+  }
+  return projectViews.get(key);
+}
+function changeProjectView(groupId){
+  const key=projectViewKey(groupId),enabled=!readProjectView(groupId);
+  projectViews.set(key,enabled);
+  try{localStorage.setItem(key,String(enabled));}catch{announce('Project view preference could not be saved in this browser.');}
+  render({animate:true});
+}
 function clearTaskDropMarkers(){document.querySelectorAll('.task-drop-before,.task-drop-after').forEach(node=>node.classList.remove('task-drop-before','task-drop-after'));}
 function enableTaskOrderDrop(card,task,groupId){
-  const allowed=()=>$('order').value==='manual'&&draggedKey&&draggedKey!==taskKey(task)&&draggedTaskGroup===groupId;
+  const allowed=()=>$('order').value==='manual'&&draggedKey&&draggedKey!==taskKey(task)&&draggedTaskGroup===groupId&&(!readProjectView(groupId)||projectKey(DATA.tasks.find(t=>taskKey(t)===draggedKey)??{})===projectKey(task));
   const after=e=>{const rect=card.getBoundingClientRect();return e.clientY>rect.top+rect.height/2;};
   card.addEventListener('dragover',e=>{
     if(!allowed())return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';clearTaskDropMarkers();card.classList.add(after(e)?'task-drop-after':'task-drop-before');
@@ -514,7 +568,7 @@ function enableTaskOrderDrop(card,task,groupId){
   card.addEventListener('keydown',e=>{
     if($('order').value!=='manual'||!e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;
     e.preventDefault();e.stopPropagation();
-    const items=[...document.querySelectorAll('.card')].filter(node=>node.dataset.groupId===groupId),index=items.indexOf(card),forward=e.key==='ArrowDown',target=items[index+(forward?1:-1)];
+    const items=[...document.querySelectorAll('.card')].filter(node=>node.dataset.groupId===groupId&&(!readProjectView(groupId)||node.dataset.projectKey===projectKey(task))),index=items.indexOf(card),forward=e.key==='ArrowDown',target=items[index+(forward?1:-1)];
     if(target&&moveTaskOrder(taskKey(task),target.dataset.taskKey,forward))document.querySelectorAll('.card').forEach(node=>{if(node.dataset.taskKey===taskKey(task))node.querySelector('.card-open').focus();});
   });
 }
@@ -644,10 +698,25 @@ function render({animate=false}={}){
     if(native){section.dataset.nativeSection=col.id;if(nativeWritable&&['For Later','In Progress','For Review','Pinned'].includes(col.name))enableDrop(section,col.id);}
     const progress=items.length>0&&(native&&col.name==='In Progress'||workflow&&col.id==='progress');
     const ring=el('span','state-ring');
-    const chevron=el('span','col-chevron');chevron.append(icon('down'));head.append(ring,el('span','',col.name),el('span','col-count',String(items.length)),chevron);
-    head.onclick=()=>{if(performance.now()<suppressClickUntil)return;if(collapsed.has(collapseKey))collapsed.delete(collapseKey);else collapsed.add(collapseKey);render();};section.append(head);
+    const chevron=el('span','col-chevron');chevron.append(icon('down'));head.append(ring,el('span','col-name',col.name),el('span','col-count',String(items.length)),chevron);
+    head.onclick=()=>{if(performance.now()<suppressClickUntil)return;if(collapsed.has(collapseKey))collapsed.delete(collapseKey);else collapsed.add(collapseKey);render();};
+    const header=el('div','col-header'),toggle=el('button','project-toggle');toggle.type='button';toggle.title='Project view · '+col.name;
+    toggle.setAttribute('role','switch');toggle.setAttribute('aria-label','Project view: '+col.name);toggle.setAttribute('aria-checked',String(readProjectView(col.id)));
+    const track=el('span','switch-track');track.setAttribute('aria-hidden','true');toggle.append(icon('folder'),track);
+    toggle.onclick=()=>{changeProjectView(col.id);for(const node of $('board').querySelectorAll('.column'))if(node.dataset.groupId===col.id)node.querySelector('.project-toggle').focus();};
+    header.append(head,toggle);section.append(header);
     if(native){const missing=(DATA.sidebarUnresolved??[]).filter(t=>nativeStage(t,groups)===col.id).length;if(missing){const gap=el('p','metadata-gap','Another '+missing+' member records could not be read and are excluded from task counts');gap.style.cssText='font-size:10px;color:var(--muted);margin:0 0 12px;line-height:1.7';section.append(gap);}}
-    const cards=el('div','cards');for(const task of items)cards.append(makeCard(task,progress,col.id));
+    const cards=el('div','cards');
+    if(readProjectView(col.id)){
+      for(const group of projectGroups(items)){
+        const container=el('section','project-group');container.setAttribute('aria-label',group.name+' project tasks');
+        const heading=el('h3','project-head');heading.title=group.name;
+        heading.append(icon('folder'),el('span','project-name',group.name),el('span','project-count',String(group.items.length)));
+        const children=el('div','project-cards');
+        for(const task of group.items){const card=makeCard(task,progress,col.id);card.dataset.projectKey=group.key;children.append(card);}
+        container.append(heading,children);cards.append(container);
+      }
+    }else for(const task of items)cards.append(makeCard(task,progress,col.id));
     if(!items.length){const empty=el('div','empty');empty.append(icon('inbox'),el('span','',tasks.length?col.empty:'No matching tasks'),el('small','',tasks.length?col.desc:'Try another search or filter'));cards.append(empty);}
     section.append(cards);$('board').append(section);
   }
@@ -714,7 +783,8 @@ async function changeDetailGroup(){
 $('detail-native').onchange=changeDetailGroup;
 $('detail-workflow').onchange=()=>{if(!moveWorkflow(selectedTask,$('detail-workflow').value))$('detail-workflow').value=workflowStage(selectedTask);};
 window.addEventListener('storage',e=>{
-  if(e.key===null)restoreSortPreference();
+  if(e.key===null){restoreSortPreference();projectViews.clear();}
+  if(e.key?.startsWith(projectViewStoragePrefix)){projectViews.delete(e.key);if(!draggedGroup&&!draggedKey)render();return;}
   if(e.key===sortStorageKey){restoreSortPreference();if(!draggedGroup&&!draggedKey)render();return;}
   if(e.key?.startsWith(taskOrderStoragePrefix)){if(!draggedGroup&&!draggedKey)render({animate:true});return;}
   if(e.key?.startsWith(groupOrderStoragePrefix)){if(!draggedGroup&&!draggedKey)render();return;}
