@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en-US">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Codex Kanban · Task Status</title>
+<style>
+:root{color-scheme:dark;--bg:#191a1e;--side:#141519;--panel:#222328;--hover:#292a31;--line:#2d2e35;--ink:#eeeff3;--muted:#93949f;--dim:#8a8c9a;--accent:#9590ff;--selected:#282634}
+:root{--state-progress:#7da7ff;--state-review:#6bc5a5;--state-later:#dab16c;--state-pinned:#b99af4;--state-unread:#ee947d;--state-neutral:#99a4b6;--state-muted:#788294;--state-error:#e9818b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}button,input,select{font:inherit}button{border:0;background:none;color:inherit;cursor:pointer}a{color:inherit;text-decoration:none}button:hover{background:var(--hover)}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}.icon{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.shell{display:flex;height:100dvh;min-height:460px}.sidebar{width:216px;flex-shrink:0;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line);padding:18px 10px 12px}.profile{display:flex;align-items:center;gap:10px;padding:0 8px 22px}.avatar{display:grid;place-items:center;width:30px;height:30px;flex-shrink:0;border:1px solid #4e4a73;border-radius:8px;background:#343047;color:#d9d6ff;font-size:17px;font-weight:650}.workspace{flex:1;min-width:0}.workspace strong{display:block;font-size:13px;font-weight:600}.workspace small{font-size:10px;color:var(--dim)}.icon-button{display:grid;place-items:center;border-radius:5px;padding:5px;color:var(--muted)}.nav{display:flex;flex-direction:column;gap:3px}.nav button{height:34px;width:100%;display:flex;gap:10px;align-items:center;padding:0 10px;text-align:left;border-radius:5px;color:#a5a6b0;font-size:12px;white-space:nowrap}.nav button.selected{color:#e8e7f2;background:var(--selected)}.nav .n{margin-left:auto;color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}.nav button.selected .n{color:#a9a4d0}.nav .icon{width:15px;height:15px}.nav button[data-filter=running] .icon{color:#e3bc67}.nav button[data-filter=attention] .icon{color:#aaa0f7}.caption{color:var(--dim);font-size:10px;letter-spacing:.5px;padding:23px 10px 8px}.side-note{margin-top:auto;padding:15px 10px 0;border-top:1px solid var(--line);font-size:10px;color:var(--dim);line-height:1.9}.side-note strong{display:flex;align-items:center;gap:7px;color:var(--muted);font-weight:400;margin-bottom:5px}.side-note .icon{width:13px;height:13px}.main{flex:1;min-width:0;display:flex;flex-direction:column}.topbar{min-height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 28px}.breadcrumb{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}.breadcrumb strong{font-weight:500;color:#c9c9d2}.breadcrumb .icon{width:13px;height:13px}.top-actions{display:flex;align-items:center;gap:12px}.badge{display:flex;gap:6px;align-items:center;font-size:10px;color:var(--muted)}.badge:before{content:"";width:5px;height:5px;background:var(--dim);border-radius:50%}.toolbar-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--line);border-radius:5px;color:#b3b4be;padding:5px 9px;font-size:11px;white-space:nowrap}.toolbar-btn .icon{width:13px;height:13px}.page-head{padding:25px 28px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}h1{font-size:22px;line-height:1.2;font-weight:600;letter-spacing:-.5px;margin:0 0 8px}.subtitle{font-size:11px;color:var(--muted)}.overview{display:flex;gap:17px;font-size:11px;color:var(--muted)}.metric{display:flex;gap:7px;align-items:center}.metric strong{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}.metric i{width:6px;height:6px;background:#e3bc67;border-radius:50%}.filters{display:flex;align-items:center;gap:8px;padding:0 28px 17px;flex-wrap:wrap}.search{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:5px;width:230px;padding:5px 9px;color:var(--dim);background:#1c1d22}.search:focus-within{border-color:#706aaf}.search .icon{width:14px;height:14px}.search input{background:none;border:0;outline:0;color:var(--ink);font-size:11px;min-width:0;width:100%;padding:0;line-height:20px}.search input:focus-visible{outline:none}.search input::placeholder{color:var(--dim)}kbd{font-size:10px;border:1px solid #3c3d46;border-radius:3px;min-width:16px;text-align:center;color:var(--dim)}.filters select{border:1px solid var(--line);border-radius:5px;background:#1c1d22;color:#b0b1bd;font-size:11px;padding:6px 8px;max-width:180px}.view-switch{display:flex;border:1px solid var(--line);border-radius:5px;padding:2px;gap:2px;margin-left:auto}.view-switch button{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);border-radius:3px;padding:4px 9px}.view-switch .icon{width:14px;height:14px}.view-switch button[aria-pressed=true]{background:#33343c;color:#e6e6ef}.status-line{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 28px;display:flex;align-items:center;gap:7px;font-size:10px;color:var(--dim);min-height:35px}.status-line .icon{width:12px;height:12px}.board-wrap{flex:1;min-height:0;overflow:auto;padding:22px 28px 18px;scrollbar-color:#41424b transparent;scrollbar-width:thin}.board{display:flex;align-items:flex-start;gap:18px;min-width:100%;min-height:100%}.column{flex:1;min-width:225px;width:270px}.col-head{width:100%;display:flex;align-items:center;gap:8px;padding:0 1px 13px;text-align:left;border-radius:4px;font-size:12px;font-weight:500}.col-head:hover{background:transparent;color:white}.state-ring{display:block;width:13px;height:13px;flex-shrink:0;border:1.5px solid var(--color);border-radius:50%}.running .state-ring{border-left-color:transparent;background:none}.attention .state-ring{border-radius:4px;transform:rotate(45deg);width:10px;height:10px;margin:1px 2px}.unloaded .state-ring{border-style:dashed;opacity:.7}.col-count{color:var(--dim);font-size:10px;font-weight:400;margin-left:1px}.col-chevron{margin-left:auto;opacity:0;transition:opacity .15s}.col-chevron .icon{width:12px;height:12px}.col-head:hover .col-chevron,.col-head:focus-visible .col-chevron,.column.collapsed .col-chevron{opacity:1}.column.collapsed .col-chevron{transform:rotate(-90deg)}.column.collapsed .cards{display:none}.cards{display:flex;flex-direction:column;gap:8px}.card{position:relative;background:var(--panel);border:1px solid #303138;border-radius:6px;padding:12px;transition:border-color .15s,background .15s}.card:hover{border-color:#51505f;background:#25262c}.card-open{position:absolute;inset:0;border-radius:inherit}.card-open:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.unread{width:5px;height:5px;background:var(--accent);border-radius:50%;margin-left:auto}.card-title{font-size:12px;font-weight:500;line-height:1.65;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:20px}.project-line{display:flex;align-items:center;gap:5px;color:#aaaab5;font-size:10px;margin:10px 0 12px;min-height:18px}.project-line .icon{width:12px;height:12px;color:var(--dim)}.project{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;border:1px solid #393a43;border-radius:3px;padding:0 5px}.card-footer{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:10px;line-height:17px}.host{display:flex;align-items:center;gap:4px;white-space:nowrap}.host .icon{width:11px;height:11px}.time{margin-left:auto;white-space:nowrap;font-variant-numeric:tabular-nums}.card-details{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:22px;height:20px;border-radius:4px;color:#9b9ca9;margin-left:1px}.card-details .icon{width:13px;height:13px}.card-details:hover{color:var(--ink);background:#3a3b44}.empty{border:1px dashed #34353d;border-radius:6px;text-align:center;padding:26px 12px;color:var(--dim);font-size:11px;line-height:1.8}.empty .icon{width:19px;height:19px;display:block;margin:0 auto 9px;color:#555661}.empty small{display:block;font-size:10px;color:#62636d;margin-top:3px}.footer{flex-shrink:0;display:flex;align-items:center;gap:12px;border-top:1px solid var(--line);padding:8px 28px;font-size:9px;color:var(--dim)}.footer .read-only{display:flex;align-items:center;gap:5px;white-space:nowrap}.footer .icon{width:11px;height:11px}.footer span:last-child{margin-left:auto;white-space:nowrap}.column:only-child{flex:0 1 340px;width:340px}.board.list{display:block}.list .column{width:100%;min-width:640px;margin-bottom:20px}.list .col-head{padding:0 10px 10px}.list .cards{gap:0;border-top:1px solid var(--line)}.list .card{display:grid;grid-template-columns:minmax(160px,1fr) 120px 180px;align-items:center;gap:12px;padding:10px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.list .card:hover{background:#24252b}.list .project-line{margin:0}.list .card-title{display:block;min-height:0;white-space:nowrap;text-overflow:ellipsis}.list .empty{border:0;text-align:left;padding:15px 10px}.list .empty .icon,.list .empty small{display:none}.list .col-chevron{opacity:1}
+ dialog{color:var(--ink);background:#202126;border:0;border-left:1px solid #373841;width:min(520px,100vw);height:100dvh;max-height:100dvh;max-width:100vw;margin:0 0 0 auto;padding:0;box-shadow:-15px 0 60px #0005}dialog::backdrop{background:#08090d80;backdrop-filter:blur(2px)}.detail-top{display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--line);height:53px;padding:0 25px;font-size:11px;color:var(--muted)}.detail-top .close{margin-left:auto}.detail-body{padding:28px}.detail-status{display:inline-flex;align-items:center;gap:7px;font-size:10px;margin-bottom:17px;color:var(--muted)}dialog h2{font-size:22px;font-weight:550;line-height:1.5;margin:0 0 21px;overflow-wrap:anywhere}.detail-summary{white-space:pre-wrap;overflow-wrap:anywhere;color:#a8a9b5;font-size:12px;line-height:1.9;border-bottom:1px solid var(--line);padding-bottom:24px;margin:0 0 24px}.detail-label{font-size:10px;color:var(--dim);margin:0 0 15px;letter-spacing:.5px}dialog dl{display:grid;grid-template-columns:70px 1fr;gap:15px;font-size:11px;margin:0}dialog dt{color:var(--muted)}dialog dd{margin:0;color:#cdced7;overflow-wrap:anywhere}dialog details{color:var(--dim);font-size:10px;margin-top:24px}dialog summary{cursor:pointer}dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;color:var(--muted);background:var(--bg);padding:12px;border-radius:4px}.dialog-actions{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--line);padding-top:24px;margin-top:27px}.primary{display:inline-flex;align-items:center;gap:8px;font-size:11px;color:#f3f1ff;background:#6862b2;border:1px solid #837bcc;padding:7px 12px;border-radius:5px}.primary:hover{background:#7770c2}.primary .icon{width:13px;height:13px}.dialog-actions a[hidden]{display:none}.dialog-actions .toolbar-btn{padding:7px 11px}.hint{font-size:10px;line-height:1.8;color:var(--dim);margin-top:13px}#open-prompt{display:none;width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:9px;margin-top:13px;font:11px/1.7 monospace;resize:vertical}.sidebar-collapsed .sidebar{width:58px}.sidebar-collapsed .workspace,.sidebar-collapsed .nav .label,.sidebar-collapsed .nav .n,.sidebar-collapsed .caption,.sidebar-collapsed .side-note{display:none}.sidebar-collapsed .profile{padding:0 3px 20px;flex-wrap:wrap;justify-content:center;gap:8px}.sidebar-collapsed .nav button{justify-content:center;padding:0}
+@media(max-width:1100px){.sidebar{width:190px}.overview{gap:10px}.topbar,.status-line{padding-left:22px;padding-right:22px}.page-head{padding-left:22px;padding-right:22px}.filters{padding-left:22px;padding-right:22px}.board-wrap{padding-left:22px;padding-right:22px}.footer{padding-left:22px;padding-right:22px}}
+@media(max-width:760px){.sidebar{width:58px;padding:16px 10px}.workspace,.sidebar .profile .icon-button,.sidebar .label,.sidebar .n,.caption,.side-note{display:none}.profile{padding:0 3px 22px}.nav button{justify-content:center;padding:0}.topbar{padding:0 16px}.top-actions .badge{display:none}.page-head{padding:22px 16px 18px}.overview{display:none}.filters{padding:0 16px 15px}.search{width:100%}.view-switch{margin-left:auto}.view-switch button{padding:4px 6px}.view-switch button span{display:none}.filters select{max-width:125px}.status-line{padding:8px 16px;font-size:9px}.board-wrap{padding:20px 16px}.column{min-width:235px}.footer{padding:8px 16px}.footer #coverage{display:none}.detail-body{padding:24px}.breadcrumb{gap:7px}}
+.running .state-ring{animation:running-spin 1.8s linear infinite;transform-origin:center}
+.snapshot-runtime .state-ring{animation:none}
+.detail-status[hidden],.metric[hidden]{display:none}
+@keyframes running-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}.running .state-ring{animation:none}}
+.workflow-note{display:flex;align-items:center;gap:7px;padding:0 28px 14px;color:var(--muted);font-size:10px}
+.workflow-note[hidden]{display:none}
+.workflow-note .icon{width:13px;height:13px;color:var(--accent)}
+.card-footer .pin{display:inline-flex;align-items:center;color:var(--dim)}
+.card-footer .pin .icon{width:13px;height:13px}
+.card-heading{display:flex;align-items:flex-start;gap:8px;min-width:0}
+.card-heading .card-title{flex:1;min-width:0}
+.card.has-archive .card-heading{padding-right:28px}
+.card-action{position:absolute;top:8px;right:8px;z-index:2;display:grid;place-items:center;width:28px;height:28px;border:1px solid transparent;border-radius:5px;background:var(--panel);color:var(--muted);opacity:0;transform:translateY(3px);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease,background 160ms ease,color 160ms ease}
+.card:hover .card-action,.card:focus-within .card-action,.card.archiving .card-action,.card.pinning .card-action{opacity:1;transform:translateY(0);pointer-events:auto}
+.card-action:hover{background:#353740;border-color:#454752;color:var(--ink)}
+.card-action .icon{width:16px;height:16px}
+.card-action:disabled{cursor:wait}
+.card-pin{right:40px}
+.card-action[data-tooltip]::after{content:attr(data-tooltip);position:absolute;top:calc(100% + 6px);right:0;padding:5px 8px;border:1px solid #454752;border-radius:5px;background:#303139;color:var(--ink);font-size:11px;font-weight:400;line-height:1.4;white-space:nowrap;box-shadow:0 3px 10px #0004;pointer-events:none;opacity:0;transform:translateY(-2px);transition:opacity 80ms ease,transform 80ms ease}
+.card-action[data-tooltip]:hover::after,.card-action[data-tooltip]:focus-visible::after{opacity:1;transform:translateY(0)}
+.card-pin[aria-pressed=true]{color:var(--state-pinned)}
+.card.has-pin .card-heading{padding-right:60px}
+.card.archiving,.card.pinning{opacity:.65}
+.card.archiving .card-archive .icon,.card.pinning .card-pin .icon{animation:archive-pulse 1s ease-in-out infinite}
+.list .card.has-archive{padding-right:48px}
+.list .card.has-pin{padding-right:80px}
+.list .card.has-archive .card-heading,.list .card.has-pin .card-heading{padding-right:0}
+@keyframes archive-pulse{50%{opacity:.35}}
+@media(hover:none){.card-action{opacity:1;transform:none;pointer-events:auto}}
+@media(prefers-reduced-motion:reduce){.card.archiving .card-archive .icon,.card.pinning .card-pin .icon{animation:none}}
+.card-heading .unread{width:8px;height:8px;flex-shrink:0;margin:6px 0 0;background:var(--state-unread);box-shadow:0 0 0 3px #ee947d18}
+.card.is-unread .card-title{font-weight:650;color:#f4f3f7}
+.card-heading+.card-footer{margin-top:12px}
+.list .card-heading{grid-column:1}
+.list .project-line{grid-column:2}
+.list .card-footer{grid-column:3;margin-top:0}
+.board.workflow{align-items:stretch}
+.workflow .column{border-radius:6px;transition:background .15s,box-shadow .15s}
+.workflow .cards{min-height:180px;padding-bottom:18px}
+.workflow .column.drop-target{background:#9590ff0d;box-shadow:0 0 0 2px #9590ff80}
+.workflow .card-open{cursor:grab}
+.workflow .card-open:active{cursor:grabbing}
+.card.dragging{opacity:.4}
+.col-head[draggable=true]{cursor:grab}
+.col-head[draggable=true]:active{cursor:grabbing}
+.column{position:relative}
+.column.group-dragging{opacity:.45}
+.column.group-drop-before::before,.column.group-drop-after::after{content:"";position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none}
+.column.group-drop-before::before{left:-10px}
+.column.group-drop-after::after{right:-10px}
+.list .column.group-drop-before::before,.list .column.group-drop-after::after{left:0;right:0;width:auto;height:2px;bottom:auto}
+.list .column.group-drop-before::before{top:-10px}
+.list .column.group-drop-after::after{top:auto;bottom:-10px}
+.workflow .empty{min-height:125px;display:flex;flex-direction:column;justify-content:center}
+.workflow .col-head .state-ring{animation:none;background:none;border-color:var(--color)}
+.workflow .done>.col-head .state-ring{background:var(--color)}
+.list .column{min-width:740px}
+.workflow.list .empty{min-height:0;display:block}
+.workflow-edit{display:flex;align-items:center;gap:15px;margin:23px 0;padding-top:20px;border-top:1px solid var(--line);font-size:11px}
+.workflow-edit label{color:var(--muted);width:70px;flex-shrink:0}
+.workflow-edit select{background:var(--bg);color:var(--ink);border:1px solid #454650;border-radius:5px;padding:6px 9px}
+.workflow-edit-hint{font-size:10px;color:var(--muted);line-height:1.8;margin-top:-12px}
+.toast{position:fixed;bottom:45px;left:50%;transform:translateX(-50%);background:#383542;border:1px solid #5e5777;border-radius:6px;padding:9px 15px;color:var(--ink);font-size:11px;z-index:5;max-width:calc(100vw - 30px)}
+.toast[hidden]{display:none}
+.archive-notices{position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;gap:8px;width:min(400px,calc(100vw - 32px));max-height:45vh;overflow:auto}
+.archive-notice{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#2a2b33;border:1px solid #494b59;border-radius:8px;box-shadow:0 8px 28px #0005;animation:notice-in 160ms ease-out}
+.archive-notice-copy{flex:1;min-width:0;font-size:12px}
+.archive-notice-title{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.archive-notice-copy small{display:block;font-size:10px;color:var(--muted);margin-top:3px}
+.archive-notice-copy .undo-error{color:var(--state-error);white-space:normal}
+.undo-button{border:1px solid #7973ae;border-radius:5px;color:#d8d4ff;padding:5px 10px;font-size:11px}
+.undo-button:hover{background:#3b3750}
+.undo-button:disabled{cursor:wait;opacity:.65}
+.notice-dismiss{display:grid;place-items:center;color:var(--muted);padding:4px;border-radius:4px}
+.notice-dismiss .icon{width:13px;height:13px}
+@keyframes notice-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.archive-notice{animation:none}}
+.native-note{padding:0 28px 13px;font-size:10px;color:var(--muted)}
+.native-note[hidden]{display:none}
+.native-groups .column.drop-target{background:#9590ff0d;box-shadow:0 0 0 2px #9590ff80;border-radius:6px}
+.native-groups .cards{min-height:180px}
+.native-groups .card[draggable=true] .card-open{cursor:grab}
+.card.native-pending{opacity:.6}
+.workflow-edit[hidden],.workflow-edit-hint[hidden]{display:none}
+.list .column{margin-bottom:24px;border:1px solid #3b3d47;border-radius:8px;background:#1c1d22}
+.list .col-head{padding:12px 14px;background:#24252b;border-radius:7px 7px 0 0}
+.list .col-head:hover{background:#292a32}
+.list .column.collapsed .col-head{border-radius:7px}
+.list .cards{min-height:0;padding-bottom:0;border-top:1px solid #3b3d47}
+.list .card{padding:12px 14px;border-bottom-color:#30323b}
+.list .card:last-child{border-bottom:0;border-radius:0 0 7px 7px}
+.list .empty{padding:18px 14px;border-radius:0 0 7px 7px}
+.card-heading .progress-ring{display:block;width:11px;height:11px;flex-shrink:0;margin-top:4px;border:1.5px solid var(--color,var(--state-progress));border-left-color:transparent;border-radius:50%;transform-origin:center}
+.nav button[data-filter=running] .icon,.metric i{color:var(--state-progress)}
+.metric i{background:var(--state-progress)}
+.nav button[data-filter=attention] .icon{color:var(--state-later)}
+.nav button[data-filter=idle] .icon{color:var(--state-neutral)}
+.nav button[data-filter=unloaded] .icon{color:var(--state-muted)}
+.nav button[data-filter=unread] .icon{color:var(--state-unread)}
+.nav button[data-filter=pinned] .icon{color:var(--state-pinned)}
+.card.layout-moving,.col-head.layout-moving{position:relative;z-index:2;will-change:transform}
+.card[draggable=true] .card-open{cursor:grab}
+.card.task-drop-before::before,.card.task-drop-after::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--accent);pointer-events:none;z-index:3}
+.card.task-drop-before::before{top:-5px}.card.task-drop-after::after{bottom:-5px}
+.list .card.task-drop-before::before{top:0}.list .card.task-drop-after::after{bottom:0}
+@media(max-width:1100px){.workflow-note{padding-left:22px;padding-right:22px}}
+@media(max-width:760px){.workflow-note{padding-left:16px;padding-right:16px}.filters #grouping{max-width:100%}}
+</style>
+<svg style="display:none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-board" viewBox="0 0 20 20"><rect x="3" y="4" width="4" height="12" rx="1"/><rect x="9" y="4" width="3" height="8" rx="1"/><rect x="14" y="4" width="3" height="10" rx="1"/></symbol>
+<symbol id="i-list" viewBox="0 0 20 20"><path d="M6 5h11M6 10h11M6 15h11M3 5h.1M3 10h.1M3 15h.1"/></symbol>
+<symbol id="i-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></symbol>
+<symbol id="i-run" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></symbol>
+<symbol id="i-wait" viewBox="0 0 20 20"><path d="m10 2 8 8-8 8-8-8Z"/><path d="M10 6v5m0 3h.01"/></symbol>
+<symbol id="i-circle" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/></symbol>
+<symbol id="i-unloaded" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" stroke-dasharray="3 3"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 20 20"><path d="M3 11 5 4h10l2 7v5H3Zm0 0h4l1 2h4l1-2h4"/></symbol>
+<symbol id="i-pin" viewBox="0 0 20 20"><path d="M6 3h8M7 3v5l-2 3v2h10v-2l-2-3V3M10 13v4"/></symbol>
+<symbol id="i-archive" viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="4" rx="1"/><path d="M4 7v9h12V7M8 10h4"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 20 20"><rect x="2.5" y="3" width="15" height="10" rx="1.5"/><path d="M7 17h6m-3-4v4"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 20 20"><path d="M5 15a4 4 0 0 1-1-8 6 6 0 0 1 11-1 4.5 4.5 0 0 1 0 9Z"/></symbol>
+<symbol id="i-folder" viewBox="0 0 20 20"><path d="M2.5 5h6l2 2h7v9h-15Z"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 20 20"><path d="m7 5 5 5-5 5"/></symbol>
+<symbol id="i-down" viewBox="0 0 20 20"><path d="m5 7 5 5 5-5"/></symbol>
+<symbol id="i-sidebar" viewBox="0 0 20 20"><rect x="2.5" y="3" width="15" height="14" rx="2"/><path d="M7 3v14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 20 20"><path d="M16 7a6.5 6.5 0 1 0 .5 5M16 3v4h-4"/></symbol>
+<symbol id="i-more" viewBox="0 0 20 20"><circle cx="4" cy="10" r=".7"/><circle cx="10" cy="10" r=".7"/><circle cx="16" cy="10" r=".7"/></symbol>
+<symbol id="i-lock" viewBox="0 0 20 20"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M6 9V6a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 20 20"><path d="M6 14 14 6M6 6h8v8"/></symbol>
+</defs></svg>
+<div class="shell" id="shell">
+  <aside class="sidebar" aria-label="Task navigation">
+    <div class="profile"><div class="avatar">C</div><div class="workspace"><strong>Codex</strong><small>Personal workspace</small></div><button class="icon-button" id="sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true"><svg class="icon"><use href="#i-sidebar"/></svg></button></div>
+    <nav class="nav" id="nav" aria-label="Task views">
+      <button data-filter="all" class="selected" aria-pressed="true"><svg class="icon"><use href="#i-board"/></svg><span class="label">All tasks</span><span class="n" id="nav-all"></span></button>
+      <button data-filter="unread" aria-pressed="false"><svg class="icon"><use href="#i-inbox"/></svg><span class="label">Unread replies</span><span class="n" id="nav-unread"></span></button>
+      <button data-filter="pinned" aria-pressed="false"><svg class="icon"><use href="#i-pin"/></svg><span class="label">Pinned tasks</span><span class="n" id="nav-pinned"></span></button>
+      <div class="caption">Runtime status</div>
+      <button data-filter="running" aria-pressed="false"><svg class="icon"><use href="#i-run"/></svg><span class="label">Running</span><span class="n" id="nav-running"></span></button>
+      <button data-filter="attention" aria-pressed="false"><svg class="icon"><use href="#i-wait"/></svg><span class="label">Needs attention</span><span class="n" id="nav-attention"></span></button>
+      <button data-filter="idle" aria-pressed="false"><svg class="icon"><use href="#i-circle"/></svg><span class="label">Idle</span><span class="n" id="nav-idle"></span></button>
+      <button data-filter="unloaded" aria-pressed="false"><svg class="icon"><use href="#i-unloaded"/></svg><span class="label">Not loaded</span><span class="n" id="nav-unloaded"></span></button>
+    </nav>
+    <div class="side-note"><strong><svg class="icon"><use href="#i-lock"/></svg>Read-only runtime status</strong>Workflow can be adjusted manually<br>Runtime status reflects the snapshot timestamp</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div class="breadcrumb"><svg class="icon"><use href="#i-board"/></svg><span>Tasks</span><svg class="icon"><use href="#i-chevron"/></svg><strong id="view-title">All tasks</strong></div><div class="top-actions"><span class="badge">Snapshot mode</span><button class="toolbar-btn" id="refresh" title="Reload saved data without fetching new runtime status"><svg class="icon"><use href="#i-refresh"/></svg>Reload snapshot</button></div></header>
+    <section class="page-head"><div><h1>Task board</h1><div class="subtitle">Every task at a glance.</div></div><div class="overview"><div class="metric"><i></i><strong id="running-count">0</strong><span id="runtime-metric-label">Running</span></div><div class="metric"><strong id="total-count">0</strong>tasks</div></div></section>
+    <div class="filters"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Search tasks or projects…" aria-label="Search tasks or projects"><kbd>/</kbd></label><select id="grouping" aria-label="Group by"><option value="native">Sidebar groups</option><option value="workflow">Local workflow</option><option value="runtime">Runtime status</option></select><select id="host" aria-label="Filter hosts"><option value="all">All hosts</option></select><select id="order" aria-label="Sort"><option value="recent">Recently updated</option><option value="title">Task title</option><option value="manual">Manual order</option></select><div class="view-switch" aria-label="Layout"><button id="view-board" aria-label="Board view" aria-pressed="true" title="Board view · ⌘/Ctrl B"><svg class="icon"><use href="#i-board"/></svg><span>Board</span></button><button id="view-list" aria-label="List view" aria-pressed="false" title="List view · ⌘/Ctrl B"><svg class="icon"><use href="#i-list"/></svg><span>List</span></button></div></div>
+    <div class="workflow-note" id="workflow-note"><svg class="icon"><use href="#i-board"/></svg><span id="workflow-note-text">Local workflow · Drag to organize · Saved in this browser, separate from sidebar groups</span></div>
+    <div class="native-note" id="native-note" role="status" hidden></div><div class="status-line"><svg class="icon"><use href="#i-run"/></svg><span id="snapshot-time" role="status"></span></div>
+    <div class="board-wrap"><div class="board" id="board" aria-label="Tasks grouped by runtime status"></div></div>
+    <footer class="footer"><span class="read-only"><svg class="icon"><use href="#i-lock"/></svg>Read-only runtime status</span><span id="coverage"></span><span id="visible-count"></span></footer>
+  </main>
+</div>
+<dialog id="detail" aria-labelledby="detail-title">
+  <div class="detail-top"><svg class="icon"><use href="#i-board"/></svg>Task details<button class="icon-button close" id="close" aria-label="Close task details"><svg class="icon"><use href="#i-close"/></svg></button></div>
+  <div class="detail-body"><div class="detail-status" id="detail-status"></div><h2 id="detail-title"></h2><p class="detail-summary" id="detail-summary"></p><p class="detail-label">Task properties</p><dl id="detail-meta"></dl><div class="workflow-edit"><label for="detail-workflow">Workflow status</label><select id="detail-workflow"><option value="todo">To do</option><option value="progress">In progress</option><option value="done">Done</option></select></div><p class="workflow-edit-hint" id="detail-workflow-hint" role="status"></p><div class="workflow-edit" id="native-edit" hidden><label for="detail-native">Native group</label><select id="detail-native"></select></div><p class="workflow-edit-hint" id="native-edit-hint" role="status" hidden></p><details><summary>Runtime observation</summary><pre id="detail-raw"></pre></details><div class="dialog-actions"><a class="primary" id="open-task" hidden>Open chat<svg class="icon"><use href="#i-arrow"/></svg></a><button class="toolbar-btn" id="copy">Copy open instruction</button><button class="toolbar-btn" id="detail-done">Close</button></div><textarea id="open-prompt" aria-label="Instruction to open this task" readonly></textarea><div class="hint" id="detail-hint"></div></div>
+</dialog>
+<div class="toast" id="workflow-toast" role="status" hidden></div>
+<div class="archive-notices" id="archive-notices" aria-label="Archived tasks" aria-live="polite"></div>
+<script>
+let DATA = /*__BOARD_DATA__*/null;
+const columns=[
+  {id:'running',name:'Running',color:'var(--state-progress)',desc:'Executing',empty:'No running tasks in this snapshot'},
+  {id:'attention',name:'Needs attention',color:'var(--state-later)',desc:'Needs your input',empty:'No tasks waiting for input in this snapshot'},
+  {id:'idle',name:'Idle',color:'var(--state-neutral)',desc:'No active turn',empty:'No idle tasks in this snapshot'},
+  {id:'unloaded',name:'Not loaded',color:'var(--state-muted)',desc:'Not loaded in the runtime',empty:'No unloaded tasks in this snapshot'},
+  {id:'error',name:'Error',color:'var(--state-error)',desc:'System error',empty:'No errors in this snapshot'},
+  {id:'unknown',name:'Unknown status',color:'var(--state-muted)',desc:'No runtime evidence',empty:'No tasks with unknown status'}
+];
+const workflowColumns=[
+  {id:'todo',name:'To do',color:'var(--state-later)',desc:'Unassigned or planned locally',empty:'Drag tasks here to plan'},
+  {id:'progress',name:'In progress',color:'var(--state-progress)',desc:'Manually scheduled locally',empty:'Drag tasks here to start your workflow'},
+  {id:'done',name:'Done',color:'var(--state-review)',desc:'Marked complete locally',empty:'Drag tasks here to mark complete'}
+];
+const $=id=>document.getElementById(id);
+let filter='all',view='board',selectedTask=null;
+const collapsed=new Set();
+const groupOrderStoragePrefix='codex-kanban.group-order.v1:';
+let draggedGroup=null;
+function currentGroups(){return $('grouping').value==='native'?nativeColumns():$('grouping').value==='workflow'?workflowColumns:columns;}
+function readGroupOrder(mode){
+  try{
+    const saved=JSON.parse(localStorage.getItem(groupOrderStoragePrefix+mode)??'[]');
+    return Array.isArray(saved)?[...new Set(saved.filter(id=>typeof id==='string').map(id=>mode==='native'&&id==='threads'?'chats':id))]:[];
+  }catch{return [];}
+}
+function orderedGroups(groups,mode=$('grouping').value){
+  const saved=readGroupOrder(mode),rank=new Map(saved.map((id,i)=>[id,i]));
+  return [...groups].sort((a,b)=>(rank.get(a.id)??saved.length)-(rank.get(b.id)??saved.length));
+}
+function moveGroup(sourceId,targetId,after=false){
+  const mode=$('grouping').value,groups=orderedGroups(currentGroups(),mode),ids=groups.map(g=>g.id);
+  if(sourceId===targetId||!ids.includes(sourceId)||!ids.includes(targetId))return false;
+  ids.splice(ids.indexOf(sourceId),1);ids.splice(ids.indexOf(targetId)+(after?1:0),0,sourceId);
+  try{localStorage.setItem(groupOrderStoragePrefix+mode,JSON.stringify(ids));}
+  catch{announce('Group order not saved: allow browser storage and try again.');return false;}
+  render();announce('Group order saved in this browser');return true;
+}
+function clearGroupDropMarkers(){
+  document.querySelectorAll('.group-drop-before,.group-drop-after').forEach(node=>node.classList.remove('group-drop-before','group-drop-after'));
+}
+function finishGroupDrag(){
+  draggedGroup=null;suppressClickUntil=performance.now()+300;
+  document.querySelectorAll('.group-dragging').forEach(node=>node.classList.remove('group-dragging'));clearGroupDropMarkers();
+}
+function enableGroupDrag(section,head,col){
+  head.draggable=true;head.title='Drag to reorder · Alt + arrow keys to move · '+col.desc;
+  head.addEventListener('dragstart',e=>{
+    if(draggedKey){e.preventDefault();return;}
+    e.stopPropagation();draggedGroup=col.id;++nativeEpoch;
+    e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-codex-kanban-group',col.id);
+    section.classList.add('group-dragging');
+  });
+  head.addEventListener('dragend',finishGroupDrag);
+  const dropAfter=e=>{const rect=(view==='list'?head:section).getBoundingClientRect();return view==='list'?e.clientY>rect.top+rect.height/2:e.clientX>rect.left+rect.width/2;};
+  section.addEventListener('dragover',e=>{
+    if(!draggedGroup)return;e.preventDefault();e.stopImmediatePropagation();e.dataTransfer.dropEffect='move';clearGroupDropMarkers();
+    if(draggedGroup!==col.id)section.classList.add(dropAfter(e)?'group-drop-after':'group-drop-before');
+  });
+  section.addEventListener('dragleave',e=>{if(draggedGroup&&!section.contains(e.relatedTarget))clearGroupDropMarkers();});
+  section.addEventListener('drop',e=>{
+    if(!draggedGroup)return;e.preventDefault();e.stopImmediatePropagation();
+    const source=draggedGroup,after=dropAfter(e);finishGroupDrag();moveGroup(source,col.id,after);
+  });
+  head.addEventListener('keydown',e=>{
+    if(!e.altKey||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+    e.preventDefault();const groups=orderedGroups(currentGroups()),index=groups.findIndex(g=>g.id===col.id),forward=['ArrowRight','ArrowDown'].includes(e.key),target=groups[index+(forward?1:-1)];
+    if(target&&moveGroup(col.id,target.id,forward))document.querySelectorAll('.column').forEach(node=>{if(node.dataset.groupId===col.id)node.querySelector('.col-head').focus();});
+  });
+}
+function expireRuntimeSnapshot(now=Date.now()){
+  if(!DATA||DATA.sync?.runtimeLive!==false)return false;
+  const observed=Date.parse(DATA.runtimeCapturedAt),age=now-observed;
+  if(Number.isFinite(observed)&&age>=0&&age<=(DATA.runtimeSnapshotMaxAgeMs??15000))return false;
+  let changed=false;
+  for(const task of DATA.tasks){
+    if(task.runtimeStatusSource!=='desktopSnapshot'||task.runtimeStatusStale)continue;
+    task.lastObservedStatus??=task.rawStatus;task.lastObservedAt??=DATA.runtimeCapturedAt;
+    task.column='unknown';task.rawStatus='unknown';task.runtimeStatusStale=true;changed=true;
+  }
+  DATA.runtimeSnapshotFresh=false;return changed;
+}
+function runtimeLabel(task){
+  if(task.runtimeStatusStale||task.runtimeStatusSource==='unavailable'||task.column==='unknown')return null;
+  const name=columns.find(c=>c.id===task.column)?.name??'Unknown status';
+  return DATA.sync?.runtimeLive===false?name+' (snapshot)':name;
+}
+function updateRuntimeDetail(task){
+  const col=columns.find(c=>c.id===task.column),label=runtimeLabel(task);
+  $('detail-status').hidden=!label;
+  $('detail-status').className='detail-status '+col.id+(DATA.sync?.runtimeLive===false?' snapshot-runtime':'');
+  $('detail-status').style.setProperty('--color',col.color);
+  $('detail-status').replaceChildren(...(label?[el('span','state-ring'),el('span','',label)]:[]));
+  $('detail-raw').textContent=JSON.stringify(DATA.sync?.runtimeLive===false?{
+    currentStatus:runtimeLabel(task),lastObservedStatus:task.lastObservedStatus??null,lastObservedAt:task.lastObservedAt??null
+  }:task.rawStatus??null,null,2);
+}
+const workflowStoragePrefix='codex-kanban.workflow.v1:';
+const workflowStates=new Map();
+let storageAvailable=true,draggedKey=null,draggedTaskGroup=null,suppressClickUntil=0,toastTimer;
+let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nativePending=false,nativeReads=0;
+let archivingKey=null;
+let pinningKey=null,restoringToken=null;
+const archiveNotices=new Map();
+function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken;}
+function canArchive(task){return nativeConnected&&DATA.sync?.archiveLocal===true&&!!nativeToken&&!!taskUrl(task);}
+function taskPinned(task){return task.nativeTaskPinned??task.pinned;}
+function canPin(task){return nativeConnected&&DATA.sync?.pinLocal===true&&!!nativeToken&&!!taskUrl(task)
+  &&DATA.sections.filter(s=>s.name==='Pinned').length===1;}
+function renderArchiveNotices(){
+  const root=$('archive-notices');root.replaceChildren();
+  for(const [token,notice]of archiveNotices){
+    const row=el('div','archive-notice'),copy=el('div','archive-notice-copy');
+    const title=el('div','archive-notice-title',notice.task.title);title.title=notice.task.title;
+    copy.append(title,el('small','','Task archived'));
+    if(notice.error)copy.append(el('small','undo-error',notice.error));
+    const undo=el('button','undo-button',restoringToken===token?'Restoring…':'Undo');undo.type='button';
+    undo.setAttribute('aria-label','Undo archive: '+notice.task.title);undo.disabled=!!taskActionPending();undo.onclick=()=>undoArchive(token);
+    const dismiss=el('button','notice-dismiss');dismiss.type='button';dismiss.append(icon('close'));
+    dismiss.setAttribute('aria-label','Dismiss archive notice: '+notice.task.title);dismiss.title='Dismiss';dismiss.disabled=restoringToken===token;
+    dismiss.onclick=()=>{archiveNotices.delete(token);renderArchiveNotices();};
+    row.append(copy,undo,dismiss);root.append(row);
+  }
+}
+async function undoArchive(token){
+  const notice=archiveNotices.get(token);if(!notice||taskActionPending())return;
+  restoringToken=token;++nativeEpoch;render();renderArchiveNotices();
+  try{
+    const response=await fetch('/api/unarchive',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({undoToken:token})});
+    const payload=await response.json();
+    if(!response.ok||payload.restored!==true||payload.threadId!==notice.task.id)throw Error(payload.error||'Restore could not be confirmed.');
+    restoringToken=null;
+    if(payload.board)applyNativeBoard(payload.board);
+    else{if(!DATA.tasks.some(t=>taskKey(t)===taskKey(notice.task)))DATA={...DATA,tasks:[...DATA.tasks,notice.task]};refreshSummary();render({animate:true});}
+    archiveNotices.delete(token);renderArchiveNotices();announce('Archive undone');
+  }catch(error){restoringToken=null;notice.error=error.message;render();renderArchiveNotices();await refreshNativeBoard(true);}
+}
+async function setTaskPinned(task){
+  if(!canPin(task)||taskActionPending())return;
+  pinningKey=taskKey(task);++nativeEpoch;render();renderArchiveNotices();
+  try{
+    const response=await fetch('/api/pin',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({threadId:task.id,hostId:task.hostId,pinned:!taskPinned(task)})});
+    const payload=await response.json();
+    if(!response.ok||payload.threadId!==task.id||payload.pinned!==!taskPinned(task))throw Error(payload.error||'Pin change could not be confirmed.');
+    pinningKey=null;
+    if(payload.board)applyNativeBoard(payload.board);else await refreshNativeBoard(true);
+    announce(payload.pinned?'Task pinned':'Task unpinned');
+  }catch(error){pinningKey=null;render();await refreshNativeBoard(true);announce(error.message);}
+  finally{renderArchiveNotices();}
+}
+async function archiveTask(task){
+  if(!canArchive(task)||taskActionPending())return;
+  archivingKey=taskKey(task);++nativeEpoch;render();renderArchiveNotices();
+  try{
+    const response=await fetch('/api/archive',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},
+      body:JSON.stringify({threadId:task.id,hostId:task.hostId})});
+    const payload=await response.json();
+    if(!response.ok||payload.archived!==true||payload.threadId!==task.id)throw Error(payload.error||'Archive could not be confirmed.');
+    archivingKey=null;
+    // Keep the recovery action even if the subsequent board rendering fails.
+    if(typeof payload.undoToken==='string')archiveNotices.set(payload.undoToken,{task,error:null});
+    renderArchiveNotices();
+    if(selectedTask&&taskKey(selectedTask)===taskKey(task)){$('detail').close();selectedTask=null;}
+    if(payload.board)applyNativeBoard(payload.board);
+    else{DATA={...DATA,tasks:DATA.tasks.filter(t=>taskKey(t)!==taskKey(task))};refreshSummary();render({animate:true});}
+    if(typeof payload.undoToken!=='string')announce('Task archived');
+    renderArchiveNotices();
+  }catch(error){archivingKey=null;render();renderArchiveNotices();await refreshNativeBoard(true);announce(error.message);}
+}
+let nativeMessage='Sidebar snapshot · Live bridge disconnected · Read only';
+function nativeCanEditGroup(task){return nativeConnected&&nativeWritable&&!!nativeToken&&!taskActionPending()&&!task.sidebarOnly&&task.hostId==='local'
+  &&['localThreadSection','localDefault'].includes(task.placementSource)&&(task.nativeMembershipCount??0)<=1;}
+function nativeCanMove(task){return nativeCanEditGroup(task);}
+function nativeColumns(){
+  const colors={'For Later':'var(--state-later)','In Progress':'var(--state-progress)','For Review':'var(--state-review)','Tasks':'var(--state-neutral)','Pinned':'var(--state-pinned)'};
+  const groups=[];
+  for(const section of DATA?.sections??[]){
+    const ungrouped=['chats','threads'].includes(section.sectionId),id=ungrouped?'chats':section.sectionId;
+    if(groups.some(g=>g.id===id)||!ungrouped&&!Object.hasOwn(colors,section.name)&&!DATA.tasks.some(t=>t.nativeSectionId===id))continue;
+    groups.push({id,name:ungrouped?'Ungrouped':section.name,color:ungrouped?'var(--state-neutral)':colors[section.name]??'var(--state-muted)',
+      desc:ungrouped?'No explicit group · Project labels are preserved':'Codex sidebar snapshot; counts reflect readable task cards',empty:ungrouped?'No ungrouped tasks':'No readable tasks in this group'});
+  }
+  const other=DATA?.tasks.some(t=>nativeStage(t,groups)==='__other');
+  if(other)groups.push({id:'__other',name:'Unconfirmed group',color:'var(--state-muted)',desc:'No exact membership match',empty:'No unconfirmed tasks'});
+  return groups;
+}
+function nativeStage(task,groups=nativeColumns()){
+  const id=task.nativeSectionId==='threads'?'chats':task.nativeSectionId;
+  return groups.some(g=>g.id===id)?id:'__other';
+}
+function nativeNotice(){
+  $('native-note').hidden=$('grouping').value!=='native';$('native-note').textContent=nativeMessage;
+  if($('grouping').value==='native')document.querySelector('.subtitle').textContent=DATA?.sync?.scope==='localSections'?'Local tasks follow native sidebar groups.':nativeConnected?'Codex sidebar groups with separate runtime status.':'Sidebar groups as captured; snapshots may be outdated.';
+}
+function refreshSummary(){
+  if(!DATA)return;
+  expireRuntimeSnapshot();
+  $('running-count').closest('.metric').hidden=!DATA.tasks.some(t=>runtimeLabel(t)!==null);
+  $('running-count').textContent=DATA.tasks.filter(t=>t.column==='running').length;
+  $('runtime-metric-label').textContent=DATA.sync?.runtimeLive===false?'Running in snapshot':'Running';
+  $('total-count').textContent=DATA.tasks.length;
+  for(const key of ['all','running','attention','idle','unloaded','unread','pinned'])$('nav-'+key).textContent=DATA.tasks.filter(t=>key==='all'||t.column===key||key==='unread'&&t.isUnread||key==='pinned'&&t.pinned).length;
+  $('nav-unread').closest('button').title=DATA.sync?.localUnreadConnected?'Local unread markers refresh every 5 seconds; other hosts use a desktop snapshot.':'Unread replies from the desktop snapshot.';
+}
+function applyNativeBoard(board){
+  if(!Array.isArray(board?.tasks)||!Array.isArray(board.sections)||board.sync?.connected!==true)throw Error('Incomplete desktop response.');
+  DATA=board;nativeConnected=true;nativeWritable=board.sync.writable===true;
+  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Drag between groups, including Pinned · Sidebar Flow continues automatic grouping':'Local groups connected · Refresh every 5 seconds'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
+  expireRuntimeSnapshot();
+  loadWorkflow();refreshSummary();render({animate:true});$('coverage').textContent=board.coverage;
+  const format=value=>new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'medium',hour12:false}).format(new Date(value));
+  $('snapshot-time').textContent='Groups read: '+format(board.capturedAt);
+  if(board.sync.scope==='localSections')document.querySelector('.top-actions .badge').textContent='Groups auto-refresh';
+}
+async function refreshNativeBoard(force=false){
+  if(location.protocol!=='http:'||taskActionPending()||(!force&&(nativePending||draggedKey||draggedGroup||document.hidden||nativeReads||document.activeElement?.closest('.card'))))return;
+  nativeReads++;
+  const epoch=++nativeEpoch;
+  try{
+    const response=await fetch('/api/board',{cache:'no-store'});
+    if(!response.ok)throw Error('Local groups unavailable; keeping the latest snapshot.');
+    const payload=await response.json();
+    if(epoch!==nativeEpoch)return;
+    if(!response.ok)throw Error(payload.error||'Desktop bridge unavailable.');
+    nativeToken=payload.csrf;applyNativeBoard(payload.board);
+  }catch(error){if(epoch!==nativeEpoch)return;nativeConnected=false;nativeWritable=false;nativeMessage=error.message;render();}
+  finally{nativeReads--;}
+}
+async function moveNative(task,sectionId){
+  if(!nativeCanEditGroup(task)){announce(nativeMessage);return false;}
+  nativePending=true;++nativeEpoch;render();renderArchiveNotices();announce('Saving native group and verifying…');
+  try{
+    const response=await fetch('/api/move',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},
+      body:JSON.stringify({threadId:task.id,hostId:task.hostId,sectionId,expectedSectionId:task.localSectionId??null})});
+    const payload=await response.json();if(!response.ok)throw Error(payload.error||'Native move could not be verified.');
+    if(payload.board)applyNativeBoard(payload.board);else{nativePending=false;await refreshNativeBoard(true);}
+    announce('Group updated');return true;
+  }catch(error){nativePending=false;await refreshNativeBoard(true);announce(error.message);return false;}
+  finally{nativePending=false;render();renderArchiveNotices();}
+}
+function taskKey(task){return task.hostId+':'+task.id;}
+function storageKey(task){return workflowStoragePrefix+encodeURIComponent(taskKey(task));}
+function validWorkflow(stage){return workflowColumns.some(col=>col.id===stage);}
+function workflowStage(task){return workflowStates.get(taskKey(task))??'todo';}
+function loadWorkflow(){
+  try{for(const task of DATA?.tasks??[]){const stage=localStorage.getItem(storageKey(task));if(validWorkflow(stage))workflowStates.set(taskKey(task),stage);}}
+  catch{storageAvailable=false;}
+}
+function workflowNotice(){
+  $('workflow-note').hidden=$('grouping').value!=='workflow';
+  document.querySelector('.subtitle').textContent=$('grouping').value==='workflow'?'Drag to organize tasks. Runtime status is shown separately.':'Runtime status at a glance.';
+  $('workflow-note-text').textContent=storageAvailable?'Local workflow · Drag to organize · Saved in this browser, separate from sidebar groups':'Local storage unavailable; workflow changes cannot be saved';
+}
+function announce(message){
+  clearTimeout(toastTimer);$('workflow-toast').textContent=message;$('workflow-toast').hidden=false;
+  if($('detail').open)$('detail-workflow-hint').textContent=message;
+  toastTimer=setTimeout(()=>$('workflow-toast').hidden=true,2600);
+}
+function moveWorkflow(task,stage){
+  if(!validWorkflow(stage))return false;
+  if(workflowStage(task)===stage)return true;
+  try{localStorage.setItem(storageKey(task),stage);}
+  catch{storageAvailable=false;workflowNotice();announce('Not saved: allow browser storage and try again.');return false;}
+  storageAvailable=true;workflowStates.set(taskKey(task),stage);workflowNotice();render();
+  announce('Moved to “'+workflowColumns.find(col=>col.id===stage).name+'” · Saved');return true;
+}
+function finishDrag(){
+  draggedKey=null;draggedTaskGroup=null;suppressClickUntil=performance.now()+300;
+  document.querySelectorAll('.dragging,.drop-target').forEach(node=>node.classList.remove('dragging','drop-target'));
+  clearTaskDropMarkers();
+}
+function enableDrop(section,stage){
+  const canDrop=()=>{const task=DATA.tasks.find(t=>taskKey(t)===draggedKey);return task&&($('grouping').value==='native'?nativeCanMove(task):!task.sidebarOnly);};
+  section.addEventListener('dragover',e=>{if(!canDrop())return;e.preventDefault();e.dataTransfer.dropEffect='move';section.classList.add('drop-target');});
+  section.addEventListener('dragleave',e=>{if(!section.contains(e.relatedTarget))section.classList.remove('drop-target');});
+  section.addEventListener('drop',e=>{
+    if(!canDrop())return;e.preventDefault();e.stopPropagation();
+    const task=DATA.tasks.find(task=>taskKey(task)===draggedKey);finishDrag();
+    if(task){collapsed.delete($('grouping').value+':'+stage);if($('grouping').value==='native')moveNative(task,stage);else moveWorkflow(task,stage);}
+  });
+}
+const taskOrderStoragePrefix='codex-kanban.task-order.v1:',sortStorageKey='codex-kanban.sort.v1';
+let taskOrderSaveFailed=false;
+function taskGroup(task,mode=$('grouping').value,groups=currentGroups()){
+  return mode==='native'?nativeStage(task,groups):mode==='workflow'?workflowStage(task):task.column;
+}
+function taskOrderKey(groupId,mode=$('grouping').value){return taskOrderStoragePrefix+encodeURIComponent(mode)+':'+encodeURIComponent(groupId);}
+function readTaskOrder(groupId,mode=$('grouping').value){
+  try{
+    const saved=JSON.parse(localStorage.getItem(taskOrderKey(groupId,mode))??'[]');
+    const keys=Array.isArray(saved)?saved.filter(key=>typeof key==='string'&&key.includes(':')):[];
+    if(mode==='native'&&groupId==='chats')keys.push(...readTaskOrder('threads',mode));
+    return [...new Set(keys)];
+  }
+  catch{return [];}
+}
+function saveTaskOrder(groupId,keys,mode){
+  try{localStorage.setItem(taskOrderKey(groupId,mode),JSON.stringify(keys));taskOrderSaveFailed=false;return true;}
+  catch{if(!taskOrderSaveFailed)announce('Task order not saved: allow browser storage and try again.');taskOrderSaveFailed=true;return false;}
+}
+function orderedTasks(items,groupId,mode=$('grouping').value){
+  const saved=readTaskOrder(groupId,mode),rank=new Map(saved.map((key,i)=>[key,i]));
+  const ordered=[...items].sort((a,b)=>(rank.get(taskKey(a))??saved.length)-(rank.get(taskKey(b))??saved.length));
+  const keys=[...saved,...ordered.map(taskKey).filter(key=>!rank.has(key))];
+  // Retain absent keys: another tab may still hold an older placement snapshot.
+  if(JSON.stringify(keys)!==JSON.stringify(saved))saveTaskOrder(groupId,keys,mode);
+  return ordered;
+}
+function moveTaskOrder(sourceKey,targetKey,after=false){
+  const source=DATA.tasks.find(t=>taskKey(t)===sourceKey),target=DATA.tasks.find(t=>taskKey(t)===targetKey);
+  if(!source||!target||sourceKey===targetKey||taskGroup(source)!==taskGroup(target))return false;
+  const groupId=taskGroup(source),items=DATA.tasks.filter(t=>taskGroup(t)===groupId).sort((a,b)=>(b.updatedAt??0)-(a.updatedAt??0)||taskKey(a).localeCompare(taskKey(b)));
+  const ordered=orderedTasks(items,groupId).map(taskKey),saved=readTaskOrder(groupId);
+  const keys=[...saved,...ordered.filter(key=>!saved.includes(key))];
+  keys.splice(keys.indexOf(sourceKey),1);keys.splice(keys.indexOf(targetKey)+(after?1:0),0,sourceKey);
+  if(!saveTaskOrder(groupId,keys))return false;
+  render({animate:true});announce('Task order saved in this browser');return true;
+}
+function restoreSortPreference(){
+  try{const saved=localStorage.getItem(sortStorageKey);$('order').value=['recent','title','manual'].includes(saved)?saved:'recent';}catch{}
+}
+function changeSort(){
+  try{localStorage.setItem(sortStorageKey,$('order').value);}catch{announce('Sort preference could not be saved in this browser.');}
+  render();
+}
+function clearTaskDropMarkers(){document.querySelectorAll('.task-drop-before,.task-drop-after').forEach(node=>node.classList.remove('task-drop-before','task-drop-after'));}
+function enableTaskOrderDrop(card,task,groupId){
+  const allowed=()=>$('order').value==='manual'&&draggedKey&&draggedKey!==taskKey(task)&&draggedTaskGroup===groupId;
+  const after=e=>{const rect=card.getBoundingClientRect();return e.clientY>rect.top+rect.height/2;};
+  card.addEventListener('dragover',e=>{
+    if(!allowed())return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';clearTaskDropMarkers();card.classList.add(after(e)?'task-drop-after':'task-drop-before');
+  });
+  card.addEventListener('dragleave',e=>{if(!card.contains(e.relatedTarget))card.classList.remove('task-drop-before','task-drop-after');});
+  card.addEventListener('drop',e=>{
+    if(!allowed())return;e.preventDefault();e.stopPropagation();const source=draggedKey,placeAfter=after(e);finishDrag();moveTaskOrder(source,taskKey(task),placeAfter);
+  });
+  card.addEventListener('keydown',e=>{
+    if($('order').value!=='manual'||!e.altKey||!['ArrowUp','ArrowDown'].includes(e.key))return;
+    e.preventDefault();e.stopPropagation();
+    const items=[...document.querySelectorAll('.card')].filter(node=>node.dataset.groupId===groupId),index=items.indexOf(card),forward=e.key==='ArrowDown',target=items[index+(forward?1:-1)];
+    if(target&&moveTaskOrder(taskKey(task),target.dataset.taskKey,forward))document.querySelectorAll('.card').forEach(node=>{if(node.dataset.taskKey===taskKey(task))node.querySelector('.card-open').focus();});
+  });
+}
+function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;}
+function icon(name){const node=document.createElementNS('http://www.w3.org/2000/svg','svg');node.setAttribute('class','icon');node.setAttribute('aria-hidden','true');const use=document.createElementNS(node.namespaceURI,'use');use.setAttribute('href','#i-'+name);node.append(use);return node;}
+function hostName(host){return host==='local'?'Local':host==='durable'?'Cloud':host==='unknown'?'Unknown host':host.startsWith('remote-control:')?'Remote host':host;}
+function date(ts){return ts?new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(ts*1000)):'Unknown time';}
+function project(task){return task.projectName??null;}
+function matches(task){const q=$('search').value.trim().toLocaleLowerCase(),host=$('host').value;return(host==='all'||task.hostId===host)&&(!q||[task.title,task.summary,task.projectName,task.cwd,task.id].join(' ').toLocaleLowerCase().includes(q))&&(filter==='all'||filter==='unread'&&task.isUnread||filter==='pinned'&&task.pinned||task.column===filter);}
+function taskUrl(task){return !task.sidebarOnly&&task.hostId==='local'&&typeof task.id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(task.id)?'codex://threads/'+encodeURIComponent(task.id):null;}
+function makeCard(task,progress=false,groupId){
+  const card=el('article','card'),url=taskUrl(task),action=el(url?'a':'button','card-open');
+  if(url){action.href=url;action.setAttribute('aria-label','Open task: '+task.title);action.title='Open this chat in Codex';}
+  else{action.type='button';action.setAttribute('aria-label',task.title);action.onclick=()=>showDetail(task);}
+  action.draggable=false;
+  action.addEventListener('click',e=>{if(performance.now()<suppressClickUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
+  card.dataset.taskKey=taskKey(task);
+  card.dataset.groupId=groupId;
+  const manual=$('order').value==='manual';
+  if(manual||$('grouping').value==='workflow'&&!task.sidebarOnly||$('grouping').value==='native'&&nativeCanMove(task)){
+    card.draggable=true;action.title+=(url?'; ':'')+(manual?'Drag within this group to reorder · Alt + Up/Down':'Drag to organize your workflow');
+    if($('grouping').value==='native'&&nativeCanMove(task))action.title+=' · Drag between sidebar groups';
+    card.addEventListener('dragstart',e=>{if(taskActionPending()||e.target.closest('.card-action')){e.preventDefault();return;}e.stopPropagation();draggedKey=taskKey(task);draggedTaskGroup=groupId;++nativeEpoch;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-codex-kanban-task',draggedKey);card.classList.add('dragging');});
+    card.addEventListener('dragend',finishDrag);
+  }
+  if(manual)enableTaskOrderDrop(card,task,groupId);
+  card.append(action);
+  if(canArchive(task)){
+    card.classList.add('has-archive');
+    const archive=el('button','card-action card-archive');archive.type='button';archive.draggable=false;archive.append(icon('archive'));
+    archive.setAttribute('aria-label','Archive task: '+task.title);archive.dataset.tooltip='Archive task';archive.disabled=!!taskActionPending();
+    archive.onclick=e=>{e.stopPropagation();archiveTask(task);};
+    card.append(archive);
+    if(archivingKey===taskKey(task)){card.classList.add('archiving');card.setAttribute('aria-busy','true');archive.dataset.tooltip='Archiving…';}
+  }
+  if(canPin(task)){
+    card.classList.add('has-pin');
+    const pin=el('button','card-action card-pin');pin.type='button';pin.draggable=false;pin.append(icon('pin'));
+    pin.setAttribute('aria-label',(taskPinned(task)?'Unpin task: ':'Pin task: ')+task.title);pin.setAttribute('aria-pressed',String(taskPinned(task)));
+    pin.dataset.tooltip=taskPinned(task)?'Unpin task':'Pin task';pin.disabled=!!taskActionPending();pin.onclick=e=>{e.stopPropagation();setTaskPinned(task);};card.append(pin);
+    if(pinningKey===taskKey(task)){card.classList.add('pinning');card.setAttribute('aria-busy','true');pin.dataset.tooltip='Saving pin…';}
+  }
+  if(nativePending&&$('grouping').value==='native')card.classList.add('native-pending');
+  const title=el('div','card-title',task.title);title.title=task.title;
+  const heading=el('div','card-heading');
+  if(task.isUnread&&!progress){
+    card.classList.add('is-unread');
+    const unread=el('span','unread');unread.title=task.unreadSource==='desktopPersistedReadState'?'Unread reply':'Unread reply (snapshot)';
+    unread.setAttribute('role','img');unread.setAttribute('aria-label','Unread reply');heading.append(unread);
+  }
+  if(progress){const ring=el('span','progress-ring');ring.title='In progress';ring.setAttribute('role','img');ring.setAttribute('aria-label','In progress');heading.append(ring);}
+  heading.append(title);
+  const projectName=project(task);
+  card.append(heading);
+  if(projectName){const line=el('div','project-line');line.append(icon('folder'),el('span','project',projectName));line.title=projectName;card.append(line);}
+  const foot=el('div','card-footer'),host=el('span','host');host.append(icon(task.hostId==='durable'?'cloud':'monitor'),el('span','',hostName(task.hostId)));host.title=task.hostId;
+  const detail=el('button','card-details');detail.type='button';detail.append(icon('more'));detail.setAttribute('aria-label','View details: '+task.title);detail.title='View task details';detail.onclick=()=>showDetail(task);
+  foot.append(host);
+  if(task.pinned){const pin=el('span','pin');pin.append(icon('pin'));pin.title='Pinned task';foot.append(pin);}
+  foot.append(el('span','time',date(task.updatedAt)),detail);card.append(foot);return card;
+}
+const refreshAnimations=new Set();
+function captureBoardLayout(){
+  const positions=new Map();
+  for(const node of $('board').querySelectorAll('.card,.col-head')){
+    const rect=node.getBoundingClientRect();
+    if(!rect.width||!rect.height)continue;
+    const key=node.dataset.taskKey?'task:'+node.dataset.taskKey:'group:'+node.dataset.groupKey;
+    positions.set(key,{rect,unread:!!node.querySelector('.unread')});
+  }
+  return positions;
+}
+function cancelRefreshAnimations(){
+  for(const animation of refreshAnimations)animation.cancel();
+  refreshAnimations.clear();
+}
+function animateRefreshNode(node,frames,duration=500){
+  node.classList.add('layout-moving');
+  const animation=node.animate(frames,{duration,easing:'cubic-bezier(.2,.7,.2,1)'});
+  refreshAnimations.add(animation);
+  animation.onfinish=animation.oncancel=()=>{node.classList.remove('layout-moving');refreshAnimations.delete(animation);};
+}
+function animateBoardRefresh(before){
+  if(!before.size)return;
+  const viewport=$('board').parentElement.getBoundingClientRect();
+  const visible=rect=>rect.right>viewport.left&&rect.left<viewport.right&&rect.bottom>viewport.top&&rect.top<viewport.bottom;
+  for(const node of $('board').querySelectorAll('.card,.col-head')){
+    const rect=node.getBoundingClientRect();
+    if(!rect.width||!rect.height)continue;
+    const card=!!node.dataset.taskKey,key=card?'task:'+node.dataset.taskKey:'group:'+node.dataset.groupKey,previous=before.get(key);
+    if(!visible(rect)&&(!previous||!visible(previous.rect)))continue;
+    if(previous){
+      const dx=previous.rect.left-rect.left,dy=previous.rect.top-rect.top;
+      if(Math.abs(dx)>1||Math.abs(dy)>1)animateRefreshNode(node,[{transform:`translate(${dx}px,${dy}px)`},{transform:'translate(0,0)'}]);
+      const unread=node.querySelector('.unread');
+      if(card&&unread&&!previous.unread)animateRefreshNode(unread,[{opacity:0},{opacity:1}],180);
+    }else if(card)animateRefreshNode(node,[{opacity:0},{opacity:1}],180);
+  }
+}
+function render({animate=false}={}){
+  if(!DATA)return;
+  const animateLayout=animate&&!draggedKey&&!draggedGroup&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const before=animateLayout?captureBoardLayout():null;
+  const wrap=$('board').parentElement,scroll=animate?{left:wrap.scrollLeft,top:wrap.scrollTop}:null;
+  // Capture in-flight visual positions before cancellation so consecutive updates stay continuous.
+  cancelRefreshAnimations();
+  const allTasks=[...DATA.tasks];
+  allTasks.sort($('order').value==='title'?(a,b)=>a.title.localeCompare(b.title,'en-US'):(a,b)=>(b.updatedAt??0)-(a.updatedAt??0)||taskKey(a).localeCompare(taskKey(b)));
+  const tasks=allTasks.filter(matches),manual=$('order').value==='manual';
+  $('order').title=manual?'Drag tasks within a group to reorder · Saved in this browser':'Choose how tasks are sorted';
+  const workflow=$('grouping').value==='workflow',native=$('grouping').value==='native',groups=orderedGroups(currentGroups());
+  for(const ring of $('board').querySelectorAll('.progress-ring'))for(const animation of ring.getAnimations())animation.cancel();
+  $('board').replaceChildren();$('board').classList.toggle('list',view==='list');$('board').classList.toggle('workflow',workflow);$('board').classList.toggle('native-groups',native);
+  $('board').setAttribute('aria-label',native?'Tasks grouped by native sidebar group':workflow?'Tasks grouped by workflow':'Tasks grouped by runtime status');$('visible-count').textContent=`Showing ${tasks.length} / ${DATA.tasks.length}`;
+  workflowNotice();nativeNotice();
+  for(const col of groups){
+    const groupTasks=allTasks.filter(t=>taskGroup(t,$('grouping').value,groups)===col.id);
+    const items=(manual?orderedTasks(groupTasks,col.id):groupTasks).filter(matches),collapseKey=$('grouping').value+':'+col.id;
+    if((col.id==='error'||col.id==='unknown')&&!items.length)continue;
+    if(!workflow&&!native&&columns.some(c=>c.id===filter)&&col.id!==filter)continue;
+    const section=el('section','column '+col.id+(!workflow&&!native&&DATA.sync?.runtimeLive===false?' snapshot-runtime':''));section.style.setProperty('--color',col.color);section.classList.toggle('collapsed',collapsed.has(collapseKey));
+    section.dataset.groupId=col.id;
+    const head=el('button','col-head');head.type='button';head.title=col.desc;head.setAttribute('aria-label',col.name+' group');head.setAttribute('aria-expanded',String(!collapsed.has(collapseKey)));
+    head.dataset.groupKey=col.id;
+    enableGroupDrag(section,head,col);
+    if(workflow){section.dataset.stage=col.id;enableDrop(section,col.id);}
+    if(native){section.dataset.nativeSection=col.id;if(nativeWritable&&['For Later','In Progress','For Review','Pinned'].includes(col.name))enableDrop(section,col.id);}
+    const progress=items.length>0&&(native&&col.name==='In Progress'||workflow&&col.id==='progress');
+    const ring=el('span','state-ring');
+    const chevron=el('span','col-chevron');chevron.append(icon('down'));head.append(ring,el('span','',col.name),el('span','col-count',String(items.length)),chevron);
+    head.onclick=()=>{if(performance.now()<suppressClickUntil)return;if(collapsed.has(collapseKey))collapsed.delete(collapseKey);else collapsed.add(collapseKey);render();};section.append(head);
+    if(native){const missing=(DATA.sidebarUnresolved??[]).filter(t=>nativeStage(t,groups)===col.id).length;if(missing){const gap=el('p','metadata-gap','Another '+missing+' member records could not be read and are excluded from task counts');gap.style.cssText='font-size:10px;color:var(--muted);margin:0 0 12px;line-height:1.7';section.append(gap);}}
+    const cards=el('div','cards');for(const task of items)cards.append(makeCard(task,progress,col.id));
+    if(!items.length){const empty=el('div','empty');empty.append(icon('inbox'),el('span','',tasks.length?col.empty:'No matching tasks'),el('small','',tasks.length?col.desc:'Try another search or filter'));cards.append(empty);}
+    section.append(cards);$('board').append(section);
+  }
+  if(scroll){wrap.scrollLeft=scroll.left;wrap.scrollTop=scroll.top;}
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    for(const ring of $('board').querySelectorAll('.progress-ring')){
+      if(!ring.getClientRects().length)continue;
+      const animation=ring.animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:2400,iterations:Infinity,easing:'linear'});
+      // Anchor every replacement to the document clock so polling never resets its phase.
+      animation.startTime=0;
+    }
+  }
+  if(before)animateBoardRefresh(before);
+  if(selectedTask&&$('detail').open){
+    const latest=DATA.tasks.find(t=>taskKey(t)===taskKey(selectedTask));
+    if(latest){selectedTask=latest;updateDetailProperties(latest);}
+    else{$('detail-native').disabled=true;$('native-edit-hint').textContent='This task is no longer available. Close details and refresh.';}
+  }
+}
+function setView(next){view=next;for(const mode of ['board','list'])$('view-'+mode).setAttribute('aria-pressed',String(mode===view));render();}
+function setFilter(next){filter=next;for(const button of document.querySelectorAll('[data-filter]')){const selected=button.dataset.filter===filter;button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));if(selected)$('view-title').textContent=button.querySelector('.label').textContent;}render();}
+function updateDetailProperties(task){
+  $('detail-title').textContent=task.title;$('detail-summary').textContent=task.summary||'No summary available.';$('detail-meta').replaceChildren();
+  updateRuntimeDetail(task);
+  $('detail-workflow').value=workflowStage(task);$('detail-workflow-hint').textContent='Workflow is saved in this browser and does not start or stop Codex tasks.';
+  const native=$('grouping').value==='native';$('detail-workflow').closest('.workflow-edit').hidden=native;$('detail-workflow-hint').hidden=native;
+  $('native-edit').hidden=false;$('native-edit-hint').hidden=false;
+  const select=$('detail-native'),names=['For Later','In Progress','For Review','Pinned'],groups=nativeColumns(),stage=nativeStage(task,groups);
+  const choices=groups.filter(s=>names.includes(s.name)||s.id==='chats'||s.id===stage)
+    .map(s=>({value:s.id,name:s.name,disabled:!names.includes(s.name)&&s.id!=='chats'}));
+  if(!choices.some(s=>s.value===stage))choices.unshift({value:stage,name:'Other group',disabled:true});
+  const signature=JSON.stringify(choices);
+  // Keep the focused select intact across polling when the group catalog is unchanged.
+  if(select.dataset.choices!==signature){
+    select.replaceChildren();for(const choice of choices){const option=el('option','',choice.name);option.value=choice.value;option.disabled=choice.disabled;select.append(option);}
+    select.dataset.choices=signature;
+  }
+  select.value=stage;select.disabled=!nativeCanEditGroup(task);
+  $('native-edit-hint').textContent=nativePending?'Saving group and verifying…':
+    !['localThreadSection','localDefault'].includes(task.placementSource)||task.hostId!=='local'||task.sidebarOnly?'Manage this task’s group in Codex.':
+    !nativeConnected||!nativeWritable?'Local connection required to change groups.':'Changes are saved to Codex. Sidebar Flow continues automatic grouping.';
+  for(const [name,value] of [['Host',hostName(task.hostId)],['Updated at',date(task.updatedAt)],['Working directory',task.cwd||'Standalone task'],['Task ID',task.id],['Host ID',task.hostId]])$('detail-meta').append(el('dt','',name),el('dd','',value));
+  if(task.projectName)$('detail-meta').append(el('dt','','Project'),el('dd','',task.projectName));
+  const section=groups.find(s=>s.id===stage),source={task:'Task membership ID',project:'Parent project group',pinned:'Pinned task list',verifiedAlias:'Sidebar identity verified by task readback',unconfirmed:'No reliable match'};
+  const placement={localThreadSection:'Local thread.section field',desktopProject:'Desktop project group (snapshot)',localDefault:'No local group; standalone task',desktopSnapshot:'Other hosts (desktop snapshot)'};
+  $('detail-meta').append(el('dt','','Group'),el('dd','',section?.name??'Unconfirmed'),el('dt','','Grouping source'),el('dd','',placement[task.placementSource]??source[task.nativeMembershipSource]??'Unknown'));
+}
+function showDetail(task){
+  selectedTask=task;updateDetailProperties(task);
+  $('detail').querySelector('details').open=false;
+  const url=taskUrl(task);$('open-task').hidden=!url;if(url)$('open-task').href=url;else $('open-task').removeAttribute('href');
+  $('detail-hint').textContent=url?'Select “Open chat” to open Codex. Allow the browser to open Codex if prompted.':'Direct navigation is unavailable for this host. Copy the instruction and send it to Codex.';
+  $('copy').textContent='Copy open instruction';$('open-prompt').style.display='none';$('detail').showModal();
+}
+$('search').addEventListener('input',render);$('host').onchange=render;$('order').onchange=changeSort;
+$('grouping').onchange=()=>{collapsed.clear();render();};
+async function changeDetailGroup(){
+  const task=selectedTask,value=$('detail-native').value;
+  if(!task)return;
+  await moveNative(task,value==='chats'?null:value);
+  const latest=DATA.tasks.find(t=>taskKey(t)===taskKey(task));
+  if(selectedTask&&taskKey(selectedTask)===taskKey(task)&&latest){selectedTask=latest;updateDetailProperties(latest);$('native-edit-hint').textContent=$('workflow-toast').textContent;}
+}
+$('detail-native').onchange=changeDetailGroup;
+$('detail-workflow').onchange=()=>{if(!moveWorkflow(selectedTask,$('detail-workflow').value))$('detail-workflow').value=workflowStage(selectedTask);};
+window.addEventListener('storage',e=>{
+  if(e.key===null)restoreSortPreference();
+  if(e.key===sortStorageKey){restoreSortPreference();if(!draggedGroup&&!draggedKey)render();return;}
+  if(e.key?.startsWith(taskOrderStoragePrefix)){if(!draggedGroup&&!draggedKey)render({animate:true});return;}
+  if(e.key?.startsWith(groupOrderStoragePrefix)){if(!draggedGroup&&!draggedKey)render();return;}
+  if(e.key!==null&&!e.key.startsWith(workflowStoragePrefix))return;
+  workflowStates.clear();loadWorkflow();render();
+  if(selectedTask&&$('detail').open)$('detail-workflow').value=workflowStage(selectedTask);
+});
+for(const button of document.querySelectorAll('[data-filter]')){button.title=button.querySelector('.label').textContent;button.onclick=()=>setFilter(button.dataset.filter);}
+$('view-board').onclick=()=>setView('board');$('view-list').onclick=()=>setView('list');
+$('sidebar-toggle').onclick=()=>{const closed=$('shell').classList.toggle('sidebar-collapsed');$('sidebar-toggle').setAttribute('aria-expanded',String(!closed));$('sidebar-toggle').setAttribute('aria-label',closed?'Expand sidebar':'Collapse sidebar');};
+$('close').onclick=$('detail-done').onclick=()=>$('detail').close();
+$('detail').onclick=e=>{if(e.target===$('detail')){const rect=$('detail').getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)$('detail').close();}};
+$('refresh').onclick=()=>location.reload();
+$('copy').onclick=async()=>{const prompt=`Please open the Codex chat “${selectedTask.title}”, threadId=${selectedTask.id}，hostId=${selectedTask.hostId}.`;try{await navigator.clipboard.writeText(prompt);$('copy').textContent='Copied';}catch{$('open-prompt').value=prompt;$('open-prompt').style.display='block';$('open-prompt').focus();$('open-prompt').select();$('copy').textContent='Copy the instruction below';}};
+document.addEventListener('keydown',e=>{if($('detail').open||e.target.closest('input,textarea,select,[contenteditable=true]'))return;if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='b'){e.preventDefault();setView(view==='board'?'list':'board');}});
+restoreSortPreference();
+if(!DATA){$('snapshot-time').textContent='No snapshot generated. Run build.mjs first.';}
+else{
+  loadWorkflow();
+  for(const host of [...new Set(DATA.tasks.map(t=>t.hostId))]){const option=el('option','',hostName(host));option.value=host;$('host').append(option);}
+  refreshSummary();
+  $('snapshot-time').textContent=DATA.capturedAt?'Snapshot captured: '+new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'medium',hour12:false}).format(new Date(DATA.capturedAt))+' · For new status, ask Codex: “Refresh my Codex Kanban”':'Snapshot time unknown';
+  if(DATA.unavailableHosts.length)$('snapshot-time').textContent+=' · Some hosts unavailable';$('coverage').textContent=DATA.coverage;render();
+}
+refreshNativeBoard();
+setInterval(()=>{
+  if(!draggedKey&&!draggedGroup&&expireRuntimeSnapshot()){
+    refreshSummary();render();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);
+  }
+  refreshNativeBoard();
+},5000);
+</script>
+</html>
