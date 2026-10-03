@@ -191,3 +191,9 @@ Verified on 2026-10-04 with the bundled Codex CLI 0.160.0.
 - A fresh directory created from Git archive plus the reviewed patch passed npm ci, plugin build and all 166 automated tests, with no failures or skips. The independent reviewer separately passed all 166 tests and git diff --check.
 - The clean build passed both real official App Server labs: native group/pin/runtime and Archive/Undo in disposable CODEX_HOME, plus official plugin installation, discovery, all six tools and global sidebar metadata. Desktop MCP dispatch and project-container snapshots remain simulated; zero model turns were started.
 - The existing localhost board was read without task mutations and had no captured browser warnings/errors. This verification did not change the active Desktop plugin cache or any existing user tasks. Genuine native sidebar clicking, Desktop write authorization and immediate visible sidebar updates retain their live-client acceptance boundary.
+
+## Kanban plugin icon — 0.4.32
+
+- Added a square transparent PNG with a purple three-column Kanban glyph. The portable manifest references the packaged asset through both extensions.com.openai.interface.logo and composerIcon. The build includes the asset, and Git ignores continue excluding personal screenshots while explicitly retaining this icon.
+- All 166 tests pass, including installed-package checks for icon byte identity, PNG signature, square dimensions and official size limits. The official plugin-discovery lab also passes.
+- Installed 0.4.32 through the official CLI, preserving the previous prepared package. Installed icon, manifest version and MCP/service files match source; a read-only client discovers six tools and loads the board with zero task writes. No Desktop restart was performed; native icon appearance awaits client plugin reload or a normal restart.

@@ -16,6 +16,7 @@ export async function buildPlugin(){
   const plugin=join(root,'dist','plugin');
   await rm(plugin,{recursive:true,force:true});
   await mkdir(join(plugin,'dist'),{recursive:true});
+  await mkdir(join(plugin,'assets'),{recursive:true});
   await mkdir(join(plugin,'skills','codex-kanban'),{recursive:true});
   await build({entryPoints:[join(root,'mcp-sdk.mjs')],outfile:join(plugin,'mcp-sdk.mjs'),bundle:true,
     minify:true,format:'esm',platform:'node',target:'node22',
@@ -23,7 +24,7 @@ export async function buildPlugin(){
   const files=['mcp-server.mjs','kanban-service.mjs','local-read.mjs','local-board.mjs','build.mjs',
     'desktop-unread.mjs','desktop-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs',
     'git-status.mjs','archive.mjs','pin.mjs','move.mjs','bridge-transport.mjs','setup-desktop-bridge.mjs',
-    'plugin.json','mcp.json','launch-mcp'];
+    'plugin.json','mcp.json','launch-mcp','assets/kanban-icon.png'];
   await Promise.all(files.map(file=>copyFile(join(root,file),join(plugin,file))));
   await chmod(join(plugin,'launch-mcp'),0o755);
   await copyFile(join(root,'skills','codex-kanban','SKILL.md'),join(plugin,'skills','codex-kanban','SKILL.md'));

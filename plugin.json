@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-kanban",
-  "version": "0.4.31",
+  "version": "0.4.32",
   "description": "A Codex sidebar MCP App with Desktop-owned groups, pinning, live runtime and archive Undo.",
   "extensions": {
     "com.openai": {
@@ -16,6 +16,8 @@
           "Write"
         ],
         "brandColor": "#9590ff",
+        "composerIcon": "./assets/kanban-icon.png",
+        "logo": "./assets/kanban-icon.png",
         "defaultPrompt": [
           "刷新我的 Codex 看板",
           "查看正在运行和等待处理的 Codex 任务"

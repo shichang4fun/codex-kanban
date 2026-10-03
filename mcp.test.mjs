@@ -142,6 +142,15 @@ test('installed package runs outside its directory without node_modules and serv
   const client=new Client({name:'installed-probe',version:'1'},{capabilities:{}});let transport;
   try{
     const installed=await preparePlugin({root});
+    const manifest=JSON.parse(await readFile(join(installed.plugin,'plugin.json'),'utf8'));
+    const presentation=manifest.extensions['com.openai'].interface;
+    assert.equal(presentation.logo,'./assets/kanban-icon.png');
+    assert.equal(presentation.composerIcon,presentation.logo);
+    const icon=await readFile(join(installed.plugin,presentation.logo));
+    assert.deepEqual(icon,await readFile(new URL('./assets/kanban-icon.png',import.meta.url)));
+    assert.equal(icon.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+    const width=icon.readUInt32BE(16),height=icon.readUInt32BE(20);
+    assert.equal(width,height);assert(width>=48&&width<=4096);assert(icon.length<=5*1024*1024);
     const config=JSON.parse(await readFile(join(installed.plugin,'mcp.json'),'utf8'));
     assert.equal(config.mcpServers['codex-kanban'].command,'./launch-mcp');
     assert.equal(config.mcpServers['codex-kanban'].cwd,'./');

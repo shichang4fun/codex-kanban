@@ -5,6 +5,7 @@ index.html
 *-preview.png
 *-preview.jpg
 *.png
+!/assets/kanban-icon.png
 *.jpg
 *.zip
 
