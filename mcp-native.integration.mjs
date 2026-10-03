@@ -50,7 +50,7 @@ try{
   assert.equal(entry.serverInfo?.icons?.[0]?.mimeType,'image/png');
   assert(entry.serverInfo.icons[0].src.startsWith('data:image/png;base64,'),'Sidebar server icon missing from App Server discovery.');
   assert.deepEqual(entry.serverInfo.icons.map(icon=>icon.theme),['light','dark']);
-  assert.deepEqual(Object.values(entry.tools).map(tool=>tool.name).sort(),['archive_task','get_board','move_task','open_board','pin_task','set_project','undo_archive']);
+  assert.deepEqual(Object.values(entry.tools).map(tool=>tool.name).sort(),['archive_task','create_task','get_board','get_creation_options','get_creation_status','move_task','open_board','pin_task','retry_creation_group','save_group_settings','set_project','undo_archive']);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility.length===1&&tool._meta.ui.visibility[0]==='app'));
   const open=Object.values(entry.tools).find(tool=>tool.name==='open_board');
   assert.equal(open._meta.ui.resourceUri,'ui://kanban/board/v1.html');

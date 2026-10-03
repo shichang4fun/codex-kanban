@@ -3,6 +3,9 @@ import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
 import {startLocalBridge,bridgeError} from './bridge-transport.mjs';
 import {createDesktopGroups} from './desktop-groups.mjs';
 import {createDesktopRuntime} from './desktop-runtime.mjs';
+import {createDesktopCreation} from './desktop-creation.mjs';
+import {createJsonStore} from './creation-store.mjs';
+import {dirname,join} from 'node:path';
 
 // Mutations run on the attached Desktop MCP connection. Exact-ID verification
 // still uses the official read-only local protocol; it never opens another writer.
@@ -39,13 +42,20 @@ export function createDesktopArchive({call,ready=()=>true,openReader=openLocalRe
 export async function startDesktopArchiveBridge({socketPath,...options}){
   const controller=createDesktopArchive(options);
   const groups=createDesktopGroups(options),runtime=typeof options.request==='function'?createDesktopRuntime(options):null;let busy=false;
+  const creation=createDesktopCreation({...options,store:options.creationStore??createJsonStore(join(dirname(socketPath),'creation-operations.json'))});
   return startLocalBridge({socketPath,dispatch:async(method,params,context)=>{
-    if(method==='status')return {...controller.status(),groupActions:true,runtimeAvailable:runtime!==null};
+    if(method==='status'){
+      const status={...controller.status(),groupActions:true,runtimeAvailable:runtime!==null};
+      try{return {...status,taskCreation:true,creationOperations:await creation.operations()};}
+      catch{return {...status,taskCreation:false,creationError:'Creation history could not be read. Task creation is disabled until its storage is repaired.'};}
+    }
     if(method==='runtime'&&runtime)return runtime.read(params,context);
-    if(!['archive','move','pin'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore and task group changes.',400);
+    if(method==='creationCatalog')return creation.catalog();
+    if(method==='creationStatus')return creation.operation(params);
+    if(!['archive','move','pin','create','retryCreationGroup'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore, task group changes and explicit task creation.',400);
     if(busy)throw bridgeError('Another desktop task action is in progress.',409);
     busy=true;
-    try{return await (method==='archive'?controller.change(params,context):groups[method](params,context));}
+    try{return await (method==='archive'?controller.change(params,context):method==='create'?creation.create(params,context):method==='retryCreationGroup'?creation.retryGroup(params,context):groups[method](params,context));}
     finally{busy=false;}
   }});
 }

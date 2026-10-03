@@ -24,16 +24,39 @@ function harness(storage=new Map()){
 const ids=rows=>Array.from(rows,key);
 const review=h=>h.data.tasks.filter(t=>t.group==='review');
 
-test('manual order survives updates and reload; new tasks append rather than jump to the top',()=>{
+test('new tasks lead manual order while existing positions survive updates and reload',()=>{
   const h=harness();h.api.orderedTasks(review(h),'review');
   assert.equal(h.api.moveTaskOrder('local:b','local:a'),true);
   const reloaded=harness(h.storage);
   reloaded.data.tasks[0].updatedAt=1000;
   const added={id:'new',hostId:'local',group:'review',updatedAt:2000};reloaded.data.tasks.push(added);
   const incoming=review(reloaded).sort((a,b)=>b.updatedAt-a.updatedAt);
-  assert.deepEqual(ids(reloaded.api.orderedTasks(incoming,'review')),['local:b','local:a','cloud:a','local:new']);
+  assert.deepEqual(ids(reloaded.api.orderedTasks(incoming,'review')),['local:new','local:b','local:a','cloud:a']);
   const again=harness(reloaded.storage);
+  again.data.tasks.push(added);again.data.tasks[0].updatedAt=3000;
+  assert.deepEqual(ids(again.api.orderedTasks(review(again).sort((a,b)=>b.updatedAt-a.updatedAt),'review')),['local:new','local:b','local:a','cloud:a']);
+  again.data.tasks=again.data.tasks.filter(t=>t.id!=='new');
   assert.deepEqual(ids(again.api.orderedTasks(review(again),'review')),['local:b','local:a','cloud:a']);
+});
+test('multiple arrivals prepend in incoming time order without dropping hidden or absent tasks',()=>{
+  const h=harness();h.api.orderedTasks(review(h),'review');h.api.moveTaskOrder('local:b','local:a');
+  h.data.tasks=h.data.tasks.filter(t=>key(t)!=='cloud:a');
+  h.data.tasks.push({id:'older',hostId:'local',group:'review',updatedAt:50},
+    {id:'newer',hostId:'local',group:'review',updatedAt:100});
+  const incoming=review(h).sort((a,b)=>b.updatedAt-a.updatedAt);
+  assert.deepEqual(ids(h.api.orderedTasks(incoming,'review')),['local:newer','local:older','local:b','local:a']);
+  assert.deepEqual(JSON.parse(h.storage.get(h.api.taskOrderKey('review'))),['local:newer','local:older','local:b','local:a','cloud:a']);
+  assert.deepEqual(ids(h.api.orderedTasks(incoming,'review').filter(t=>t.id!=='b')),['local:newer','local:older','local:a']);
+  h.data.tasks.push(tasks[2]);
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:newer','local:older','local:b','local:a','cloud:a']);
+});
+test('a task entering another group for the first time goes to its front',()=>{
+  const h=harness();h.api.orderedTasks(review(h),'review');h.api.moveTaskOrder('local:b','local:a');
+  const pinned=h.data.tasks.find(t=>t.group==='pinned');
+  h.api.orderedTasks([pinned],'pinned');pinned.group='review';
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:p','local:b','local:a','cloud:a']);
+  assert.equal(h.api.moveTaskOrder('local:p','local:a',true),true);
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:b','local:a','local:p','cloud:a']);
 });
 test('before and after moves preserve hidden tasks and never change memberships or runtime state',()=>{
   const h=harness(),before=JSON.stringify(h.data);
@@ -71,8 +94,8 @@ test('malformed orders, duplicate keys and missing tasks are reconciled safely',
   h.storage.set(storageKey,'{"bad":true}');
   assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:a','local:b','cloud:a']);
   h.storage.set(storageKey,'["local:b","local:b",null,"removed"]');
-  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:b','local:a','cloud:a']);
-  assert.deepEqual(JSON.parse(h.storage.get(storageKey)),['local:b','local:a','cloud:a']);
+  assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:a','cloud:a','local:b']);
+  assert.deepEqual(JSON.parse(h.storage.get(storageKey)),['local:a','cloud:a','local:b']);
 });
 test('failed writes do not move tasks or claim success',()=>{
   const h=harness();h.api.orderedTasks(review(h),'review');h.block();
@@ -97,7 +120,7 @@ test('a stale tab cannot remove ordering entries learned from a newer snapshot',
   assert.equal(fresh.storage.get(storageKey),before,'older snapshots must not trigger opposing storage writes');
   assert.equal(stale.api.moveTaskOrder('local:b','local:a'),true);
   assert.ok(JSON.parse(fresh.storage.get(storageKey)).includes('local:new'),'a user reorder retains entries missing from this tab');
-  assert.deepEqual(ids(fresh.api.orderedTasks(review(fresh),'review')),['local:b','local:a','cloud:a','local:new']);
+  assert.deepEqual(ids(fresh.api.orderedTasks(review(fresh),'review')),['local:new','local:b','local:a','cloud:a']);
 });
 test('Ungrouped retains former Tasks and Projects orders across a manual reorder and reload',()=>{
   const h=harness();for(const task of h.data.tasks)task.group='chats';

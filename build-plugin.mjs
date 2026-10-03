@@ -22,7 +22,7 @@ export async function buildPlugin(){
     minify:true,format:'esm',platform:'node',target:'node22',
     banner:{js:'import {createRequire} from "node:module"; const require=createRequire(import.meta.url);'}});
   const files=['mcp-server.mjs','kanban-service.mjs','local-read.mjs','local-board.mjs','build.mjs',
-    'desktop-unread.mjs','desktop-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs',
+    'desktop-unread.mjs','desktop-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs',
     'git-status.mjs','archive.mjs','pin.mjs','move.mjs','project.mjs','bridge-transport.mjs','setup-desktop-bridge.mjs',
     'plugin.json','mcp.json','launch-mcp','assets/kanban-icon.png','assets/kanban-icon-dark.png'];
   await Promise.all(files.map(file=>copyFile(join(root,file),join(plugin,file))));

@@ -6,7 +6,7 @@ import {bridgeError} from './bridge-transport.mjs';
 const allowedNames=['For Later','In Progress','For Review','Pinned'];
 // Only the write is adapted. The existing controllers keep native validation,
 // stale-source checks and readback; this connection never acquires a writer.
-export function createDesktopGroups({call,ready=()=>true,openReader=openLocalReader}){
+export function createDesktopGroups({call,ready=()=>true,openReader=openLocalReader,allowedGroupNames=allowedNames}){
   let busy=false;
   async function run(action,params,{signal}={}){
     if(!ready())throw bridgeError('Launch Codex with Kanban and open a local task to change groups.');
@@ -52,7 +52,7 @@ export function createDesktopGroups({call,ready=()=>true,openReader=openLocalRea
           let desktopSectionId=null,destinationName=null;
           if(args.sectionId!==null){
             const destination=sections.filter(s=>s.id===args.sectionId);
-            if(destination.length!==1||!allowedNames.includes(destination[0].name)
+            if(destination.length!==1||allowedGroupNames!==null&&!allowedGroupNames.includes(destination[0].name)
               ||sections.filter(s=>s.name===destination[0].name).length!==1)
               throw bridgeError('A unique native destination group is required.',409);
             const name=destination[0].name,matches=snapshot.sections.filter(s=>s.name===name);destinationName=name;
@@ -85,7 +85,7 @@ export function createDesktopGroups({call,ready=()=>true,openReader=openLocalRea
       // Native reads below establish eligibility. No project-container identity
       // or caller-supplied placement data is accepted over the private socket.
       const board={tasks:[{id:params?.threadId,hostId:params?.hostId,placementSource:'localDefault'}]};
-      return action==='move'?await moveLocalTask(params,board,{open,signal}):await pinLocalTask(params,board,{open});
+      return action==='move'?await moveLocalTask(params,board,{open,signal,allowedGroupNames}):await pinLocalTask(params,board,{open});
     }finally{busy=false;}
   }
   return {move:(params,context)=>run('move',params,context),pin:(params,context)=>run('pin',params,context)};

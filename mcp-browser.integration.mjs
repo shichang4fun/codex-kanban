@@ -14,16 +14,21 @@ const task={id,hostId:'local',title:'Sidebar integration fixture',summary:'Synth
   updatedAt:Math.floor(Date.now()/1000),column:'unknown',rawStatus:'unknown',nativeSectionId:'chats',localSectionId:null,
   placementSource:'localDefault',nativeMembershipSource:'localThreadSection',nativeMembershipCount:1};
 const sections=[{sectionId:'chats',name:'Tasks'},...['For Later','In Progress','For Review','Pinned'].map((name,index)=>({sectionId:'group-'+index,name}))];
+const defaults={};
+const settingsStore={read:async()=>structuredClone(defaults),update:async change=>change(defaults)};
 let archived=false,reads=0;
-const projects=[{projectId:'project-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',hostId:'local',label:'Fixture B'}];
+const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
+task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
   id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),title:'Synthetic scrolling task '+(index+1),isUnread:index%2===0,
   nativeSectionId:'group-0',localSectionId:'group-0',placementSource:'localThreadSection'}));
 const getBoard=async()=>{reads++;return {tasks:[...(archived?[]:[{...task}]),...passiveTasks],projects,sections,capturedAt:new Date().toISOString(),runtimeCapturedAt:null,
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};
-const service=createKanbanService({getBoard,desktopBridgeSocket:'synthetic',
+const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'synthetic',
   bridgeRequest:async(_socket,method,params)=>{
-    if(method==='status')return {connected:true,groupActions:true};
+    if(method==='status')return {connected:true,groupActions:true,taskCreation:true,creationOperations:[]};
+    if(method==='creationCatalog')return {projects:projects.map(p=>({projectId:p.desktopProjectId,label:p.label,isGitRepository:true,nativeProjectId:p.projectId})),
+      sections:[...sections.filter(s=>s.sectionId!=='chats'),{sectionId:null,name:'Ungrouped'}]};
     if(method==='archive'){
       archived=params.archived;
       return {threadId:id,...(archived?{archived:true}:{restored:true})};
@@ -40,7 +45,7 @@ const service=createKanbanService({getBoard,desktopBridgeSocket:'synthetic',
   setProject:async params=>{if(params.threadId!==id||params.expectedProjectId!==task.localProjectId)throw Error('Unexpected fixture project request');
     const project=projects.find(p=>p.projectId===params.projectId);
     if(params.projectId!==null&&!project)throw Error('Unknown fixture project');
-    task.localProjectId=task.projectId=params.projectId;task.projectName=project?.label??null;
+    task.localProjectId=params.projectId;task.projectId=project?.desktopProjectId??null;task.projectName=project?.label??null;
     return {threadId:id,projectId:params.projectId,changed:true};}
 });
 const app=createKanbanMcp({service});const client=new Client({name:'browser-fixture-host',version:'1'},{});

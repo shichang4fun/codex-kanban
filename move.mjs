@@ -7,7 +7,7 @@ const failure=(message,status=409)=>Object.assign(Error(message),{status});
 
 // An explicit move is a single native section write. Sidebar Flow remains free
 // to classify later; no policy override, retry loop, or model turn is created.
-export async function moveLocalTask(params,board,{open=openLocalPinner,signal}={}){
+export async function moveLocalTask(params,board,{open=openLocalPinner,signal,allowedGroupNames=editableGroupNames}={}){
   const {threadId,hostId,sectionId,expectedSectionId}=params??{};
   if(hostId!=='local'||typeof threadId!=='string'||!uuid.test(threadId)
     ||(sectionId!==null&&(typeof sectionId!=='string'||!sectionId||sectionId.length>128))
@@ -32,7 +32,7 @@ export async function moveLocalTask(params,board,{open=openLocalPinner,signal}={
       seen.add(cursor);
     }while(cursor!==null);
     const destination=sections.filter(s=>s.id===sectionId);
-    if(sectionId!==null&&(destination.length!==1||!editableGroupNames.includes(destination[0].name)))
+    if(sectionId!==null&&(destination.length!==1||allowedGroupNames!==null&&!allowedGroupNames.includes(destination[0].name)))
       throw failure('Choose Tasks, Pinned, For Later, In Progress, or For Review.');
     const readTask=async()=>{
       const {thread}=await client.request('thread/read',{threadId,includeTurns:false});

@@ -70,7 +70,7 @@ test('MCP UI can refresh on sandbox protocols and recover Undo without reloading
   let applied=0,recovered=0;
   const context=createContext({kanbanTransport:{},location:{protocol:'about:'},taskActionPending:()=>false,
     nativeReads:0,nativeEpoch:0,nativePending:false,taskMenu:null,draggedKey:null,draggedGroup:null,
-    document:{hidden:false,activeElement:null,getElementById:()=>({open:false})},nativeToken:null,
+    document:{hidden:false,activeElement:null,getElementById:()=>({open:false})},$:()=>({open:false}),nativeToken:null,
     fetch:async()=>({ok:true,json:async()=>({csrf:'token',board:{tasks:[]},undoArchives:[{undoToken:'recover'}]})}),
     applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){}});
   const refresh=new Script(code+'\nrefreshNativeBoard').runInContext(context);await refresh();
@@ -84,10 +84,10 @@ test('MCP chat and PR navigation uses the host and reports rejected links in the
   const context=createContext({ready:Promise.resolve(),app:{async openLink(params){links.push(params.url);return {isError:true};}},
     document:{addEventListener(_event,callback){handler=callback;},getElementById(id){assert.equal(id,'task-toast');return toast;}}});
   new Script(handlerCode).runInContext(context);
-  for(const href of ['codex://threads/fixture','https://github.com/example/repo/pull/1']){
+  for(const href of ['codex://threads/fixture','https://github.com/example/repo/pull/1','codex://threads/new','codex://new?projectId=desktop-project&prompt=Review']){
     let prevented=false;
-    await handler({target:{closest(selector){assert(selector.includes('https://'));return {href};}},preventDefault(){prevented=true;}});
+    await handler({target:{closest(selector){assert(selector.includes('https://'));assert(selector.includes('codex://new?'));return {href};}},preventDefault(){prevented=true;}});
     assert(prevented);assert.equal(toast.hidden,false);assert(toast.textContent.includes('unavailable'));
   }
-  assert.equal(links.length,2);
+  assert.equal(links.length,4);
 });

@@ -19,7 +19,8 @@ process.env.CODEX_HOME=fixtureHome;
 const cli='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
 const child=spawn(cli,['--disable','hooks','app-server','--listen','stdio://'],{env:process.env,stdio:['pipe','pipe','pipe']});
 child.stderr.on('data',()=>{});child.stdout.setEncoding('utf8');
-let sequence=0,buffer='',desktopSequence=0,stop,server;const pending=new Map(),desktopPending=new Map();
+let sequence=0,buffer='',desktopSequence=0,stop,server,fixtureProject=null,simulatedCreations=0;const pending=new Map(),desktopPending=new Map();
+const creationDesktopProjectId='desktop-creation-project';
 child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);let m;try{m=JSON.parse(line);}catch{continue;}
   const p=pending.get(m.id);if(!p)continue;pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);
 }});
@@ -32,6 +33,21 @@ const relay=createDesktopRelay({toDesktop:message=>{const p=desktopPending.get(m
       if(!isTool)return nativeRpc(message.method,message.params);
       const {tool,arguments:args}=message.params;
       if(tool==='set_thread_archived')return nativeRpc(args.archived?'thread/archive':'thread/unarchive',{threadId:args.threadId});
+      if(tool==='list_projects')return {projects:fixtureProject?[{projectId:creationDesktopProjectId,projectKind:'local',hostId:'local',label:'Disposable Kanban project',path:fixtureHome,isGitRepository:false}]:[]};
+      if(tool==='create_thread'){
+        // Simulate Desktop's create tool using a real offline native thread.
+        // No turn/start or model execution is sent by this fixture dispatcher.
+        simulatedCreations++;
+        assert.equal(args.target.projectId,creationDesktopProjectId);
+        const {thread}=await nativeRpc('thread/start',{cwd:fixtureHome,ephemeral:false,projectId:fixtureProject.id});
+        assert(thread.path.startsWith(fixtureHome));assert(/^[0-9a-f-]{36}$/.test(thread.id));
+        await nativeRpc('thread/inject_items',{threadId:thread.id,items:[{type:'message',role:'user',content:[{type:'input_text',text:args.prompt}]}]});
+        await nativeRpc('thread/name/set',{threadId:thread.id,name:'Disposable creation fixture'});
+        await appendFile(thread.path,JSON.stringify({timestamp:new Date().toISOString(),type:'event_msg',payload:{type:'user_message',message:'Disposable creation fixture',images:[],local_images:[],text_elements:[]}})+'\n');
+        await nativeRpc('thread/list',{archived:false,useStateDbOnly:false,limit:100});
+        execFileSync('/usr/bin/sqlite3',[join(fixtureHome,'state_5.sqlite'),"UPDATE threads SET preview='Disposable creation fixture', first_user_message='Disposable creation fixture', has_user_event=1 WHERE id='"+thread.id+"'"]);
+        return {threadId:thread.id,hostId:'local'};
+      }
       const {data:groups}=await nativeRpc('threadSection/list',{limit:100});
       const desktopId=s=>s.name==='Pinned'?'pinned':'desktop:'+s.id;
       if(tool==='list_threads')return {sections:groups.map(s=>({sectionId:desktopId(s),name:s.name}))};
@@ -50,6 +66,7 @@ try{
   const secondRoot=await realpath(await mkdtemp(join(fixtureHome,'project-b-')));
   const {project:secondProject}=await desktopRpc('project/create',{idempotencyKey:randomUUID(),name:'Disposable second Kanban project',roots:[{path:secondRoot}]});
   assert.notEqual(project.id,secondProject.id);
+  fixtureProject=project;
   const {thread}=await desktopRpc('thread/start',{cwd:fixtureHome,ephemeral:false,projectId:project.id});
   assert.equal(thread.projectId,project.id);
   assert(/^[0-9a-f-]{36}$/.test(thread.id));
@@ -152,7 +169,14 @@ try{
   const archived=await(await post('/api/archive',params)).json();assert.equal(archived.archived,true);assert.equal(archived.board.tasks.length,0);
   const restored=await(await post('/api/unarchive',{undoToken:archived.undoToken})).json();assert.equal(restored.restored,true);assert.equal(restored.board.tasks[0].id,thread.id);
   assert.equal(projectWrites.length,5);
-  console.log(JSON.stringify({isolated:true,realAppServer:true,simulatedDesktopMcp:true,simulatedProjectSnapshot:true,realNativeProjectPreserved:true,realNativeProjectSetChangeClearVerified:true,projectMetadataWrites:projectWrites.length,projectCwdSectionRuntimePreserved:true,occupiedWriterReproduced:true,desktopGroupTransportVerified:true,desktopRuntimeReadVerified:true,nativeGroupMovesVerified:true,desktopPinUnpinVerified:true,projectInheritedTaskMoveVerified:true,clearedTaskRestoresProjectPlacement:true,detailPinnedAndTasksMovesVerified:true,laterNativeMoveFollowed:true,bridgeArchiveVerified:true,bridgeUndoVerified:true,modelTurnsStarted:0}));
+  const creationRequest={requestId:randomUUID(),sectionId:flow['For Review'],prompt:'Disposable creation test; no model turn.',settings:{projectId:creationDesktopProjectId}};
+  const createdResponse=await post('/api/create',creationRequest),created=await createdResponse.json();
+  assert.equal(createdResponse.status,200,JSON.stringify(created));assert.equal(created.groupAssigned,true);assert.notEqual(created.threadId,thread.id);
+  const createdNative=(await nativeRpc('thread/read',{threadId:created.threadId,includeTurns:false})).thread;
+  assert.equal(createdNative.projectId,project.id);assert.equal(createdNative.section.id,flow['For Review']);
+  assert.equal(created.board.tasks.find(t=>t.id===created.threadId).projectName,'Disposable Kanban project');
+  assert.equal((await(await post('/api/create',creationRequest)).json()).threadId,created.threadId);assert.equal(simulatedCreations,1);
+  console.log(JSON.stringify({realNativeProjectSetChangeClearVerified:true,projectMetadataWrites:projectWrites.length,projectCwdSectionRuntimePreserved:true,isolated:true,realAppServer:true,simulatedDesktopMcp:true,simulatedProjectSnapshot:true,realNativeProjectPreserved:true,occupiedWriterReproduced:true,desktopGroupTransportVerified:true,desktopRuntimeReadVerified:true,nativeGroupMovesVerified:true,desktopPinUnpinVerified:true,projectInheritedTaskMoveVerified:true,clearedTaskRestoresProjectPlacement:true,detailPinnedAndTasksMovesVerified:true,laterNativeMoveFollowed:true,bridgeArchiveVerified:true,bridgeUndoVerified:true,offlineCreationAndGroupVerified:true,duplicateCreationPrevented:true,modelTurnsStarted:0}));
 }finally{
   if(server)await new Promise(r=>server.close(r));if(stop)await stop();relay.close();
   for(const p of pending.values())clearTimeout(p.timer);

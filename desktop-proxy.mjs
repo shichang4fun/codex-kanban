@@ -6,7 +6,8 @@ import {isAbsolute} from 'node:path';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
 
 // Preserve Desktop's original stdio handshake and RPC IDs. Added calls can only
-// call a small tool whitelist; model execution methods are not exposed.
+// call a small tool whitelist. Explicit create_thread is the sole new-task
+// entry point; arbitrary model execution methods remain unavailable.
 export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
   const prefix='kanban:'+randomUUID()+':',pending=new Map();
   let ready=false,initializeId,sequence=0,contextThreadId=null;const loading=new Set();
@@ -38,7 +39,7 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
       toDesktop(message);
     },
     call(tool,args,contextThreadId){
-      if(!['list_threads','read_thread','set_thread_archived','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
+      if(!['list_threads','read_thread','list_projects','create_thread','set_thread_archived','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
       return send('mcpServer/tool/call',{threadId:contextThreadId,server:'codex_app',tool,arguments:args}).then(result=>{
         const blocks=result?.content?.filter(block=>block.type==='text');
         if(result?.isError||blocks?.length!==1)throw Error('Invalid Desktop tool reply');

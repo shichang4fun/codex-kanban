@@ -164,7 +164,7 @@ test('project-inherited details and dragging allow task-only grouping while reta
 });
 test('group controls require the new Desktop capability even when native reads remain connected',()=>{
   const f=detailUi(),{context,$,pinned}=f;
-  Object.assign(context,{expireRuntimeSnapshot(){},loadWorkflow(){},refreshSummary(){},render(){},document:{querySelector:()=>({})},Intl,Date});
+  Object.assign(context,{expireRuntimeSnapshot(){},loadWorkflow(){},refreshSummary(){},render(){},renderCreationNotices(){},document:{querySelector:()=>({})},Intl,Date});
   new Script(html.match(/function applyNativeBoard\([\s\S]*?(?=async function refreshNativeBoard)/)[0]).runInContext(context);
   const board={...context.DATA,capturedAt:'2026-10-03T18:00:00Z',sync:{connected:true,scope:'localSections',writable:true}};
   context.applyNativeBoard(board);context.updateDetailProperties(pinned);
