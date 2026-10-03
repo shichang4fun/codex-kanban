@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {mkdtemp,rm,readFile,writeFile,mkdir,readdir,lstat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -125,6 +125,18 @@ test('missing plugin snapshot still reads local tasks, and close releases the re
   finally{await source.close();await rm(root,{recursive:true});}
   assert(closes>=1);await assert.rejects(source.getBoard());
 });
+test('MCP app shutdown prevents a waiting tool call from dispatching its archive',async()=>{
+  let release,started,writes=0;const began=new Promise(resolve=>started=resolve);
+  const f=await harness({getBoard:async()=>{
+    started();await new Promise(resolve=>release=resolve);return board();
+  },archiveTask:async()=>{writes++;return {threadId:id,archived:true};}});
+  try{
+    const request=f.client.callTool({name:'archive_task',arguments:{threadId:id,hostId:'local',actionToken:f.service.csrf}});
+    await began;const closing=f.app.close();release();
+    const response=await request;await closing;
+    assert.equal(response.structuredContent.status,408);assert.equal(response.isError,true);assert.equal(writes,0);
+  }finally{await f.close();}
+});
 test('installed package runs outside its directory without node_modules and serves the built UI',async()=>{
   const root=await mkdtemp(join(tmpdir(),'kanban-install-'));
   const client=new Client({name:'installed-probe',version:'1'},{capabilities:{}});let transport;
@@ -149,4 +161,36 @@ test('installed package runs outside its directory without node_modules and serv
     const timeout=setTimeout(()=>child.kill('SIGKILL'),5000);
     const [code,signal]=await exit;clearTimeout(timeout);assert.equal(code,0);assert.equal(signal,null);assert.equal(stdout,'');
   }finally{await client.close();await transport?.close();await rm(root,{recursive:true});}
+});
+test('failed marketplace publication restores the previous installed package',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'kanban-install-rollback-'));
+  try{
+    const original=await preparePlugin({root,build:false});
+    await writeFile(join(original.plugin,'previous-marker'),'old installation');
+    const launcher=await readFile(join(original.plugin,'launch-mcp'),'utf8');
+    const manifest=join(root,'.agents','plugins','marketplace.json');
+    await rm(manifest);await mkdir(manifest);
+    await assert.rejects(preparePlugin({root,nodePath:'/replacement/node',build:false}),error=>['EISDIR','ENOTEMPTY','EEXIST'].includes(error.code));
+    assert.equal(await readFile(join(original.plugin,'previous-marker'),'utf8'),'old installation');
+    assert.equal(await readFile(join(original.plugin,'launch-mcp'),'utf8'),launcher);
+    assert((await lstat(manifest)).isDirectory());
+    assert(!(await readdir(root)).some(name=>name.startsWith('.stage-')||name.startsWith('.previous-')));
+    // A subsequent valid update publishes both artifacts and preserves its backup.
+    await rm(manifest,{recursive:true});
+    const updated=await preparePlugin({root,build:false});
+    assert.equal(await readFile(join(updated.previous,'previous-marker'),'utf8'),'old installation');
+    assert.equal(JSON.parse(await readFile(manifest,'utf8')).plugins[0].source.path,'./codex-kanban');
+    await assert.rejects(readFile(join(updated.plugin,'previous-marker'),'utf8'),error=>error.code==='ENOENT');
+  }finally{await rm(root,{recursive:true,force:true});}
+});
+test('failed first marketplace publication leaves no active plugin or staged package',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'kanban-install-first-'));
+  try{
+    // This is an owned installation root with an obstructed manifest destination.
+    await writeFile(join(root,'.owner'),'codex-kanban-marketplace-v1');
+    await mkdir(join(root,'.agents','plugins','marketplace.json'),{recursive:true});
+    await assert.rejects(preparePlugin({root,build:false}));
+    await assert.rejects(lstat(join(root,'codex-kanban')),error=>error.code==='ENOENT');
+    assert(!(await readdir(root)).some(name=>name.startsWith('.stage-')||name.startsWith('.previous-')));
+  }finally{await rm(root,{recursive:true,force:true});}
 });

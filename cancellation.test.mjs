@@ -37,3 +37,47 @@ test('shared service forwards cancellation into the native archive preflight',as
   await assert.rejects(service.action('archive',{threadId:id,hostId:'local'},{signal:controller.signal}),error=>error.status===408);
   assert.equal(writes,0);assert.deepEqual((await service.read()).undoArchives,[]);await service.close();
 });
+test('service shutdown cancels an archive waiting for its board preflight',async()=>{
+  let release,started,writes=0;
+  const began=new Promise(resolve=>started=resolve);
+  const service=createKanbanService({getBoard:async()=>{
+    started();await new Promise(resolve=>release=resolve);return board;
+  },archiveTask:async()=>{writes++;return {threadId:id,archived:true};}});
+  const action=service.action('archive',{threadId:id,hostId:'local'});
+  const canceled=assert.rejects(action,error=>error.status===408);
+  await began;const closing=service.close();release();
+  await canceled;await closing;assert.equal(writes,0);
+  await assert.rejects(service.read(),error=>error.status===503);
+});
+test('service shutdown reaches native archive preflight without a request signal',async()=>{
+  let release,started,writes=0,closed=false;
+  const began=new Promise(resolve=>started=resolve);
+  const client={close(){closed=true;},async request(method){
+    if(method==='thread/read'){
+      started();await new Promise(resolve=>release=resolve);
+      return {thread:{id,ephemeral:false,parentThreadId:null,cwd:'/fixture'}};
+    }
+    writes++;throw Error('Must never write');
+  }};
+  const service=createKanbanService({getBoard:async()=>board,
+    archiveTask:(params,current,options)=>archiveLocalTask(params,current,{...options,open:async()=>client})});
+  const canceled=assert.rejects(service.action('archive',{threadId:id,hostId:'local'}),error=>error.status===408);
+  await began;const closing=service.close();release();
+  await canceled;await closing;assert.equal(writes,0);assert(closed);
+});
+test('service shutdown still verifies an already dispatched archive exactly once',async()=>{
+  let release,started,writes=0,verified=false;
+  const began=new Promise(resolve=>started=resolve);
+  const client={close(){},async request(method){
+    if(method==='thread/read')return {thread:{id,ephemeral:false,parentThreadId:null,cwd:'/fixture'}};
+    if(method==='thread/archive'){writes++;started();await new Promise(resolve=>release=resolve);return {};}
+    assert.equal(method,'thread/list');verified=true;return {data:[{id}]};
+  }};
+  const service=createKanbanService({getBoard:async()=>board,
+    archiveTask:(params,current,options)=>archiveLocalTask(params,current,{...options,open:async()=>client})});
+  const action=service.action('archive',{threadId:id,hostId:'local'});
+  await began;const closing=service.close();release();
+  const result=await action;await closing;
+  assert.equal(result.archived,true);assert.equal(writes,1);assert(verified);
+  await assert.rejects(service.action('archive',{threadId:id,hostId:'local'}),error=>error.status===503);
+});

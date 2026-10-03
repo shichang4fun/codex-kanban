@@ -17,29 +17,37 @@ export async function preparePlugin({root=join(homedir(),'.codex','kanban-plugin
   if(owner===null&&(await readdir(root)).length)throw Error('Use an empty installation directory.');
   await writeFile(ownerPath,'codex-kanban-marketplace-v1',{mode:0o600});
   const stage=await mkdtemp(join(root,'.stage-'));
-  const plugin=join(root,'codex-kanban');
-  let previous;
+  const plugin=join(root,'codex-kanban'),stagedPlugin=join(stage,'plugin');
+  const manifestPath=join(root,'.agents','plugins','marketplace.json');
+  let previous,published=false;
   try{
-    await cp(join(source,'dist','plugin'),stage,{recursive:true});
+    await cp(join(source,'dist','plugin'),stagedPlugin,{recursive:true});
     // Desktop need not inherit the interactive shell's Node search path.
-    const config=JSON.parse(await readFile(join(stage,'mcp.json'),'utf8'));
+    const config=JSON.parse(await readFile(join(stagedPlugin,'mcp.json'),'utf8'));
     config.mcpServers['codex-kanban'].command='./launch-mcp';
     config.mcpServers['codex-kanban'].args=[];
     const quote=value=>`'${value.replaceAll("'", "'\\''")}'`;
-    await writeFile(join(stage,'launch-mcp'),`#!/bin/sh\nexec ${quote(nodePath)} "$(dirname "$0")/mcp-server.mjs" "$@"\n`,{mode:0o700});
-    await writeFile(join(stage,'mcp.json'),JSON.stringify(config,null,2)+'\n');
-    if(await lstat(plugin).catch(()=>null)){
-      previous=await mkdtemp(join(root,'.previous-'));await rm(previous,{recursive:true});await rename(plugin,previous);
-    }
-    try{await rename(stage,plugin);}
-    catch(error){if(previous)await rename(previous,plugin);throw error;}
+    await writeFile(join(stagedPlugin,'launch-mcp'),`#!/bin/sh\nexec ${quote(nodePath)} "$(dirname "$0")/mcp-server.mjs" "$@"\n`,{mode:0o700});
+    await writeFile(join(stagedPlugin,'mcp.json'),JSON.stringify(config,null,2)+'\n');
     const marketplace={name:'codex-kanban-local',interface:{displayName:'Codex Kanban Local'},plugins:[{
       name:'codex-kanban',source:{source:'local',path:'./codex-kanban'},
       policy:{installation:'AVAILABLE',authentication:'ON_INSTALL'},category:'Productivity'
     }]};
-    await mkdir(join(root,'.agents','plugins'),{recursive:true,mode:0o700});
-    await writeFile(join(root,'.agents','plugins','marketplace.json'),JSON.stringify(marketplace,null,2)+'\n',{mode:0o600});
+    await mkdir(dirname(manifestPath),{recursive:true,mode:0o700});
+    const stagedManifest=join(stage,'marketplace.json');
+    await writeFile(stagedManifest,JSON.stringify(marketplace,null,2)+'\n',{mode:0o600});
+    if(await lstat(plugin).catch(error=>{if(error.code==='ENOENT')return null;throw error;})){
+      const backup=await mkdtemp(join(root,'.previous-'));await rm(backup,{recursive:true});
+      await rename(plugin,backup);previous=backup;
+    }
+    await rename(stagedPlugin,plugin);published=true;
+    // Publish the manifest last, atomically. Any earlier failure keeps it intact.
+    await rename(stagedManifest,manifestPath);
     return {root,plugin,marketplace:'codex-kanban-local',previous};
+  }catch(error){
+    if(published)await rm(plugin,{recursive:true,force:true});
+    if(previous)await rename(previous,plugin);
+    throw error;
   }finally{await rm(stage,{recursive:true,force:true});}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

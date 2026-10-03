@@ -36,7 +36,7 @@ const failure=(message,status)=>Object.assign(Error(message),{status});
 // HTTP and MCP share one write lock and one token-bound Undo registry.
 export function createKanbanService({getBoard,archiveTask=archiveLocalTask,restoreTask=restoreArchivedTask,
   pinTask=null,moveTask=null,desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
-  const csrf=randomUUID(),undoArchives=new Map();let mutating=null,closed=false;
+  const csrf=randomUUID(),undoArchives=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
   const desktopStatus=async()=>{
     if(desktopBridgeSocket)try{return await bridgeRequest(desktopBridgeSocket,'status',{},1500);}catch{}
     return {connected:false};
@@ -56,8 +56,9 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
       if(mutating)await mutating.catch(()=>{});
       return {board:await connectedBoard(),csrf,undoArchives:[...undoArchives].map(([undoToken,entry])=>({undoToken,task:entry.task}))};
     },
-    async action(name,params,{signal}={}){
+    async action(name,params,{signal:requestSignal}={}){
       if(closed)throw failure('The board connection is closed.',503);
+      const signal=requestSignal?AbortSignal.any([requestSignal,lifetime.signal]):lifetime.signal;
       if(!['move','pin','archive','unarchive'].includes(name))throw failure('Unknown task action.',400);
       if(mutating)throw failure('Another task action is in progress.',409);
       const undo=name==='unarchive'?undoArchives.get(params?.undoToken):null;
@@ -111,6 +112,6 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
       try{return await mutating;}
       finally{mutating=null;}
     },
-    async close(){closed=true;await mutating?.catch(()=>{});undoArchives.clear();}
+    async close(){closed=true;lifetime.abort();await mutating?.catch(()=>{});undoArchives.clear();}
   };
 }

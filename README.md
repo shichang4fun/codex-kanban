@@ -126,11 +126,11 @@ codex plugin marketplace add "$HOME/.codex/kanban-plugin-marketplace"
 codex plugin add codex-kanban@codex-kanban-local
 ```
 
-`prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备会保留上一份安装包；它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex 看板」。CLI 安装成功不能替代入口点击验收。
+`prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备成功后保留上一份安装包；发布失败时恢复旧包，marketplace 文件通过最后一次原子替换发布。它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex 看板」。CLI 安装成功不能替代入口点击验收。
 
 插件的用户数据默认在 `$CODEX_HOME/kanban/snapshot.json`（未设置 CODEX_HOME 时为 `~/.codex/kanban/snapshot.json`），可用 `KANBAN_DATA_DIR` 指定目录。缺少快照仍可读取本机任务与分组；项目目录、其他主机和备用运行快照由宿主 `list_threads` / `list_projects` 更新。服务不写插件缓存。MCP 和原 localhost 网页的本地偏好属于不同存储来源，不自动迁移；iframe 存储不可用时沿用现有错误提示。
 
-归档与 Undo 令牌绑定 MCP 服务实例。刷新数据保留恢复入口，丢失动作响应时下次读取可恢复 Undo；一个 UI 恢复成功后，其他 UI 下次刷新移除相应入口。关闭整个 MCP 服务后，使用客户端归档列表恢复。预派发取消不执行写入；已经派发的写入不自动重试。多 UI 操作共用互斥锁，覆盖动作后的回读。
+归档与 Undo 令牌绑定 MCP 服务实例。刷新数据保留恢复入口，丢失动作响应时下次读取可恢复 Undo；一个 UI 恢复成功后，其他 UI 下次刷新移除相应入口。关闭整个 MCP 服务后，使用客户端归档列表恢复。请求取消或服务关闭都会取消尚在预检中的操作，不执行写入；已经派发的写入继续回读确认，不自动重试。多 UI 操作共用互斥锁，覆盖动作后的回读。
 
 插件与 HTTP 使用相同的 Desktop 能力检查、分组写入和运行状态读取。已启用的桥接每 5 秒读取本机真实运行状态，断线后 15 秒过期；没有桥接时保留桌面快照，禁用 Group／Pin 写入。sidebar 注册本身不授予桌面工具权限。真实 Desktop 写入与即时侧栏更新仍需现场验收。旧 native-sync／native-bridge 不用于当前拖拽。此包尚未公开发布。
 

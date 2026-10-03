@@ -66,7 +66,7 @@ if(process.argv[1]&&realpathSync(resolve(process.argv[1]))===fileURLToPath(impor
     desktopBridgeSocket:process.env.KANBAN_ARCHIVE_SOCKET??connection?.socketPath??null});
   const app=createKanbanMcp({source,service});
   let stopping=false;
-  const stop=async()=>{if(stopping)return;stopping=true;await app.close();await app.server.close();};
+  const stop=async()=>{if(stopping)return;stopping=true;await app.server.close();await app.close();};
   process.stdin.once('end',()=>{void stop();});
   for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{void stop();});
   try{await app.server.connect(new StdioServerTransport());}
