@@ -1,0 +1,18 @@
+#!/bin/sh
+# GUI hosts may not inherit the user's Node PATH. Never bake in a publisher's path.
+if [ -n "${KANBAN_NODE:-}" ]; then
+  if [ ! -x "$KANBAN_NODE" ] || ! "$KANBAN_NODE" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)'; then
+    echo 'KANBAN_NODE must point to an executable Node.js 22 or newer.' >&2
+    exit 1
+  fi
+  exec "$KANBAN_NODE" "$(dirname "$0")/mcp-server.mjs" "$@"
+fi
+if command -v node >/dev/null 2>&1 && node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)'; then
+  exec node "$(dirname "$0")/mcp-server.mjs" "$@"
+fi
+node_path='/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node'
+if [ -x "$node_path" ] && "$node_path" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)'; then
+  exec "$node_path" "$(dirname "$0")/mcp-server.mjs" "$@"
+fi
+echo 'Codex Kanban requires Node.js 22 or newer. Install Node or set KANBAN_NODE to its executable path.' >&2
+exit 1
