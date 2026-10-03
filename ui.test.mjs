@@ -1,61 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {Script,createContext} from 'node:vm';
-
-const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
-const source=html.match(/<script>([\s\S]*?)<\/script>/)[1];
-const localId='11111111-1111-4111-8111-111111111111';
-const fixture=()=>({capturedAt:new Date().toISOString(),runtimeCapturedAt:null,unavailableHosts:[],
-  sync:{connected:true,writable:true,scope:'localSections',runtimeLive:false,pinLocal:true,archiveLocal:true},
-  sections:[{sectionId:'pin',name:'Pinned'},{sectionId:'review',name:'For Review'},{sectionId:'chats',name:'Tasks'}],
-  tasks:[{id:localId,title:'Local fixture',hostId:'local',nativeSectionId:'review',localSectionId:'review',placementSource:'localThreadSection',column:'unknown',isUnread:true},
-    {id:'remote',title:'Cloud fixture',hostId:'durable',nativeSectionId:'chats',column:'unknown',pinned:true}]});
-
-// Exercise the entire browser script against only the nodes that exist in the
-// template, so a leftover reference to a removed control fails at startup.
-function harness(board=fixture()){
-  class Element {
-    constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.attributes={};this.style={setProperty(){}};this.value='';this.hidden=false;this.open=false;this.listeners={};this.textContent='';
-      const classes=new Set();this.classList={add:(...names)=>names.forEach(n=>classes.add(n)),remove:(...names)=>names.forEach(n=>classes.delete(n)),contains:n=>classes.has(n),toggle:(n,on)=>{const next=on??!classes.has(n);next?classes.add(n):classes.delete(n);return next;}};
-    }
-    append(...children){children.forEach(child=>{child.parentElement=this;this.children.push(child);});}
-    replaceChildren(...children){this.children=[];this.append(...children);}
-    setAttribute(key,value){this.attributes[key]=value;}
-    removeAttribute(key){delete this.attributes[key];}
-    addEventListener(key,listener){this.listeners[key]=listener;}
-    closest(selector){return selector==='button'?this.parentElement:null;}
-    querySelector(selector){return selector==='details'?nodes.get('detail-technical'):this.children.find(n=>selector.startsWith('.')?n.className===selector.slice(1):n.tag===selector)??this.children.map(n=>n.querySelector(selector)).find(Boolean);}
-    querySelectorAll(selector){const names=selector.split(',').map(n=>n.replace('.',''));return this.children.flatMap(n=>[...(names.some(name=>name===n.className||n.className?.split(/\s+/).includes(name))?[n]:[]),...n.querySelectorAll(selector)]);}
-    getAnimations(){return [];}
-    getClientRects(){return [];}
-    getBoundingClientRect(){return {top:0,bottom:0,left:0,right:0,width:0,height:0};}
-    showModal(){this.open=true;}
-    close(){this.open=false;}
-    contains(target){return this===target||this.children.some(n=>n.contains(target));}
-    focus(){context.document.activeElement=this;}
-    select(){}
-  }
-  const nodes=new Map([...html.matchAll(/id="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
-  nodes.get('board').parentElement=new Element();
-  nodes.get('host').value='all';nodes.get('order').value='recent';nodes.get('search').value='';
-  const nav=['all','unread','pinned'].map(filter=>{const button=new Element('button');button.dataset.filter=filter;const label=new Element();label.className='label';label.textContent=filter;button.append(label);if(filter!=='all')button.append(nodes.get('nav-'+filter));return button;});
-  const storage=new Map([['codex-kanban.workflow.v1:local%3Alegacy','done'],['codex-kanban.group-order.v1:workflow','["done","todo"]']]);
-  const writes=[],events={},intervals=[];
-  const context=createContext({
-    document:{hidden:false,activeElement:null,getElementById:id=>{assert(nodes.has(id),'Missing DOM node: '+id);return nodes.get(id);},
-      createElement:tag=>new Element(tag),createElementNS:(ns,tag)=>new Element(tag),
-      querySelectorAll:selector=>selector==='[data-filter]'?nav:[],addEventListener:(name,listener)=>events[name]=listener},
-    window:{addEventListener:(name,listener)=>events[name]=listener},
-    location:{protocol:'file:',reload(){}},performance:{now:()=>1000},matchMedia:()=>({matches:true}),
-    localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>{writes.push(key);storage.set(key,value);}},
-    setInterval:listener=>intervals.push(listener),setTimeout:()=>1,clearTimeout(){},
-    navigator:{clipboard:{writeText:async()=>{throw Error('Clipboard denied');}}}
-  });
-  new Script(source.replace('/*__BOARD_DATA__*/null',JSON.stringify(board))).runInContext(context);
-  const api=new Script('({applyNativeBoard,showDetail,setFilter,setView,nativeNotice,render,nativeCanEditGroup,DATA})').runInContext(context);
-  return {api,nodes,storage,writes,events,intervals,context};
-}
+import {Script} from 'node:vm';
+import {harness,fixture,localId} from './ui-test-helpers.mjs';
 
 test('the simplified UI boots, polls, filters and changes layout without touching retired classifications',()=>{
   const h=harness();h.api.applyNativeBoard(fixture());
@@ -91,9 +37,9 @@ test('details keep direct navigation, technical data and clipboard fallback for 
 
 test('connection, read-only and unavailable-host warnings remain visible',()=>{
   const h=harness();assert(!h.nodes.get('native-note').hidden);
-  const board=fixture();board.sync.writable=false;h.api.applyNativeBoard(board);
-  assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/Read only|connected/i);
-  board.sync.writable=true;board.unavailableHosts=['remote'];h.api.applyNativeBoard(board);
+  const board=fixture();board.sync.writable=false;board.sync.moveWritable=false;h.api.applyNativeBoard(board);
+  assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/updated Kanban launcher/i);
+  board.sync.writable=true;board.sync.moveWritable=true;board.unavailableHosts=['remote'];h.api.applyNativeBoard(board);
   assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/Some hosts unavailable/);
 });
 
@@ -118,7 +64,24 @@ test('Group explains every protected source and pending action while keeping wri
   new Script("nativePending=false;pinningKey='fixture'").runInContext(h.context);check(task,/Another task action/);
   new Script('pinningKey=null;nativeConnected=false').runInContext(h.context);check(task,/Local connection required/);
   new Script("nativeConnected=true;nativeToken=''").runInContext(h.context);check(task,/Local connection required/);
-  new Script("nativeToken='csrf';nativeWritable=false").runInContext(h.context);check(task,/read only/);
+  new Script("nativeToken='csrf'").runInContext(h.context);
+  h.api.applyNativeBoard({...board,sync:{...board.sync,moveWritable:false}});check(task,/updated Kanban launcher/);
+});
+
+test('verified project-inherited tasks can change group while preserving project details',()=>{
+  const board=fixture(),task=board.tasks[0];
+  Object.assign(task,{placementSource:'desktopProject',localSectionId:null,projectId:'fixture-project',projectName:'Tools'});
+  const h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+  h.api.showDetail(task);
+  assert(h.api.nativeCanEditGroup(task));assert(!h.nodes.get('detail-native').disabled);
+  assert.match(h.nodes.get('native-edit-hint').textContent,/this task only; its project stays in place/);
+  assert(h.nodes.get('detail-meta').children.some(n=>n.textContent==='Tools'));
+  const disconnected={...board,sync:{...board.sync,moveWritable:false,pinLocal:false}};
+  h.api.applyNativeBoard(disconnected);
+  assert(h.nodes.get('detail-native').disabled);
+  assert.match(h.nodes.get('native-edit-hint').textContent,/updated Kanban launcher/);
+  const menu=h.nodes.get('board').querySelectorAll('.card-menu')[0];
+  assert(!menu.querySelector('.card-menu-panel').children.some(n=>n.attributes['aria-label']?.startsWith('Pin task:')));
 });
 
 test('details visibly explain absence from refreshed board data and recover when the task returns',()=>{

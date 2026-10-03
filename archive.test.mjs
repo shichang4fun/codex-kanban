@@ -55,7 +55,7 @@ test('HTTP archive requires local origin and CSRF; invalid native moves are reje
     for(const bad of [{...headers,'X-Kanban-Token':'wrong'},{...headers,Origin:'http://evil.test'}])
       assert.equal((await fetch(url+'/api/archive',{method:'POST',headers:bad,body:JSON.stringify(params)})).status,403);
     assert.equal((await fetch(url+'/api/archive',{method:'POST',headers,body:'bad'})).status,400);
-    assert.equal((await fetch(url+'/api/move',{method:'POST',headers,body:'{}'})).status,400);
+    assert.equal((await fetch(url+'/api/move',{method:'POST',headers,body:'{}'})).status,503);
     assert.equal(calls,0);
     const success=await fetch(url+'/api/archive',{method:'POST',headers,body:JSON.stringify(params)});
     assert.equal(success.status,200);assert.equal((await success.json()).archived,true);assert.equal(calls,1);

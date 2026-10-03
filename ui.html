@@ -114,7 +114,7 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 .list .empty{padding:18px 14px;border-radius:0 0 7px 7px}
 .board .board-empty{width:100%;padding:40px 20px;text-align:center;border:1px dashed #34353d;border-radius:6px}
 .board .board-empty .icon{display:block}.board .board-empty small{display:block}
-.card-heading .progress-ring{display:block;width:11px;height:11px;flex-shrink:0;margin-top:4px;border:1.5px solid var(--color,var(--state-progress));border-left-color:transparent;border-radius:50%;transform-origin:center}
+.card-heading .progress-ring{display:block;width:11px;height:11px;flex-shrink:0;margin-top:4px;border:1.5px solid var(--state-progress);border-left-color:transparent;border-radius:50%;transform-origin:center}
 .nav button[data-filter=unread] .icon{color:var(--state-unread)}
 .nav button[data-filter=pinned] .icon{color:var(--state-pinned)}
 .card.layout-moving,.col-head.layout-moving{position:relative;z-index:2;will-change:transform}
@@ -265,29 +265,31 @@ function enableGroupDrag(section,head,col){
   });
 }
 function expireRuntimeSnapshot(now=Date.now()){
-  if(!DATA||DATA.sync?.runtimeLive!==false)return false;
-  const observed=Date.parse(DATA.runtimeCapturedAt),age=now-observed;
-  if(Number.isFinite(observed)&&age>=0&&age<=(DATA.runtimeSnapshotMaxAgeMs??15000))return false;
+  if(!DATA)return false;
   let changed=false;
   for(const task of DATA.tasks){
-    if(task.runtimeStatusSource!=='desktopSnapshot'||task.runtimeStatusStale)continue;
-    task.lastObservedStatus??=task.rawStatus;task.lastObservedAt??=DATA.runtimeCapturedAt;
+    if(!['desktopSnapshot','desktopRuntime'].includes(task.runtimeStatusSource)||task.runtimeStatusStale)continue;
+    const capturedAt=task.runtimeStatusSource==='desktopRuntime'?task.runtimeCapturedAt:DATA.runtimeCapturedAt;
+    const observed=Date.parse(capturedAt),age=now-observed;
+    if(Number.isFinite(observed)&&age>=0&&age<=(DATA.runtimeSnapshotMaxAgeMs??15000))continue;
+    task.lastObservedStatus??=task.rawStatus;task.lastObservedAt??=capturedAt;
     task.column='unknown';task.rawStatus='unknown';task.runtimeStatusStale=true;changed=true;
   }
-  DATA.runtimeSnapshotFresh=false;return changed;
+  if(changed)DATA.runtimeSnapshotFresh=false;return changed;
 }
+function runtimeIsLive(task){return task.runtimeStatusSource==='desktopRuntime'&&!task.runtimeStatusStale;}
 function runtimeLabel(task){
   if(task.runtimeStatusStale||task.runtimeStatusSource==='unavailable'||task.column==='unknown')return null;
   const name=columns.find(c=>c.id===task.column)?.name??'Unknown status';
-  return DATA.sync?.runtimeLive===false?name+' (snapshot)':name;
+  return runtimeIsLive(task)?name:name+' (snapshot)';
 }
 function updateRuntimeDetail(task){
   const col=columns.find(c=>c.id===task.column),label=runtimeLabel(task);
   $('detail-status').hidden=!label;
-  $('detail-status').className='detail-status '+col.id+(DATA.sync?.runtimeLive===false?' snapshot-runtime':'');
+  $('detail-status').className='detail-status '+col.id+(runtimeIsLive(task)?'':' snapshot-runtime');
   $('detail-status').style.setProperty('--color',col.color);
   $('detail-status').replaceChildren(...(label?[el('span','state-ring'),el('span','',label)]:[]));
-  $('detail-raw').textContent=JSON.stringify(DATA.sync?.runtimeLive===false?{
+  $('detail-raw').textContent=JSON.stringify(!runtimeIsLive(task)?{
     currentStatus:runtimeLabel(task),lastObservedStatus:task.lastObservedStatus??null,lastObservedAt:task.lastObservedAt??null
   }:task.rawStatus??null,null,2);
 }
@@ -363,17 +365,19 @@ async function archiveTask(task){
 }
 let nativeMessage='Sidebar snapshot · Live bridge disconnected · Read only';
 function nativeCanEditGroup(task){return nativeConnected&&nativeWritable&&!!nativeToken&&!taskActionPending()&&!task.sidebarOnly&&task.hostId==='local'
-  &&['localThreadSection','localDefault'].includes(task.placementSource)&&(task.nativeMembershipCount??0)<=1;}
+  &&nativeEditablePlacement(task)&&(task.nativeMembershipCount??0)<=1;}
+function nativeEditablePlacement(task){return ['localThreadSection','localDefault'].includes(task.placementSource)
+  ||task.placementSource==='desktopProject'&&task.localSectionId===null&&typeof task.projectId==='string'&&task.projectId.length>0;}
 function nativeGroupDisabledReason(task){
   if(taskActionPending())return nativePending?'Saving group and verifying…':'Another task action is in progress. Wait for it to finish.';
   if(!nativeConnected||!nativeToken)return 'Local connection required to change groups.';
-  if(!nativeWritable)return 'The local connection is read only. Manage groups in Codex.';
+  if(!nativeWritable)return DATA?.sync?.scope==='localSections'?nativeMessage:'The local connection is read only. Manage groups in Codex.';
   if(task.hostId!=='local')return 'Group editing is available for local tasks only. Manage this task in Codex.';
   if(task.sidebarOnly)return 'This task’s details could not be verified. Manage its group in Codex.';
-  if(task.placementSource==='desktopProject')return task.projectName?
+  if(task.placementSource==='desktopProject'&&!nativeEditablePlacement(task))return task.projectName?
     `Inherited from project “${task.projectName}”. Manage the project’s group in Codex.`:
     'Inherited from its project. Manage the project’s group in Codex.';
-  if(!['localThreadSection','localDefault'].includes(task.placementSource))return 'This task’s group could not be verified. Manage it in Codex.';
+  if(!nativeEditablePlacement(task))return 'This task’s group could not be verified. Manage it in Codex.';
   if(!((task.nativeMembershipCount??0)<=1))return 'Group membership is ambiguous. Refresh before changing groups.';
   return '';
 }
@@ -402,7 +406,7 @@ function nativeNotice(){
   $('native-note').hidden=!messages.length;$('native-note').textContent=messages.join(' · ');
   const format=value=>Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'medium',hour12:false}).format(new Date(value)):'Unknown';
   $('refresh').title=['Refresh tasks',nativeConnected?'Groups auto-refresh every 5 seconds':'Showing saved groups',
-    'Groups read: '+format(DATA?.capturedAt),'Runtime snapshot: '+format(DATA?.runtimeCapturedAt),DATA?.coverage].filter(Boolean).join('\n');
+    'Groups read: '+format(DATA?.capturedAt),DATA?.tasks.some(runtimeIsLive)?'Runtime read: '+format(DATA?.runtimeLiveCapturedAt):'Runtime snapshot: '+format(DATA?.runtimeCapturedAt),DATA?.coverage].filter(Boolean).join('\n');
 }
 function refreshSummary(){
   if(!DATA)return;
@@ -421,8 +425,8 @@ function syncHostOptions(){
 }
 function applyNativeBoard(board){
   if(!Array.isArray(board?.tasks)||!Array.isArray(board.sections)||board.sync?.connected!==true)throw Error('Incomplete desktop response.');
-  DATA=board;nativeConnected=true;nativeWritable=board.sync.writable===true;
-  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Drag between groups, including Pinned · Sidebar Flow continues automatic grouping':'Local groups connected · Refresh every 5 seconds'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
+  DATA=board;nativeConnected=true;nativeWritable=board.sync.scope==='localSections'?board.sync.moveWritable===true:board.sync.writable===true;
+  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop · Sidebar Flow continues automatic grouping':'Group changes require Codex launched with the updated Kanban launcher · Open a local task after launch'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
   expireRuntimeSnapshot();
   refreshSummary();render({animate:true});
 }
@@ -614,7 +618,8 @@ function appendGitDetail(task){
     if(value)technical.append(el('dt','',name),el('dd','',value));
   }
 }
-function makeCard(task,progress=false,groupId){
+function makeCard(task,groupId){
+  const status=runtimeLabel(task),progress=task.column==='running'&&status!==null;
   const card=el('article','card'),url=taskUrl(task),action=el(url?'a':'button','card-open');
   if(url){action.href=url;action.setAttribute('aria-label','Open task: '+task.title);action.title='Open this chat in Codex';}
   else{action.type='button';action.setAttribute('aria-label',task.title);action.onclick=()=>showDetail(task);}
@@ -660,7 +665,7 @@ function makeCard(task,progress=false,groupId){
     const unread=el('span','unread');unread.title=task.unreadSource==='desktopPersistedReadState'?'Unread reply':'Unread reply (snapshot)';
     unread.setAttribute('role','img');unread.setAttribute('aria-label','Unread reply');heading.append(unread);
   }
-  if(progress){const ring=el('span','progress-ring');ring.title='In progress';ring.setAttribute('role','img');ring.setAttribute('aria-label','In progress');heading.append(ring);}
+  if(progress){const ring=el('span','progress-ring'+(runtimeIsLive(task)?'':' snapshot-runtime'));ring.title=status;ring.setAttribute('role','img');ring.setAttribute('aria-label',status);heading.append(ring);}
   heading.append(title);
   const projectName=project(task);
   card.append(heading);
@@ -754,7 +759,6 @@ function render({animate=false}={}){
     head.dataset.groupKey=col.id;
     enableGroupDrag(section,head,col);
     section.dataset.nativeSection=col.id;if(nativeWritable&&['For Later','In Progress','For Review','Pinned'].includes(col.name))enableDrop(section,col.id);
-    const progress=items.length>0&&col.name==='In Progress';
     const ring=el('span','state-ring');
     const chevron=el('span','col-chevron');chevron.append(icon('down'));head.append(ring,el('span','col-name',col.name),el('span','col-count',String(items.length)),chevron);
     head.onclick=()=>{if(performance.now()<suppressClickUntil)return;if(collapsed.has(collapseKey))collapsed.delete(collapseKey);else collapsed.add(collapseKey);render();};
@@ -771,16 +775,16 @@ function render({animate=false}={}){
         const heading=el('h3','project-head');heading.title=group.name;
         heading.append(icon('folder'),el('span','project-name',group.name),el('span','project-count',String(group.items.length)));
         const children=el('div','project-cards');
-        for(const task of group.items){const card=makeCard(task,progress,col.id);card.dataset.projectKey=group.key;children.append(card);}
+        for(const task of group.items){const card=makeCard(task,col.id);card.dataset.projectKey=group.key;children.append(card);}
         container.append(heading,children);cards.append(container);
       }
-    }else for(const task of items)cards.append(makeCard(task,progress,col.id));
+    }else for(const task of items)cards.append(makeCard(task,col.id));
     if(!items.length){const empty=el('div','empty');empty.append(icon('inbox'),el('span','',filtering?'No matching tasks in this group':col.empty));if(!filtering)empty.append(el('small','',col.desc));cards.append(empty);}
     section.append(cards);$('board').append(section);
   }
   if(scroll){wrap.scrollLeft=scroll.left;wrap.scrollTop=scroll.top;}
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
-    for(const ring of $('board').querySelectorAll('.progress-ring')){
+    for(const ring of $('board').querySelectorAll('.progress-ring:not(.snapshot-runtime)')){
       if(!ring.getClientRects().length)continue;
       const animation=ring.animate([{transform:'rotate(0deg)'},{transform:'rotate(360deg)'}],{duration:2400,iterations:Infinity,easing:'linear'});
       // Anchor every replacement to the document clock so polling never resets its phase.
@@ -812,7 +816,7 @@ function updateDetailProperties(task){
   }
   select.value=stage;select.disabled=!nativeCanEditGroup(task);
   const disabledReason=nativeGroupDisabledReason(task);
-  $('native-edit-hint').textContent=disabledReason;
+  $('native-edit-hint').textContent=disabledReason||(task.placementSource==='desktopProject'?'Changes apply to this task only; its project stays in place. Sidebar Flow continues automatic grouping.':'');
   $('native-edit-hint').hidden=!$('native-edit-hint').textContent;
   select.title=disabledReason||'Changes are saved to Codex. Sidebar Flow continues automatic grouping; moving groups does not start or stop tasks.';
   for(const [name,value] of [['Host',hostName(task.hostId)],['Updated at',date(task.updatedAt)]])$('detail-meta').append(el('dt','',name),el('dd','',value));

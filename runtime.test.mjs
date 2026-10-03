@@ -10,7 +10,8 @@ import {Script,createContext} from 'node:vm';
 const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
 const helpers=html.match(/function expireRuntimeSnapshot[\s\S]*?(?=let draggedKey)/)[0];
 function harness(runtimeLive=false){
-  const task={column:'running',rawStatus:'active',runtimeStatusSource:'desktopSnapshot',nativeSectionId:'review'};
+  const task={column:'running',rawStatus:'active',runtimeStatusSource:runtimeLive?'desktopRuntime':'desktopSnapshot',
+    runtimeCapturedAt:'2026-10-03T00:00:00Z',nativeSectionId:'review'};
   const board={tasks:[task],sync:{runtimeLive},runtimeCapturedAt:'2026-10-03T00:00:00Z',runtimeSnapshotMaxAgeMs:15000};
   const api=new Script(helpers+'\n({expireRuntimeSnapshot,runtimeLabel})').runInContext(createContext({DATA:board,columns:[{id:'running',name:'Running'},{id:'unknown',name:'Unknown status'}]}));
   return {api,task,board};
@@ -25,10 +26,22 @@ test('browser expires cached running status even when polling is disconnected',(
   assert.equal(task.lastObservedAt,board.runtimeCapturedAt);
   assert.equal(api.expireRuntimeSnapshot(Date.parse('2026-10-03T00:00:17Z')),false);
 });
-test('expiry never overrides a connected live execution source',()=>{
+test('live observations remain valid while refreshed but expire after polling stops',()=>{
   const {api,task}=harness(true);
-  assert.equal(api.expireRuntimeSnapshot(Date.parse('2026-10-03T01:00:00Z')),false);
+  assert.equal(api.expireRuntimeSnapshot(Date.parse('2026-10-03T00:00:14Z')),false);
   assert.equal(task.column,'running');assert.equal(api.runtimeLabel(task),'Running');
+  task.runtimeCapturedAt='2026-10-03T01:00:00Z';
+  assert.equal(api.expireRuntimeSnapshot(Date.parse('2026-10-03T01:00:14Z')),false);
+  assert.equal(api.expireRuntimeSnapshot(Date.parse('2026-10-03T01:00:16Z')),true);
+  assert.equal(api.runtimeLabel(task),null);
+});
+test('a live local source never renews or animates a remote snapshot',()=>{
+  const {api,task,board}=harness(true);
+  board.tasks.push({column:'running',rawStatus:'active',runtimeStatusSource:'desktopSnapshot'});
+  task.runtimeCapturedAt='2026-10-03T01:00:00Z';
+  assert.equal(api.runtimeLabel(board.tasks[1]),'Running (snapshot)');
+  api.expireRuntimeSnapshot(Date.parse('2026-10-03T01:00:01Z'));
+  assert.equal(task.column,'running');assert.equal(board.tasks[1].column,'unknown');
 });
 test('invalid timestamps and missing observations cannot claim current state',()=>{
   const {api,task,board}=harness();board.runtimeCapturedAt='invalid';

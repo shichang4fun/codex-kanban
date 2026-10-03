@@ -10,6 +10,16 @@ import {startDesktopArchiveBridge} from './desktop-archive.mjs';
 export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
   const prefix='kanban:'+randomUUID()+':',pending=new Map();
   let ready=false,initializeId,sequence=0,contextThreadId=null;const loading=new Set();
+  function send(method,params){
+    if(!ready)return Promise.reject(Error('Desktop handshake not ready'));
+    if(pending.size>=8)return Promise.reject(Error('Bridge busy'));
+    const id=prefix+(++sequence);
+    return new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{pending.delete(id);reject(Error('Desktop RPC timeout'));},timeoutMs);
+      pending.set(id,{resolve,reject,timer});
+      try{toServer({id,method,params});}catch(error){pending.delete(id);clearTimeout(timer);reject(error);}
+    });
+  }
   return {
     get ready(){return ready;},
     get contextThreadId(){return contextThreadId;},
@@ -28,19 +38,17 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
       toDesktop(message);
     },
     call(tool,args,contextThreadId){
-      if(!ready)return Promise.reject(Error('Desktop handshake not ready'));
-      if(!['list_threads','read_thread','set_thread_archived'].includes(tool))return Promise.reject(Error('Tool not allowed'));
-      if(pending.size>=8)return Promise.reject(Error('Bridge busy'));
-      const id=prefix+(++sequence);
-      return new Promise((resolve,reject)=>{
-        const timer=setTimeout(()=>{pending.delete(id);reject(Error('Desktop RPC timeout'));},timeoutMs);
-        pending.set(id,{resolve,reject,timer});
-        toServer({id,method:'mcpServer/tool/call',params:{threadId:contextThreadId,server:'codex_app',tool,arguments:args}});
-      }).then(result=>{
+      if(!['list_threads','read_thread','set_thread_archived','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
+      return send('mcpServer/tool/call',{threadId:contextThreadId,server:'codex_app',tool,arguments:args}).then(result=>{
         const blocks=result?.content?.filter(block=>block.type==='text');
         if(result?.isError||blocks?.length!==1)throw Error('Invalid Desktop tool reply');
         return JSON.parse(blocks[0].text);
       });
+    },
+    request(method,params){
+      if(method!=='thread/read'||params?.includeTurns!==false||typeof params?.threadId!=='string')
+        return Promise.reject(Error('Runtime method not allowed'));
+      return send(method,{threadId:params.threadId,includeTurns:false});
     },
     close(){ready=false;contextThreadId=null;loading.clear();for(const operation of pending.values()){clearTimeout(operation.timer);operation.reject(Error('Desktop connection closed'));}pending.clear();}
   };
@@ -65,7 +73,8 @@ async function main(){
   jsonLines(child.stdout,relay.fromServer,value=>process.stdout.write(value));
   let stopBridge;
   try{stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,
-    ready:()=>relay.ready&&relay.contextThreadId!==null,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId)});}
+    ready:()=>relay.ready&&relay.contextThreadId!==null,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
+    request:(method,params)=>relay.request(method,params)});}
   catch{process.stderr.write('KANBAN_BRIDGE_NOT_STARTED\n');}
   process.stdin.once('end',()=>child.stdin.end());
   for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));

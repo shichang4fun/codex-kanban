@@ -9,7 +9,7 @@ const source=dirname(fileURLToPath(import.meta.url));
 const defaultRoot=join(homedir(),'.codex','kanban-desktop');
 const appPath='/Applications/ChatGPT.app';
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
-const files=['desktop-proxy.mjs','desktop-archive.mjs','bridge-transport.mjs','archive.mjs','local-read.mjs'];
+const files=['desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','move.mjs','pin.mjs','local-read.mjs'];
 export async function installDesktopBridge({root=defaultRoot,contextThreadId,app=appPath,chainedCli,nodePath}={}){
   if(!isAbsolute(root)||Buffer.byteLength(join(root,'desktop.sock'))>100)throw Error('A short, absolute installation directory is required.');
   if(typeof contextThreadId!=='string'||!/^[0-9a-f-]{36}$/i.test(contextThreadId))throw Error('An explicit existing local context task is required.');
@@ -59,7 +59,7 @@ export async function launchDesktopBridge(root=defaultRoot,{run=execFileSync}={}
   if(processes.some(p=>p.trim().startsWith(join(config.app,'Contents/MacOS/'))))
     return {phase:'restart-required',message:'Quit Codex normally, then run this launcher again. No process was stopped.'};
   run('/usr/bin/open',['--env',`CODEX_CLI_PATH=${config.proxy}`,'-a',config.app],{stdio:'ignore'});
-  return {phase:'launching',message:'Codex is starting with the Kanban archive bridge.'};
+  return {phase:'launching',message:'Codex is starting with the Kanban desktop bridge.'};
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const {values}=parseArgs({options:{root:{type:'string'},context:{type:'string'},launch:{type:'boolean',default:false}}});
