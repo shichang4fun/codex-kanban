@@ -141,6 +141,37 @@ test('appearance remains usable when browser storage is unavailable',()=>{
   assert.match(h.nodes.get('task-toast').textContent,/could not be saved/);
 });
 
+test('manual arrivals lead Board and List through filtering, project view and snapshot refreshes',()=>{
+  for(const view of ['board','list'])for(const projectView of [false,true]){
+    const board=fixture();
+    board.tasks[0].updatedAt=30;
+    board.tasks.push({...board.tasks[0],id:'older',title:'Hidden existing',updatedAt:20},
+      {...board.tasks[0],id:'moved',title:'Moved task',nativeSectionId:'pin',localSectionId:'pin',updatedAt:10});
+    for(const task of board.tasks)if(task.hostId==='local')Object.assign(task,{projectId:'one',projectName:'Project one'});
+    const h=harness(board),root=h.nodes.get('board');
+    h.storage.set('codex-kanban.task-order.v1:native:review',JSON.stringify(['local:older','local:'+localId]));
+    h.storage.set('codex-kanban.project-view.v2:native:review',String(projectView));
+    h.events.storage({key:'codex-kanban.project-view.v2:native:review'});
+    h.nodes.get('order').value='manual';h.nodes.get('order').onchange();h.api.setView(view);
+    const reviewCards=()=>root.querySelectorAll('.card').filter(n=>n.dataset.groupId==='review').map(n=>n.dataset.taskKey);
+    assert.deepEqual(reviewCards(),['local:older','local:'+localId]);
+    h.nodes.get('search').value='Incoming';h.nodes.get('search').listeners.input();
+    const incoming=structuredClone(board);
+    incoming.tasks[0].updatedAt=9999;
+    Object.assign(incoming.tasks.find(t=>t.id==='moved'),{nativeSectionId:'review',localSectionId:'review',updatedAt:50});
+    incoming.tasks.push({...incoming.tasks[0],id:'new',title:'Incoming task',updatedAt:100});
+    h.api.applyNativeBoard(incoming);
+    assert.deepEqual(reviewCards(),['local:new']);
+    h.nodes.get('search').value='';h.nodes.get('search').listeners.input();
+    const expected=['local:new','local:moved','local:older','local:'+localId];
+    assert.deepEqual(reviewCards(),expected);
+    h.api.applyNativeBoard(structuredClone(incoming));assert.deepEqual(reviewCards(),expected);
+    assert.equal(h.nodes.get('order').value,'manual');
+    h.nodes.get('order').value='recent';h.nodes.get('order').onchange();
+    assert.deepEqual(reviewCards(),['local:'+localId,'local:new','local:moved','local:older']);
+  }
+});
+
 test('the simplified UI boots, polls, filters and changes layout without touching retired classifications',()=>{
   const h=harness();h.api.applyNativeBoard(fixture());
   assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');
@@ -385,6 +416,27 @@ test('a pending polling response preserves new card interactions and keeps open 
       assert.equal(h.nodes.get('detail-title').textContent,'Updated local fixture');
     }else{assert.equal(root.children[0],original);if(interaction==='menu')assert(!h.nodes.get('task-menu').hidden);}
   }
+});
+
+test('task dragging expands group hit areas and cancellation restores compact columns without a write',()=>{
+  const h=harness(),board=h.nodes.get('board');
+  new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(fixture());
+  const card=board.querySelectorAll('.card')[0],target=board.children.find(node=>node.dataset.groupId==='pin');
+  const transfer={setData(type,value){this.type=type;this.value=value;}};
+  let prevented=false;
+  const event={target:card,dataTransfer:transfer,preventDefault(){prevented=true;},stopPropagation(){}};
+  assert(!board.classList.contains('task-dragging'));
+  card.listeners.dragstart(event);
+  assert(board.classList.contains('task-dragging'));assert.equal(transfer.value,'local:'+localId);
+  target.listeners.dragover(event);
+  assert(prevented);assert(target.classList.contains('drop-target'));assert.equal(transfer.dropEffect,'move');
+  h.api.render();assert(board.classList.contains('task-dragging'));
+  card.listeners.dragend();assert(!board.classList.contains('task-dragging'));
+  assert.equal(new Script('draggedKey').runInContext(h.context),null);
+  h.api.render();assert(!board.classList.contains('task-dragging'));
+  new Script('nativePending=true').runInContext(h.context);
+  prevented=false;board.querySelectorAll('.card')[0].listeners.dragstart(event);
+  assert(prevented);assert(!board.classList.contains('task-dragging'));
 });
 test('filtered empty groups differ from empty data and zero matches share one state in Board and List',()=>{
   const h=harness(),board=h.nodes.get('board');

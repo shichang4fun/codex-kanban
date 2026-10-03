@@ -97,7 +97,7 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 .native-note{padding:0 28px 13px;font-size:10px;color:var(--muted)}
 .native-note[hidden]{display:none}
 .native-groups .column.drop-target{background:var(--drop-bg);box-shadow:0 0 0 2px var(--drop-ring);border-radius:6px}
-.native-groups .cards{min-height:180px}
+.native-groups .cards{min-height:0}
 .native-groups .card[draggable=true] .card-open{cursor:grab}
 .card.native-pending{opacity:.6}
 .group-edit[hidden],.group-edit-hint[hidden]{display:none}
@@ -119,8 +119,9 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 .card.task-drop-before::before,.card.task-drop-after::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--accent);pointer-events:none;z-index:3}
 .card.task-drop-before::before{top:-5px}.card.task-drop-after::after{bottom:-5px}
 .list .card.task-drop-before::before{top:0}.list .card.task-drop-after::after{bottom:0}
-.col-header{display:flex;align-items:center;gap:8px;margin-bottom:13px}
-.col-header .col-head{flex:1;min-width:0;padding:0}
+.col-header{display:flex;align-items:center;gap:3px;margin-bottom:13px}
+.col-header .col-head{flex:1;min-width:0;padding:0;gap:5px}
+.col-header .icon-button{padding:3px;flex-shrink:0}
 .col-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .project-toggle{display:inline-flex;align-items:center;gap:6px;flex-shrink:0;border:1px solid var(--line);border-radius:5px;padding:4px 6px;color:var(--muted)}
 .project-toggle .icon{width:12px;height:12px}
@@ -284,8 +285,30 @@ dialog::backdrop{background:var(--backdrop)}
 #refresh .icon{width:15px;height:15px}#refresh:hover{color:var(--ink)}
 @media(max-width:1100px){.page-head{grid-template-columns:minmax(0,1fr) auto;gap:12px 20px}.header-search{grid-column:1/-1;grid-row:2}.header-title{width:auto}.filters{grid-row:3}.view-controls{grid-column:2;grid-row:1}}
 @media(max-width:600px){.page-head{padding:16px;grid-template-columns:minmax(0,1fr)}.header-title{flex-wrap:wrap}.header-search{grid-row:2}.view-controls{grid-column:1;grid-row:3}.filters{grid-row:4}.view-options>summary{padding:5px 8px}.header-title h1{font-size:18px}}
+.group-create{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:8px 10px;border:1px dashed var(--line);border-radius:5px;color:var(--muted);font-size:11px;text-align:center}
+a[aria-disabled="true"]{opacity:.5;cursor:default}
+.board:not(.list) .group-create{margin-top:0}
+.group-create .icon{width:13px;height:13px}.group-settings{flex-shrink:0}.group-create:disabled,.group-settings:disabled{opacity:.45;cursor:default}
+.board:not(.list) .column.collapsed .group-settings,.board:not(.list) .column.collapsed .group-create,.board:not(.list) .column.collapsed .group-new-task{display:none}
+#creation{width:min(800px,calc(100vw - 40px));height:fit-content;max-height:calc(100dvh - 48px);margin:auto;padding:0;border:1px solid #e6e6e6;border-radius:28px;background:#fafafa;color:#303030;box-shadow:0 12px 60px #0003;overflow:visible;color-scheme:light}
+#creation::backdrop{background:#08090d66;backdrop-filter:blur(3px)}.creation-top h2{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.creation-top .close{position:absolute;right:14px;top:14px;width:28px;height:28px;border-radius:50%;color:#999}.creation-top .close:hover{color:#333;background:#eee}.creation-body{padding:0}
+.creation-form{display:flex;flex-direction:column}.creation-form label{display:flex;flex-direction:column;gap:7px;color:#777;font-size:12px}
+.creation-form input,.creation-form select,.creation-form textarea{width:100%;padding:9px 11px;border:1px solid #e2e2e2;border-radius:9px;color:#303030;background:#fff;font-family:inherit;font-size:13px}
+.creation-form textarea{min-height:88px;resize:vertical;line-height:1.6}.creation-form #creation-prompt{height:132px;min-height:100px;max-height:40dvh;padding:24px 48px 16px 24px;border:0;border-radius:28px 28px 0 0;font-size:18px;resize:none;background:transparent;outline:none}.creation-form #creation-prompt::placeholder{color:#b1b1b1}.creation-form #creation-prompt-label{font-size:0;gap:0}
+.creation-toolbar{display:flex;align-items:center;gap:10px;padding:10px 16px 16px 20px;position:relative}.creation-context{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7b7b7b;font-size:13px}.creation-menu{position:relative;margin:0;font-size:13px;color:#303030}.creation-menu summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;border-radius:8px;padding:6px;white-space:nowrap}.creation-menu summary::-webkit-details-marker{display:none}.creation-menu summary:hover,.creation-menu[open] summary{background:#eee}.creation-menu summary:focus-visible{outline:2px solid #999;outline-offset:2px}.creation-menu summary .icon{width:18px;height:18px}.creation-menu .menu-chevron{color:#999;width:13px;height:13px}.creation-menu .plus-icon{width:22px;height:22px}.creation-model-menu{margin-left:auto}.creation-model-menu summary{font-size:15px;gap:7px}.creation-model-menu .reasoning-label{color:#919191}.creation-model-menu #creation-model-label{max-width:200px;overflow:hidden;text-overflow:ellipsis}
+.creation-popover{position:absolute;bottom:calc(100% + 12px);left:-4px;z-index:2;width:320px;max-width:calc(100vw - 64px);max-height:calc(50dvh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #e5e5e5;border-radius:16px;box-shadow:0 8px 32px #0002}.creation-model-menu .creation-popover{left:auto;right:0;width:270px}.creation-popover h3{margin:0 0 16px;font-size:13px;font-weight:600;color:#333}.creation-popover label+label,.creation-popover .form-row+label{margin-top:14px}.creation-form .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.creation-form .form-row label+label{margin-top:0}
+.creation-form input:disabled,.creation-form select:disabled{opacity:.5}.creation-form .hint{margin:0;padding:0 24px 16px;font-size:12px;color:#777}.creation-form .error{color:#c33}.creation-form .dialog-actions{margin:0;padding:0 20px 16px;gap:8px}.creation-form .toolbar-btn{border-color:#ddd;background:#fff;color:#444}.creation-form .toolbar-btn:hover{background:#eee}.creation-form [hidden],#creation-message:empty{display:none}
+.creation-form .creation-send{display:grid;place-items:center;width:36px;height:36px;flex-shrink:0;padding:0;border:0;border-radius:50%;background:#303030;color:#fff}.creation-send .icon{width:20px;height:20px}.creation-send:hover{background:#111}.creation-send:disabled{background:#e5e5e5;color:#a3a3a3;cursor:default}.creation-send:focus-visible{outline:2px solid #777;outline-offset:3px}.creation-send-label{display:none}
+#creation.settings-only .creation-top h2{width:auto;height:auto;margin:0;top:20px;left:24px;right:48px;clip-path:none;font-size:14px;overflow:hidden;text-overflow:ellipsis}#creation.settings-only .creation-toolbar{flex-wrap:wrap;padding-top:52px}#creation.settings-only .creation-context{max-width:200px}#creation.settings-only .creation-send{width:auto;height:34px;padding:0 12px;border-radius:18px;font-size:12px}#creation.settings-only .creation-send .icon{display:none}#creation.settings-only .creation-send-label{display:inline}
+#creation.settings-only #creation-model-menu,#creation.settings-only .creation-environment-field,#creation.settings-only .creation-branch-field{display:none}#creation.settings-only .form-row{grid-template-columns:1fr}
+@media(max-width:600px){#creation{width:calc(100vw - 24px);border-radius:24px}.creation-toolbar{gap:4px;padding-left:12px;padding-right:12px}.creation-context{max-width:100px;font-size:12px}.creation-model-menu summary{font-size:12px;gap:4px}.creation-model-menu #creation-model-label{max-width:110px}.creation-model-menu summary .icon{width:15px;height:15px}.creation-popover{left:0}.creation-form #creation-prompt{font-size:16px;padding-left:20px}.creation-top .close{right:10px;top:10px}}
+.creation-notices{padding:0 28px;display:flex;flex-direction:column;gap:6px}.creation-notice{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:6px;border:1px solid var(--line);border-radius:5px;background:var(--side);color:var(--muted);font-size:11px}.creation-notice span{flex:1;overflow-wrap:anywhere}.creation-notice button,.creation-notice a{flex-shrink:0}
 </style>
 <svg style="display:none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 20 20"><path d="m11 2-7 9h5l-1 7 8-10h-5l1-6Z" fill="currentColor" stroke-linejoin="round"/></symbol>
+<symbol id="i-up" viewBox="0 0 20 20"><path d="M10 15V5m-5 5 5-5 5 5"/></symbol>
+<symbol id="i-down" viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></symbol>
 <symbol id="i-board" viewBox="0 0 20 20"><rect x="3" y="4" width="4" height="12" rx="1"/><rect x="9" y="4" width="3" height="8" rx="1"/><rect x="14" y="4" width="3" height="10" rx="1"/></symbol>
 <symbol id="i-list" viewBox="0 0 20 20"><path d="M7 4h10M7 10h10M7 16h10M3 4h.01M3 10h.01M3 16h.01"/></symbol>
 <symbol id="i-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></symbol>
@@ -341,12 +364,29 @@ dialog::backdrop{background:var(--backdrop)}
       </div>
     </header>
     <div class="native-note" id="native-note" role="status" hidden></div>
+    <div class="creation-notices" id="creation-notices" aria-live="polite"></div>
     <div class="board-wrap"><div class="board native-groups" id="board" aria-label="Tasks grouped by native sidebar group"></div></div>
   </main>
 </div>
 <dialog id="detail" aria-labelledby="detail-title">
   <div class="detail-top"><svg class="icon"><use href="#i-board"/></svg>Task details<button class="icon-button close" id="close" aria-label="Close task details"><svg class="icon"><use href="#i-close"/></svg></button></div>
   <div class="detail-body"><h2 id="detail-title"></h2><div class="dialog-actions"><a class="primary" id="open-task" hidden>Open chat<svg class="icon"><use href="#i-arrow"/></svg></a><button class="toolbar-btn" id="copy" hidden>Copy open instruction</button></div><textarea id="open-prompt" aria-label="Instruction to open this task" readonly></textarea><div class="hint" id="detail-hint" hidden></div><p class="detail-summary" id="detail-summary"></p><dl id="detail-meta"></dl><div class="group-edit" id="project-edit"><label for="detail-project"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg> Project</label><select id="detail-project" aria-label="Project"></select></div><p class="group-edit-hint" id="project-edit-hint" role="status" hidden></p><div class="group-edit" id="native-edit"><label for="detail-native">Group</label><select id="detail-native"></select></div><p class="group-edit-hint" id="native-edit-hint" role="status" hidden></p><section class="git-detail" id="detail-git" hidden><h3>Branch &amp; pull requests</h3><dl id="detail-git-meta"></dl><p class="git-detail-note">From the current working directory. Tasks sharing this directory share the same branch and PR matches.</p></section><details id="detail-technical"><summary>Technical information</summary><dl id="detail-tech-meta"></dl><div class="detail-status" id="detail-status" hidden></div><p>Runtime observation</p><pre id="detail-raw"></pre></details></div>
+</dialog>
+<dialog id="creation" aria-labelledby="creation-title">
+  <div class="creation-top"><h2 id="creation-title">New task</h2><button class="icon-button close" id="creation-close" aria-label="Close task creation"><svg class="icon"><use href="#i-close"/></svg></button></div>
+  <div class="creation-body">
+    <form id="creation-form" class="creation-form">
+      <label id="creation-prompt-label">Task prompt<textarea id="creation-prompt" placeholder="Do anything" required></textarea></label>
+      <div class="creation-toolbar">
+        <details class="creation-menu" id="creation-advanced"><summary aria-label="Project and task settings" title="Project and task settings"><svg class="icon plus-icon"><use href="#i-plus"/></svg></summary><div class="creation-popover"><h3>Task settings</h3><div class="form-row"><label>Project<select id="creation-project"><option value="">No project</option></select></label><label class="creation-environment-field">Environment<select id="creation-environment"><option value="local">Local</option><option value="worktree" id="creation-worktree">Worktree</option></select></label></div><label class="creation-branch-field">Starting branch<input id="creation-branch" placeholder="Project default" maxlength="256"></label><label>Prompt template<textarea id="creation-template" placeholder="Optional instructions prepended to new tasks" maxlength="2000"></textarea></label></div></details>
+        <span class="creation-context" id="creation-context"></span>
+        <details class="creation-menu creation-model-menu" id="creation-model-menu"><summary aria-label="Model and reasoning" title="Model and reasoning"><svg class="icon"><use href="#i-bolt"/></svg><span id="creation-model-label">Codex default</span><span class="reasoning-label" id="creation-thinking-label"></span><svg class="icon menu-chevron"><use href="#i-down"/></svg></summary><div class="creation-popover"><h3>Model configuration</h3><label>Model<input id="creation-model" placeholder="Codex default" maxlength="128"></label><label>Reasoning<select id="creation-thinking"><option value="">Codex default</option><option>none</option><option>minimal</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option><option>max</option><option>ultra</option></select></label></div></details>
+        <button class="creation-send" id="creation-submit" type="submit" aria-label="Create &amp; run" title="Create &amp; run"><svg class="icon"><use href="#i-up"/></svg><span class="creation-send-label" id="creation-submit-label">Save defaults</span></button>
+      </div>
+      <p class="hint" id="creation-message" role="status"></p>
+      <div class="dialog-actions" id="creation-recovery" hidden><button class="toolbar-btn" id="creation-check" type="button" hidden>Check status</button><button class="toolbar-btn" id="creation-retry" type="button" hidden>Retry group</button><a class="toolbar-btn" id="creation-open" hidden>Open chat</a><button class="toolbar-btn" id="creation-next" type="button" title="Check Codex for the previous task before starting another." hidden>Start another task</button></div>
+    </form>
+  </div>
 </dialog>
 <div class="toast" id="task-toast" role="status" hidden></div>
 <div class="archive-notices" id="archive-notices" aria-label="Archived tasks" aria-live="polite"></div>
@@ -401,7 +441,12 @@ function readGroupOrder(mode){
 }
 function orderedGroups(groups,mode=groupingMode){
   const saved=readGroupOrder(mode),rank=new Map(saved.map((id,i)=>[id,i]));
-  return [...groups].sort((a,b)=>(rank.get(a.id)??saved.length)-(rank.get(b.id)??saved.length));
+  const ordered=[...groups];
+  if(mode==='native'&&!saved.length){
+    const later=ordered.findIndex(g=>g.name==='For Later'),progress=ordered.findIndex(g=>g.name==='In Progress');
+    if(later>=0&&progress>later)[ordered[later],ordered[progress]]=[ordered[progress],ordered[later]];
+  }
+  return ordered.sort((a,b)=>(rank.get(a.id)??saved.length)-(rank.get(b.id)??saved.length));
 }
 function moveGroup(sourceId,targetId,after=false){
   const mode=groupingMode,groups=orderedGroups(currentGroups(),mode),ids=groups.map(g=>g.id);
@@ -476,6 +521,7 @@ let draggedKey=null,draggedTaskGroup=null,suppressClickUntil=0,toastTimer;
 let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nativePending=false,nativeReads=0;
 let archivingKey=null;
 let pinningKey=null,restoringToken=null;
+let creationBusy=false,creationSession=null,creationOptions=null,nextCreationTarget=null;
 const archiveNotices=new Map();
 const dismissedArchiveTokens=new Set();
 function syncArchiveNotices(entries){
@@ -488,7 +534,7 @@ function syncArchiveNotices(entries){
   }
   renderArchiveNotices();
 }
-function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken;}
+function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken||creationBusy;}
 function canArchive(task){return nativeConnected&&DATA.sync?.archiveLocal===true&&!!nativeToken&&!!taskUrl(task);}
 function taskPinned(task){return task.nativeTaskPinned??task.pinned;}
 function canPin(task){return nativeConnected&&DATA.sync?.pinLocal===true&&!!nativeToken&&!!taskUrl(task)
@@ -687,7 +733,7 @@ function nativeColumns(){
   const groups=[];
   for(const section of DATA?.sections??[]){
     const ungrouped=['chats','threads'].includes(section.sectionId),id=ungrouped?'chats':section.sectionId;
-    if(groups.some(g=>g.id===id)||!ungrouped&&!Object.hasOwn(colors,section.name)&&!DATA.tasks.some(t=>t.nativeSectionId===id))continue;
+    if(groups.some(g=>g.id===id)||DATA.sync?.scope!=='localSections'&&!ungrouped&&!Object.hasOwn(colors,section.name)&&!DATA.tasks.some(t=>t.nativeSectionId===id))continue;
     groups.push({id,name:ungrouped?'Ungrouped':section.name,color:ungrouped?'var(--state-neutral)':colors[section.name]??'var(--state-muted)',
       desc:ungrouped?'No explicit group · Project labels are preserved':'Codex sidebar snapshot; counts reflect readable task cards',empty:ungrouped?'No ungrouped tasks':'No readable tasks in this group'});
   }
@@ -727,9 +773,10 @@ function applyNativeBoard(board){
   nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop · Sidebar Flow continues automatic grouping':'Group changes require Codex launched with the updated Kanban launcher · Open a local task after launch'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
   expireRuntimeSnapshot();
   refreshSummary();render({animate:true});
+  renderCreationNotices();
 }
 async function refreshNativeBoard(force=false){
-  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(document.getElementById('view-options')?.open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads||document.activeElement?.closest('.card'))))return;
+  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(document.getElementById('view-options')?.open||$('creation').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads||document.activeElement?.closest('.card'))))return;
   nativeReads++;
   const epoch=++nativeEpoch;
   try{
@@ -738,11 +785,11 @@ async function refreshNativeBoard(force=false){
     const payload=await response.json();
     if(epoch!==nativeEpoch)return;
     // Preserve keyboard focus if the user entered a card during this read.
-    if(!force&&(document.getElementById('view-options')?.open||taskMenu||document.activeElement?.closest('.card')))return;
+    if(!force&&(document.getElementById('view-options')?.open||$('creation').open||taskMenu||document.activeElement?.closest('.card')))return;
     if(!response.ok)throw Error(payload.error||'Desktop bridge unavailable.');
     nativeToken=payload.csrf;syncArchiveNotices(payload.undoArchives);applyNativeBoard(payload.board);
   }catch(error){
-    if(epoch!==nativeEpoch||(!force&&($('view-options').open||taskMenu||document.activeElement?.closest('.card'))))return;
+    if(epoch!==nativeEpoch||(!force&&($('view-options').open||$('creation').open||taskMenu||document.activeElement?.closest('.card'))))return;
     nativeConnected=false;nativeWritable=false;nativeMessage=error.message;render();
   }
   finally{nativeReads--;}
@@ -766,6 +813,7 @@ function announce(message){
 }
 function finishDrag(){
   draggedKey=null;draggedTaskGroup=null;suppressClickUntil=performance.now()+300;
+  $('board').classList.remove('task-dragging');
   document.querySelectorAll('.dragging,.drop-target').forEach(node=>node.classList.remove('dragging','drop-target'));
   clearTaskDropMarkers();
 }
@@ -800,8 +848,9 @@ function saveTaskOrder(groupId,keys,mode){
 }
 function orderedTasks(items,groupId,mode=groupingMode){
   const saved=readTaskOrder(groupId,mode),rank=new Map(saved.map((key,i)=>[key,i]));
-  const ordered=[...items].sort((a,b)=>(rank.get(taskKey(a))??saved.length)-(rank.get(taskKey(b))??saved.length));
-  const keys=[...saved,...ordered.map(taskKey).filter(key=>!rank.has(key))];
+  const ordered=[...items].sort((a,b)=>(rank.get(taskKey(a))??-1)-(rank.get(taskKey(b))??-1));
+  const keys=[...ordered.map(taskKey).filter(key=>!rank.has(key)),...saved];
+  // New arrivals lead the group; timestamp updates never reorder saved tasks.
   // Retain absent keys: another tab may still hold an older placement snapshot.
   if(JSON.stringify(keys)!==JSON.stringify(saved))saveTaskOrder(groupId,keys,mode);
   return ordered;
@@ -934,7 +983,7 @@ function makeCard(task,groupId){
   if(manual||nativeCanMove(task)){
     card.draggable=true;action.title+=(url?'; ':'')+(manual?'Drag within this group to reorder · Alt + Up/Down':'Drag between sidebar groups');
     if(manual&&nativeCanMove(task))action.title+=' · Drag between sidebar groups';
-    card.addEventListener('dragstart',e=>{if(taskActionPending()||e.target.closest('.card-actions,.card-details,.project,.pr-badge')){e.preventDefault();return;}e.stopPropagation();draggedKey=taskKey(task);draggedTaskGroup=groupId;++nativeEpoch;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-codex-kanban-task',draggedKey);card.classList.add('dragging');});
+    card.addEventListener('dragstart',e=>{if(taskActionPending()||e.target.closest('.card-actions,.card-details,.project,.pr-badge')){e.preventDefault();return;}e.stopPropagation();draggedKey=taskKey(task);draggedTaskGroup=groupId;++nativeEpoch;$('board').classList.add('task-dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-codex-kanban-task',draggedKey);card.classList.add('dragging');});
     card.addEventListener('dragend',finishDrag);
   }
   if(manual)enableTaskOrderDrop(card,task,groupId);
@@ -1051,7 +1100,7 @@ function render({animate=false}={}){
   $('order').title=manual?'Drag tasks within a group to reorder · Saved in this browser':'Choose how tasks are sorted';
   const groups=orderedGroups(currentGroups());
   for(const ring of $('board').querySelectorAll('.progress-ring'))for(const animation of ring.getAnimations())animation.cancel();
-  $('board').replaceChildren();$('board').classList.toggle('list',view==='list');
+  $('board').replaceChildren();$('board').classList.toggle('list',view==='list');$('board').classList.toggle('task-dragging',!!draggedKey);
   $('visible-count').textContent=tasks.length===DATA.tasks.length?`${tasks.length} tasks`:`${tasks.length} / ${DATA.tasks.length} tasks`;
   updateHeaderControls();
   nativeNotice();
@@ -1075,7 +1124,15 @@ function render({animate=false}={}){
     toggle.setAttribute('role','switch');toggle.setAttribute('aria-label','Project view: '+col.name);toggle.setAttribute('aria-checked',String(readProjectView(col.id)));
     const track=el('span','switch-track');track.setAttribute('aria-hidden','true');toggle.append(icon('folder'),track);
     toggle.onclick=()=>{changeProjectView(col.id);for(const node of $('board').querySelectorAll('.column'))if(node.dataset.groupId===col.id)node.querySelector('.project-toggle').focus();};
-    header.append(head,toggle);section.append(header);
+    header.append(head,toggle);
+    if(creationGroup(col)){
+      const add=el('a','icon-button group-new-task');add.append(icon('plus'));setNativeCreationLink(add,col);
+      add.setAttribute('aria-label','New task in '+col.name);header.append(add);
+      const settings=el('button','icon-button group-settings');settings.type='button';settings.append(icon('more'));
+      settings.setAttribute('aria-label','Creation settings: '+col.name);settings.title=creationDisabledReason()||'Creation settings';settings.disabled=!!creationDisabledReason();
+      settings.onclick=()=>openCreation(col,true);header.append(settings);
+    }
+    section.append(header);
     const missing=(DATA.sidebarUnresolved??[]).filter(t=>nativeStage(t,groups)===col.id).length;if(missing){const gap=el('p','metadata-gap','Another '+missing+' member records could not be read and are excluded from task counts');gap.style.cssText='font-size:10px;color:var(--muted);margin:0 0 12px;line-height:1.7';section.append(gap);}
     const cards=el('div','cards');
     if(readProjectView(col.id)){
@@ -1083,13 +1140,26 @@ function render({animate=false}={}){
         const container=el('section','project-group');container.setAttribute('aria-label',group.name+' project tasks');
         const heading=el('h3','project-head');heading.title=group.name;
         heading.append(icon('folder'),el('span','project-name',group.name),el('span','project-count',String(group.items.length)));
+        if(creationGroup(col)&&group.items.every(t=>t.hostId==='local')){
+          const add=el('a','icon-button project-create');add.append(icon('plus'));add.setAttribute('aria-label','New task: '+group.name);
+          const projectId=group.items[0].projectId??null;
+          const mapped=projectId===null||DATA.projects?.some(p=>p.hostId==='local'&&p.desktopProjectId===projectId);
+          if(mapped)setNativeCreationLink(add,col,projectId);
+          else{add.setAttribute('aria-disabled','true');add.title='This project is unavailable in the Desktop catalog. Choose its project on Codex’s New task page.';}
+          heading.append(add);
+        }
         const children=el('div','project-cards');
         for(const task of group.items){const card=makeCard(task,col.id);card.dataset.projectKey=group.key;children.append(card);}
         container.append(heading,children);cards.append(container);
       }
     }else for(const task of items)cards.append(makeCard(task,col.id));
     if(!items.length){const empty=el('div','empty');empty.append(icon('inbox'),el('span','',filtering?'No matching tasks in this group':col.empty));if(!filtering)empty.append(el('small','',col.desc));cards.append(empty);}
-    section.append(cards);$('board').append(section);
+    section.append(cards);
+    if(creationGroup(col)){
+      const add=el('a','group-create','New task');add.append(icon('plus'));add.setAttribute('aria-label','New task: '+col.name);
+      setNativeCreationLink(add,col);cards.append(add);
+    }
+    $('board').append(section);
   }
   // Restore after every column exists: flex widths affect wrapping and scroll height.
   if(view==='board')for(const section of $('board').querySelectorAll('.column'))section.querySelector('.cards').scrollTop=columnScroll.get(section.dataset.groupId)??0;
@@ -1173,6 +1243,156 @@ function showDetail(task){
   $('copy').textContent='Copy open instruction';$('open-prompt').style.display='none';$('detail').showModal();
 }
 $('search').addEventListener('input',render);$('host').onchange=render;$('order').onchange=changeSort;
+function creationGroup(col){return !['__other','other-hosts','threads'].includes(col.id)&&DATA.sections.some(s=>s.sectionId===col.id);}
+function nativeCreationUrl(col,projectOverride=undefined){
+  const defaults=DATA.nativeCreationDefaults?.[JSON.stringify(col.id==='chats'?null:col.id)]??{};
+  const projectId=projectOverride===undefined?defaults.projectId:projectOverride,params=[];
+  if(projectId&&!DATA.projects?.some(p=>p.hostId==='local'&&p.desktopProjectId===projectId))return null;
+  if(typeof projectId==='string'&&projectId.trim())params.push('projectId='+encodeURIComponent(projectId));
+  if(typeof defaults.template==='string'&&defaults.template.trim())params.push('prompt='+encodeURIComponent(defaults.template));
+  return params.length?'codex://new?'+params.join('&'):'codex://threads/new';
+}
+function setNativeCreationLink(link,col,projectOverride=undefined){
+  const url=nativeCreationUrl(col,projectOverride);
+  if(url){link.href=url;link.title='Open Codex’s native new-task page. Choose the sidebar group after creating the task.';}
+  else{link.setAttribute('aria-disabled','true');link.title='The default project is unavailable. Update this group’s Creation settings to choose another project.';}
+}
+function creationDisabledReason(){
+  if(taskActionPending())return 'Another task action is in progress.';
+  if(DATA.sync?.creationError)return DATA.sync.creationError;
+  return nativeConnected&&nativeToken&&DATA.sync?.createWritable===true?'':'Launch Codex with the updated Kanban launcher and open a local task to create tasks.';
+}
+function creationFields(){return ['creation-prompt','creation-project','creation-environment','creation-branch','creation-model','creation-thinking','creation-template'];}
+function updateCreationForm(){
+  const locked=creationBusy||creationSession?.dispatched;
+  for(const id of creationFields())$(id).disabled=!!locked;
+  const project=creationOptions?.projects.find(p=>p.projectId===$('creation-project').value),canWorktree=project?.isGitRepository===true;
+  $('creation-worktree').disabled=!canWorktree;
+  $('creation-branch').disabled=!!locked||$('creation-environment').value!=='worktree';
+  $('creation-submit').disabled=!!locked||!creationOptions||(!creationSession?.settingsOnly&&!$('creation-prompt').value.trim());
+  $('creation-model-label').textContent=$('creation-model').value.trim()||'Codex default';
+  const thinking=$('creation-thinking').value;
+  $('creation-thinking-label').textContent=thinking?thinking[0].toUpperCase()+thinking.slice(1):'';
+  $('creation-context').textContent=project?.label??creationSession?.col.name??'';
+  $('creation-context').title=[creationSession?.col.name,project?.label,$('creation-environment').value].filter(Boolean).join(' · ');
+  $('creation-recovery').hidden=['creation-check','creation-retry','creation-open','creation-next'].every(id=>$(id).hidden);
+  $('creation-close').disabled=creationBusy;
+  $('creation-check').disabled=creationBusy;$('creation-retry').disabled=creationBusy;
+  $('creation-next').disabled=creationBusy;
+}
+function readCreationSettings(){return {projectId:$('creation-project').value||null,environment:$('creation-environment').value,
+  branch:$('creation-branch').disabled?'':$('creation-branch').value,model:$('creation-model').value,thinking:$('creation-thinking').value,template:$('creation-template').value};}
+async function openCreation(col,settingsOnly=false,projectOverride=undefined){
+  if(creationDisabledReason())return;
+  if(!settingsOnly&&creationSession?.dispatched&&!creationSession.result?.groupAssigned){
+    nextCreationTarget={col,projectOverride};
+    $('creation').showModal();$('creation-message').textContent='Check the previous task in Codex. Use Start another task when you intend to create a separate task.';$('creation-next').hidden=false;updateCreationForm();return;
+  }
+  nextCreationTarget=null;
+  const session=creationSession={col,projectOverride,sectionId:col.id==='chats'?null:col.id,settingsOnly,dispatched:false};
+  creationOptions=null;creationBusy=true;
+  $('creation-title').textContent=(settingsOnly?'Creation settings · ':'New task · ')+col.name;
+  $('creation').classList.toggle('settings-only',settingsOnly);
+  $('creation-advanced').open=settingsOnly;
+  $('creation-model-menu').open=false;
+  $('creation-prompt-label').hidden=settingsOnly;$('creation-prompt').required=!settingsOnly;$('creation-prompt').value='';
+  $('creation-submit').setAttribute('aria-label',settingsOnly?'Save defaults':'Create & run');
+  $('creation-submit').title=settingsOnly?'Save defaults':'Create & run · starts a new Codex task';
+  for(const id of ['creation-check','creation-retry','creation-open','creation-next'])$(id).hidden=true;
+  $('creation-message').textContent='Loading projects and group defaults…';$('creation-message').classList.remove('error');
+  updateCreationForm();$('creation').showModal();
+  try{
+    const response=await fetch('/api/creation-options',{cache:'no-store'}),payload=await response.json();
+    if(!response.ok)throw Error(payload.error||'Creation options unavailable.');
+    if(!payload.sections.some(s=>s.sectionId===session.sectionId))throw Error('This group cannot be uniquely verified in Codex.');
+    creationOptions=payload;
+    const defaults={projectId:null,environment:'local',branch:'',model:'',thinking:'',template:'',...payload.settings[JSON.stringify(session.sectionId)]};
+    if(projectOverride!==undefined){defaults.projectId=projectOverride;if(!payload.projects.find(p=>p.projectId===projectOverride)?.isGitRepository){defaults.environment='local';defaults.branch='';}}
+    const select=$('creation-project');select.replaceChildren();
+    for(const project of [{projectId:'',label:'No project'},...payload.projects]){const option=el('option','',project.label);option.value=project.projectId;select.append(option);}
+    if(defaults.projectId&&!payload.projects.some(p=>p.projectId===defaults.projectId)){const option=el('option','','Unavailable project · choose another');option.value=defaults.projectId;select.append(option);}
+    select.value=defaults.projectId||'';
+    for(const key of ['environment','branch','model','thinking','template'])$('creation-'+key).value=defaults[key];
+    $('creation-message').textContent=settingsOnly?'Project and template are passed to Codex. Choose model, permissions and environment on its native page.':'';
+  }catch(error){$('creation-message').textContent=error.message;$('creation-message').classList.add('error');}
+  finally{creationBusy=false;updateCreationForm();render();if(!settingsOnly)$('creation-prompt').focus();}
+}
+function showCreationResult(result){
+  creationSession.result=result;creationSession.dispatched=true;
+  $('creation-message').textContent=result.message||'Creation outcome is not yet confirmed. Check Codex before creating another task.';
+  $('creation-check').hidden=false;$('creation-retry').hidden=result.state!=='created'||result.groupAssigned;
+  $('creation-open').hidden=!result.threadId;
+  $('creation-next').hidden=false;
+  if(result.threadId)$('creation-open').href='codex://threads/'+encodeURIComponent(result.threadId);
+  updateCreationForm();
+}
+async function submitCreation(event){
+  event.preventDefault();if(creationBusy||creationSession?.dispatched||!creationOptions)return;
+  const session=creationSession,settings=readCreationSettings();
+  creationBusy=true;++nativeEpoch;updateCreationForm();render();
+  try{
+    const requestId=session.requestId??=crypto.randomUUID();
+    if(!session.settingsOnly)session.dispatched=true;
+    const response=await fetch(session.settingsOnly?'/api/group-settings':'/api/create',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},
+      body:JSON.stringify(session.settingsOnly?{sectionId:session.sectionId,settings}:{requestId,sectionId:session.sectionId,settings,prompt:$('creation-prompt').value})}),payload=await response.json();
+    if(!response.ok){if([400,403].includes(response.status))session.dispatched=false;throw Error(payload.error||'Creation could not be confirmed.');}
+    if(session.settingsOnly){$('creation-message').textContent='Defaults saved.';announce('Creation defaults saved');}
+    else showCreationResult(payload);
+    if(payload.board)applyNativeBoard(payload.board);
+  }catch(error){$('creation-message').textContent=error.message;$('creation-message').classList.add('error');$('creation-check').hidden=!session.dispatched;$('creation-next').hidden=!session.dispatched;}
+  finally{creationBusy=false;updateCreationForm();render();renderCreationNotices();}
+}
+async function checkCreation(requestId=creationSession?.requestId){
+  if(!requestId||creationBusy)return;
+  creationBusy=true;updateCreationForm();
+  try{
+    const response=await fetch('/api/creation-status?requestId='+encodeURIComponent(requestId),{cache:'no-store'}),payload=await response.json();
+    if(!response.ok){if(response.status===404&&creationSession?.requestId===requestId){creationSession.dispatched=false;$('creation-check').hidden=true;}throw Error(payload.error||'Creation status unavailable.');}
+    if(creationSession?.requestId===requestId)showCreationResult(payload);
+    else announce(payload.message);
+  }catch(error){$('creation-message').textContent=error.message;announce(error.message);}
+  finally{creationBusy=false;updateCreationForm();await refreshNativeBoard(true);}
+}
+async function retryCreationGroup(requestId=creationSession?.requestId){
+  if(!requestId||creationBusy)return;creationBusy=true;++nativeEpoch;updateCreationForm();render();
+  try{
+    const response=await fetch('/api/creation-group',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({requestId})}),payload=await response.json();
+    if(!response.ok)throw Error(payload.error||'Group could not be confirmed.');
+    if(creationSession?.requestId===requestId)showCreationResult(payload);
+    if(payload.board)applyNativeBoard(payload.board);announce(payload.message);
+  }catch(error){announce(error.message);$('creation-message').textContent=error.message;}
+  finally{creationBusy=false;updateCreationForm();render();renderCreationNotices();}
+}
+function renderCreationNotices(){
+  $('creation-notices').replaceChildren();
+  for(const operation of DATA?.creationOperations??[]){
+    if(operation.groupAssigned)continue;
+    const row=el('div','creation-notice');row.append(el('span','',operation.title+' · '+operation.message));
+    if(operation.threadId){const open=el('a','toolbar-btn','Open chat');open.href='codex://threads/'+encodeURIComponent(operation.threadId);row.append(open);
+      const retry=el('button','toolbar-btn','Retry group');retry.disabled=!!taskActionPending();retry.onclick=()=>retryCreationGroup(operation.requestId);row.append(retry);}
+    else{const check=el('button','toolbar-btn','Check status');check.disabled=!!taskActionPending();check.onclick=()=>checkCreation(operation.requestId);row.append(check);}
+    $('creation-notices').append(row);
+  }
+}
+$('creation-form').onsubmit=submitCreation;
+$('creation-form').onclick=event=>{if(!event.target.closest('.creation-menu')){$('creation-advanced').open=false;$('creation-model-menu').open=false;}};
+$('creation-prompt').oninput=updateCreationForm;
+$('creation-model').oninput=updateCreationForm;
+$('creation-thinking').onchange=()=>{updateCreationForm();$('creation-model-menu').open=false;};
+function fitCreationMenu(id){
+  const menu=$(id);if(!menu.open)return;
+  menu.querySelector('.creation-popover').style.maxHeight=Math.max(80,menu.querySelector('summary').getBoundingClientRect().top-28)+'px';
+}
+$('creation-advanced').ontoggle=()=>{if($('creation-advanced').open){$('creation-model-menu').open=false;fitCreationMenu('creation-advanced');}};
+$('creation-model-menu').ontoggle=()=>{if($('creation-model-menu').open){$('creation-advanced').open=false;fitCreationMenu('creation-model-menu');}};
+window.addEventListener('resize',()=>{fitCreationMenu('creation-advanced');fitCreationMenu('creation-model-menu');});
+$('creation-project').onchange=()=>{if(!creationOptions?.projects.find(p=>p.projectId===$('creation-project').value)?.isGitRepository){$('creation-environment').value='local';$('creation-branch').value='';}updateCreationForm();};
+$('creation-environment').onchange=()=>{if($('creation-environment').value!=='worktree')$('creation-branch').value='';updateCreationForm();};
+$('creation-close').onclick=()=>{if(!creationBusy)$('creation').close();};
+$('creation').onclick=event=>{if(event.target!==$('creation')||creationBusy)return;const rect=$('creation').getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)$('creation').close();};
+$('creation').addEventListener('cancel',event=>{if(creationBusy)event.preventDefault();});
+$('creation-check').onclick=()=>checkCreation();$('creation-retry').onclick=()=>retryCreationGroup();
+$('creation-next').onclick=()=>{if(creationBusy)return;const {col,projectOverride}=nextCreationTarget??creationSession;creationSession=null;openCreation(col,false,projectOverride);};
 async function changeDetailGroup(){
   const task=selectedTask,value=$('detail-native').value;
   if(!task)return;
@@ -1232,7 +1452,7 @@ document.addEventListener('keydown',e=>{
       return;
     }
   }
-  if($('detail').open||e.target.closest('input,textarea,select,[contenteditable=true]'))return;
+  if($('detail').open||$('creation').open||e.target.closest('input,textarea,select,[contenteditable=true]'))return;
   if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='b'){e.preventDefault();setView(view==='board'?'list':'board');}
 });
@@ -1247,7 +1467,7 @@ else{
 }
 refreshNativeBoard();
 setInterval(()=>{
-  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('view-options').open){
+  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('view-options').open&&!$('creation').open){
     const runtimeChanged=expireRuntimeSnapshot(),gitChanged=expireGitSnapshots();
     if(runtimeChanged||gitChanged){refreshSummary();render();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);}
   }

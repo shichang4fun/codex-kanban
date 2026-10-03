@@ -16,6 +16,16 @@ function harness(storage=new Map()){
   return {api,data,storage,block:()=>blocked=true,renders:()=>renders,message:()=>message};
 }
 const ids=items=>Array.from(items,g=>g.id);
+test('default native layout puts In Progress before For Later and preserves saved custom orders',()=>{
+  const input=[{id:'review',name:'For Review'},{id:'later',name:'For Later'},{id:'pin',name:'Pinned'},{id:'progress',name:'In Progress'}];
+  const h=harness();
+  assert.deepEqual(ids(h.api.orderedGroups(input)),['review','progress','pin','later']);
+  assert.deepEqual(ids(input),['review','later','pin','progress']);
+  h.storage.set('codex-kanban.group-order.v1:native','["later","progress","review","pin"]');
+  assert.deepEqual(ids(h.api.orderedGroups(input)),['later','progress','review','pin']);
+  assert.deepEqual(ids(h.api.orderedGroups(input,'workflow')),ids(input));
+  assert.deepEqual(ids(h.api.orderedGroups([{id:'later',name:'For Later'},{id:'review',name:'For Review'}])),['later','review']);
+});
 test('group moves persist across reload, append new groups, and never move tasks',()=>{
   const h=harness(),before=JSON.stringify(h.data);
   assert.equal(h.api.moveGroup('later','pinned'),true);

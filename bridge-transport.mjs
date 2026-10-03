@@ -37,15 +37,20 @@ export async function startLocalBridge({socketPath,dispatch}){
     try{if((await lstat(socketPath)).ino===owned.ino)await unlink(socketPath);}catch{}
   };
 }
-export async function desktopBridgeRequest(socketPath,method,params={},timeoutMs=60000){
+export async function desktopBridgeRequest(socketPath,method,params={},timeoutMs=60000,{signal}={}){
+  const cancelled=()=>bridgeError('Desktop request cancelled. Check its recorded outcome before retrying.',408);
+  if(signal?.aborted)throw cancelled();
   if(typeof socketPath!=='string'||!isAbsolute(socketPath))throw bridgeError('Desktop bridge is not configured.');
   const [directory,socket]=await Promise.all([lstat(dirname(socketPath)).catch(()=>null),lstat(socketPath).catch(()=>null)]);
   if(!directory?.isDirectory()||directory.isSymbolicLink()||directory.uid!==process.getuid()||(directory.mode&0o077)!==0
     ||!socket?.isSocket()||socket.uid!==process.getuid()||(socket.mode&0o077)!==0)
     throw bridgeError('Desktop bridge is not connected. Start Codex with the Kanban launcher.');
+  if(signal?.aborted)throw cancelled();
   return new Promise((resolve,reject)=>{
     const connection=createConnection(socketPath),id=randomUUID();let buffer='',settled=false;
-    const finish=(error,result)=>{if(settled)return;settled=true;connection.destroy();error?reject(error):resolve(result);};
+    const abort=()=>finish(cancelled());
+    const finish=(error,result)=>{if(settled)return;settled=true;signal?.removeEventListener('abort',abort);connection.destroy();error?reject(error):resolve(result);};
+    signal?.addEventListener('abort',abort,{once:true});
     connection.setEncoding('utf8');connection.setTimeout(timeoutMs,()=>finish(bridgeError('Desktop response timed out. Refresh before retrying; the action was not automatically repeated.')));
     connection.on('connect',()=>connection.write(JSON.stringify({id,method,params})+'\n'));
     connection.on('error',()=>finish(bridgeError('Desktop bridge disconnected. Refresh before retrying.')));
