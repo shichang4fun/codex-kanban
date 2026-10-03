@@ -12,6 +12,7 @@
     "refresh": "node refresh-local.mjs",
     "start": "node serve.mjs",
     "build:plugin": "node build-plugin.mjs",
+    "package:marketplace": "node package-marketplace.mjs",
     "start:mcp": "node mcp-server.mjs",
     "prepare:plugin": "node install-plugin.mjs",
     "test:ui": "node mcp-browser.integration.mjs",

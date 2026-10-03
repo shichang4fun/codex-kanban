@@ -128,7 +128,20 @@ npm run test:ui
 
 `test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、七个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
 
-本机安装：
+### GitHub marketplace 安装
+
+发布包位于独立的 `marketplace` 分支，包含已构建 UI 与运行依赖，不需要克隆源码或运行 npm install。需要 macOS、安装于 `/Applications/ChatGPT.app` 的当前 ChatGPT Desktop（含 Codex）。启动器优先使用 PATH 上的 Node.js 22+，否则使用应用内置 Node；可通过 `KANBAN_NODE` 指定兼容的可执行文件。
+
+```sh
+codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
+codex plugin add codex-kanban@codex-kanban
+```
+
+全局 `codex` 不可用时，可将命令中的 `codex` 替换为 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。重新加载 MCP 配置或正常重启客户端后，查看侧栏「Codex 看板」。已有本机版本 `codex-kanban@codex-kanban-local` 时，先禁用该副本，避免重复入口。GitHub 安装不会配置 Desktop 桥接；实时状态、Pin 与分组写入仍需按上面的桥接步骤设置。
+
+更新时执行 `codex plugin marketplace upgrade codex-kanban`，再执行 `codex plugin add codex-kanban@codex-kanban` 并重新加载 MCP 配置。构建分发包使用 `npm run package:marketplace`，输出 `dist/marketplace/`；只发布该目录到 `marketplace` 分支，不上传本机安装器生成的目录。该渠道不属于 OpenAI 官方公开目录。
+
+### 本机开发安装
 
 ```sh
 npm run prepare:plugin
@@ -142,7 +155,7 @@ codex plugin add codex-kanban@codex-kanban-local
 
 归档与 Undo 令牌绑定 MCP 服务实例。刷新数据保留恢复入口，丢失动作响应时下次读取可恢复 Undo；一个 UI 恢复成功后，其他 UI 下次刷新移除相应入口。关闭整个 MCP 服务后，使用客户端归档列表恢复。请求取消或服务关闭都会取消尚在预检中的操作，不执行写入；已经派发的写入继续回读确认，不自动重试。多 UI 操作共用互斥锁，覆盖动作后的回读。
 
-插件与 HTTP 使用相同的 Desktop 能力检查、分组写入和运行状态读取。已启用的桥接每 5 秒读取本机真实运行状态，断线后 15 秒过期；没有桥接时保留桌面快照，禁用 Group／Pin 写入。sidebar 注册本身不授予桌面工具权限。真实 Desktop 写入与即时侧栏更新仍需现场验收。旧 native-sync／native-bridge 不用于当前拖拽。此包尚未公开发布。
+插件与 HTTP 使用相同的 Desktop 能力检查、分组写入和运行状态读取。已启用的桥接每 5 秒读取本机真实运行状态，断线后 15 秒过期；没有桥接时保留桌面快照，禁用 Group／Pin 写入。sidebar 注册本身不授予桌面工具权限。真实 Desktop 写入与即时侧栏更新仍需现场验收。旧 native-sync／native-bridge 不用于当前拖拽。GitHub marketplace 分发不代表通过 OpenAI 官方目录审核。
 
 开发依据：
 - https://linear.app/docs/board-layout
