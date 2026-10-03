@@ -35,7 +35,8 @@ const connectedBoard=async()=>{let value=await getBoard();const status=await des
     moveTransport:desktopGroupsConnected?'desktop':null,desktopGroupsConnected,archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
 };
 return createServer(async(req,res)=>{
-  const origins=[`http://127.0.0.1:${port}`,`http://localhost:${port}`];
+  const listeningPort=port===0?req.socket.localPort:port;
+  const origins=[`http://127.0.0.1:${listeningPort}`,`http://localhost:${listeningPort}`];
   if(!origins.includes('http://'+req.headers.host)||(req.headers.origin&&!origins.includes(req.headers.origin))
     ||['cross-site','same-site'].includes(req.headers['sec-fetch-site'])){res.writeHead(403).end('Forbidden');return;}
   try{

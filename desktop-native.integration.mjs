@@ -67,7 +67,9 @@ try{
   const socketPath=join(fixtureHome,'desktop.sock');
   stop=await startDesktopArchiveBridge({socketPath,ready:()=>relay.ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
     request:(method,params)=>relay.request(method,params)});
-  const port=8892;server=createKanbanServer({port,getBoard,desktopBridgeSocket:socketPath});await new Promise(r=>server.listen(port,'127.0.0.1',r));
+  server=createKanbanServer({port:0,getBoard,desktopBridgeSocket:socketPath});
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+  const port=server.address().port;
   const base='http://127.0.0.1:'+port,get=await(await fetch(base+'/api/board')).json();assert.equal(get.board.sync.archiveTransport,'desktop');assert.equal(get.board.sync.moveTransport,'desktop');
   assert.equal(get.board.sync.runtimeLive,true);assert.equal(get.board.tasks[0].runtimeStatusSource,'desktopRuntime');
   assert.equal(get.board.tasks[0].rawStatus.type,'idle');

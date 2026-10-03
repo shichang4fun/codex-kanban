@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {get} from 'node:http';
 import {createDesktopRuntime,readBoardRuntime} from './desktop-runtime.mjs';
 import {createDesktopRelay} from './desktop-proxy.mjs';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
@@ -91,14 +92,20 @@ test('HTTP polling reads live status through the private bridge across running, 
   let status={type:'active',activeFlags:[]},connected=true;const calls=[];
   const stop=await startDesktopArchiveBridge({socketPath,ready:()=>connected,call:async()=>{throw Error('No MCP tools needed');},
     request:async(method,params)=>{calls.push(method);return {thread:thread(params.threadId,status)};}});
-  // Bind a free port, then use the same listener with its origin check configured.
-  const {createServer}=await import('node:net');const probe=createServer();
-  await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
-  const http=createKanbanServer({port,desktopBridgeSocket:socketPath,getBoard:async()=>({...base(),sync:{connected:true,runtimeLive:false}})});
-  await new Promise(r=>http.listen(port,'127.0.0.1',r));
+  const http=createKanbanServer({port:0,desktopBridgeSocket:socketPath,getBoard:async()=>({...base(),sync:{connected:true,runtimeLive:false}})});
+  await new Promise(r=>http.listen(0,'127.0.0.1',r));const port=http.address().port;
   try{
     const read=async()=> (await(await fetch(`http://127.0.0.1:${port}/api/board`)).json()).board;
     const running=await read();assert.equal(running.tasks[0].column,'running');assert.equal(running.sync.runtimeLive,true);
+    const badHost=await new Promise((resolve,reject)=>{
+      get(`http://127.0.0.1:${port}/api/board`,{headers:{Host:'evil.test'}},response=>{
+        response.resume();resolve(response.statusCode);
+      }).on('error',reject);
+    });
+    assert.equal(badHost,403);
+    for(const headers of [{Origin:'http://evil.test'},{Origin:'http://127.0.0.1:0'}]){
+      assert.equal((await fetch(`http://127.0.0.1:${port}/api/board`,{headers})).status,403);
+    }
     assert.equal(running.sync.desktopGroupsConnected,true);assert.equal(running.sync.moveWritable,true);assert.equal(running.sync.pinLocal,true);
     status={type:'active',activeFlags:['waitingOnUserInput']};assert.equal((await read()).tasks[0].column,'attention');
     status={type:'idle'};assert.equal((await read()).tasks[0].column,'idle');
