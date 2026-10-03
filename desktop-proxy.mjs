@@ -60,12 +60,11 @@ function jsonLines(stream,accept,raw){
   stream.once('end',()=>{if(buffer)raw(buffer);});
 }
 async function main(){
-  const executable=process.env.KANBAN_REAL_CODEX,context=process.env.KANBAN_CONTEXT_THREAD;
+  const executable=process.env.KANBAN_REAL_CODEX;
   if(!executable||!isAbsolute(executable)||realpathSync(executable)===realpathSync(fileURLToPath(import.meta.url)))throw Error('Native CLI required');
   const args=process.argv.slice(2),index=args.indexOf('app-server');
   const attached=index>=0&&!['daemon','proxy','generate-ts','generate-json-schema'].includes(args[index+1])&&!args.includes('--help');
   if(!attached){const child=spawn(executable,args,{stdio:'inherit'});child.once('exit',code=>process.exitCode=code??1);return;}
-  if(!context||!/^[0-9a-f-]{36}$/i.test(context))throw Error('Verified local context task required');
   const env={...process.env,CODEX_CLI_PATH:executable};
   for(const key of Object.keys(env))if(key.startsWith('KANBAN_')||key.startsWith('SIDEBAR_FLOW_'))delete env[key];
   const child=spawn(executable,args,{stdio:['pipe','pipe','inherit'],env});

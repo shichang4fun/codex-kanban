@@ -1,17 +1,25 @@
-# Codex 看板 0.4.41
+# Codex 看板 0.4.42
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
 ## 快速安装
 
-当前支持 macOS 与安装在 `/Applications/ChatGPT.app` 的 Codex Desktop。无需克隆源码或安装 npm 依赖：
+当前支持 macOS 与安装在 `/Applications/ChatGPT.app` 的 Codex Desktop。无需终端命令、全局 Codex CLI、单独安装 Node 或 npm 依赖：
+
+1. [下载安装包 ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip)，解压。
+2. 双击 **Install Codex Kanban.command**，自动安装插件并配置 Desktop 桥接；重复运行会升级插件及桥接，并保留已有代理链。
+3. 如果 Codex 正在运行，正常退出后，双击 Finder 中已选中的 **Launch Codex with Kanban.command**。打开任意本机聊天，再从侧栏打开「Codex 看板」。以后也使用此启动器，普通应用入口不会启用桥接。
+
+首次打开下载的脚本若被 macOS 拦截，右键选择「打开」并按系统提示确认。已有 `codex-kanban@codex-kanban-local` 开发副本时，先在 Codex 中禁用它，避免重复入口。
+
+仅需基础看板时，也可以使用官方 CLI：
 
 ```sh
 codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
 codex plugin add codex-kanban@codex-kanban
 ```
 
-正常重启客户端后，从侧栏打开「Codex 看板」。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。实时运行状态、Pin 和分组修改需要按需配置 [Desktop 桥接](#客户端操作桥接)。
+这两条 CLI 命令只安装基础插件；双击安装器则一并完成桥接配置，无需填写任务 ID、路径或编辑配置文件。首次启用需要正常重启，安装器不会退出正在运行的客户端。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。
 
 发布者合并到 `main` 后，在 [Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 点击 **Run workflow** 即可发布新版；完整步骤见 [发布说明](#发布者一键发布新版)。
 
@@ -110,7 +118,7 @@ Create & run 通过当前 Desktop 连接调用原生 `create_thread`，会启动
 安装只生成私有目录中的代理和启动器，不覆盖原来的 Sidebar Flow 代理、不修改全局设置或应用签名。启动链为 Kanban → 已有 Sidebar Flow → 官方 CLI；网页提供归档、恢复、任务分组、Pin、显式新增任务及只读运行状态；已有任务移动允许三个流程分组、Pinned 及清除自身分组，新增任务可归入唯一可映射的原生自定义分组。Create & run 调用原生任务创建；项目容器移动保持关闭。代理保留原始初始化、请求 ID 和事件，等待客户端成功加载一个本机任务后才启用桥接。
 
 ```sh
-node setup-desktop-bridge.mjs --context <existing-local-thread-id>
+node setup-desktop-bridge.mjs
 ```
 
 正常退出 Codex 后，打开 `~/.codex/kanban-desktop/Launch Codex with Kanban.command`。启动器发现 Codex 正在运行时只提示需要退出，不终止任何进程。启动后打开一个本机任务；`GET /api/board` 的 `sync.desktopArchiveConnected` 表示归档连接状态；`sync.desktopGroupsConnected` 与 `sync.moveWritable` 为 true 才启用任务分组及 Pin 写入。旧桥接、未连接或断线时禁止这些写入，明确提示使用更新后的启动器；不自动回退。连接状态不替代真实客户端工具及侧栏显示验收。看板服务需在安装后启动，以加载连接设置；以后每次检查连接，无需为客户端重连重启服务。普通方式启动 Codex 不启用此代理。
@@ -159,6 +167,8 @@ npm run test:ui
 
 `test:plugin-native` 使用临时 CODEX_HOME，通过官方 CLI 安装插件并由真实 App Server 验证服务发现、十二个工具和全局入口元数据。它只创建临时上下文，不启动模型任务，结束后清理目录。
 
+`npm run package:marketplace && npm run test:install-native` 验证一键安装器的真实 CLI 安装、重复升级、自动任务上下文、私有桥接和十二个 App 工具。默认使用构建好的本机分发包；可设置 `KANBAN_MARKETPLACE_SOURCE=shichang4fun/codex-kanban KANBAN_MARKETPLACE_REF=marketplace` 验证公开 GitHub 包。隔离的临时 CODEX_HOME 不触碰现有任务，不启动模型或重启当前客户端。
+
 ### GitHub 安装：两条命令
 
 发布包位于独立的 `marketplace` 分支，包含已构建 UI 与运行依赖，不需要克隆源码或运行 npm install。需要 macOS、安装于 `/Applications/ChatGPT.app` 的当前 ChatGPT Desktop（含 Codex）。启动器优先使用 PATH 上的 Node.js 22+，否则使用应用内置 Node；可通过 `KANBAN_NODE` 指定兼容的可执行文件。
@@ -177,7 +187,7 @@ codex plugin marketplace upgrade codex-kanban
 codex plugin add codex-kanban@codex-kanban
 ```
 
-这是自托管的 GitHub marketplace，不属于 OpenAI 官方公开目录。基础看板安装后即可使用，Desktop 桥接按需单独配置。
+这是自托管的 GitHub marketplace，不属于 OpenAI 官方公开目录。双击安装器包含桥接配置；仅使用 CLI 安装的基础看板可按需单独配置桥接。桥接自动使用客户端成功加载的本机任务，无需提供固定任务 ID；目录默认位于 `$CODEX_HOME/kanban-desktop`（未设置时为 `~/.codex/kanban-desktop`）。
 
 ### 发布者：一键发布新版
 
