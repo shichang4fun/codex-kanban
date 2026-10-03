@@ -2,6 +2,8 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-kanban",
   "version": "0.4.40",
+  "author": {"name": "shichang4fun", "url": "https://github.com/shichang4fun"},
+  "repository": "https://github.com/shichang4fun/codex-kanban",
   "description": "A Codex sidebar MCP App with Desktop-owned groups, pinning, live runtime and archive Undo.",
   "extensions": {
     "com.openai": {
@@ -9,7 +11,7 @@
         "displayName": "Codex 看板",
         "shortDescription": "从侧栏打开本机 Codex 任务看板",
         "longDescription": "本地 MCP App 看板，读取本机任务与项目，支持 Desktop 分组移动、置顶、归档与 Undo。实时运行状态通过所属桌面连接读取，断线后过期。支持看板、列表、筛选和详情。",
-        "developerName": "Personal",
+        "developerName": "shichang4fun",
         "category": "Productivity",
         "capabilities": [
           "Read",

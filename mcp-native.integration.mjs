@@ -21,8 +21,10 @@ function request(method,params={}){
 }
 try{
   await mkdir(env.CODEX_HOME,{mode:0o700});
-  const market=await preparePlugin({root:join(root,'market')});
-  for(const args of [['plugin','marketplace','add',market.root,'--json'],['plugin','add','codex-kanban@codex-kanban-local','--json']])
+  const source=process.env.KANBAN_MARKETPLACE_SOURCE;
+  const market=source?{root:source,marketplace:'codex-kanban'}:await preparePlugin({root:join(root,'market')});
+  const ref=process.env.KANBAN_MARKETPLACE_REF;
+  for(const args of [['plugin','marketplace','add',market.root,...(ref?['--ref',ref]:[]),'--json'],['plugin','add',`codex-kanban@${market.marketplace}`,'--json']])
     execFileSync(cli,args,{env,encoding:'utf8',stdio:['ignore','pipe','pipe']});
   child=spawn(cli,['--disable','hooks','app-server','--listen','stdio://'],{env,stdio:['pipe','pipe','pipe']});
   let diagnostic='';child.stderr.on('data',data=>diagnostic+=data);
