@@ -1,5 +1,13 @@
 # Verification
 
+## Rebase and independent pre-PR review — 2026-10-04
+
+- Rebased onto origin/main at a7843ec, preserving its per-group Project view, host-qualified project grouping, preference namespace and project-aware manual ordering. Conflict resolution adapts Project view to the native-only grouping mode and retains the 48px collapsed Board column and filtered-empty behavior.
+- All 116 automated tests passed. A full-script regression combines Project view with the simplified controls, safe PR cards, Board/List switching, keyboard focus restoration and global filtered empty states. Existing native action and retired-storage protection checks remain passing.
+- An independent read-only agent reviewed the final diff and reran npm test and git diff --check. It found one List Grid issue: Git metadata pushed the footer onto a third row. An explicit footer grid-row:1 fixes it; live measurements confirm heading/footer share the same vertical center and Git remains on the second row. No unresolved actionable findings remained.
+- In-app browser verified Project view in Board/List, 48px folded-group layout, action menu access inside project groups and the List fix at port 8896. Temporary view preferences were restored; no browser warnings/errors or native task writes occurred. Screenshot: ui-rebased-review-preview.png (local ignored artifact).
+- Remaining data boundaries: Project uses a Desktop snapshot; PR matching follows the current working directory and named branch, excludes detached HEAD/fork inference, and marks old visible results Cached. Generated UI, task snapshots, local screenshots and connection data are excluded from Git.
+
 ## Project metadata refresh — 2026-10-04
 
 - Live Desktop list_threads/list_projects confirmed the current UI task belongs to codex-kanban. The previous Desktop snapshot predated the project and task; the separate local App Server reported a null projectId. Project labels intentionally use exact Desktop host/project IDs rather than inferring from a worktree directory name.

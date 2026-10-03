@@ -25,8 +25,8 @@ function harness(board=fixture()){
     removeAttribute(key){delete this.attributes[key];}
     addEventListener(key,listener){this.listeners[key]=listener;}
     closest(selector){return selector==='button'?this.parentElement:null;}
-    querySelector(selector){return selector==='details'?nodes.get('detail-technical'):this.children.find(n=>selector.startsWith('.')?n.className===selector.slice(1):n.tag===selector);}
-    querySelectorAll(selector){const names=selector.split(',').map(n=>n.replace('.',''));return this.children.flatMap(n=>[...(names.includes(n.className)?[n]:[]),...n.querySelectorAll(selector)]);}
+    querySelector(selector){return selector==='details'?nodes.get('detail-technical'):this.children.find(n=>selector.startsWith('.')?n.className===selector.slice(1):n.tag===selector)??this.children.map(n=>n.querySelector(selector)).find(Boolean);}
+    querySelectorAll(selector){const names=selector.split(',').map(n=>n.replace('.',''));return this.children.flatMap(n=>[...(names.some(name=>name===n.className||n.className?.split(/\s+/).includes(name))?[n]:[]),...n.querySelectorAll(selector)]);}
     getAnimations(){return [];}
     getClientRects(){return [];}
     getBoundingClientRect(){return {top:0,bottom:0,left:0,right:0,width:0,height:0};}
@@ -254,4 +254,22 @@ test('branch-only cards omit empty PR placeholders and keep lookup diagnostics f
     assert.match(nodeText(h.nodes.get('detail-tech-meta')),/PR lookup/);
     assert.equal(h.nodes.get('detail-technical').open,false);
   }
+});
+test('upstream project view works with simplified controls, PR cards and filtered empty states',()=>{
+  const board=gitFixture();board.tasks[0].projectId='board-project';board.tasks[0].projectName='Board project';
+  const h=harness(board),root=h.nodes.get('board');
+  const toggle=()=>root.querySelectorAll('.project-toggle').find(n=>n.attributes['aria-label']==='Project view: For Review');
+  toggle().onclick();assert.equal(toggle().attributes['aria-checked'],'true');
+  assert.equal(root.querySelectorAll('.project-group').length,1);
+  assert.match(nodeText(root.querySelectorAll('.project-group')[0]),/Board project.*#7 · Draft/);
+  assert.equal(root.querySelectorAll('.card-menu').length,2);
+  assert.equal(h.context.document.activeElement,toggle());
+  h.api.setView('list');assert.equal(root.querySelectorAll('.project-group').length,1);
+  h.nodes.get('search').value='missing';h.nodes.get('search').listeners.input();
+  assert.equal(root.querySelectorAll('.project-group').length,0);
+  assert.equal(root.querySelectorAll('.empty board-empty').length,1);
+  h.nodes.get('search').value='';h.nodes.get('search').listeners.input();
+  assert.equal(toggle().attributes['aria-checked'],'true');
+  toggle().onclick();assert.equal(root.querySelectorAll('.project-group').length,0);
+  assert.equal(root.querySelectorAll('.pr-badge pr-draft').length,1);
 });
