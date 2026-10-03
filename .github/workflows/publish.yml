@@ -1,0 +1,59 @@
+name: Publish marketplace
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-marketplace
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run package:marketplace
+      - name: Preserve hidden metadata and launcher permissions
+        run: tar -czf "$RUNNER_TEMP/marketplace.tar.gz" -C dist/marketplace .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketplace
+          path: ${{ runner.temp }}/marketplace.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: marketplace
+          path: ${{ runner.temp }}/marketplace-artifact
+      - name: Publish tested package
+        run: |
+          mkdir "$RUNNER_TEMP/marketplace-package"
+          tar -xzf "$RUNNER_TEMP/marketplace-artifact/marketplace.tar.gz" -C "$RUNNER_TEMP/marketplace-package"
+          node publish-marketplace.mjs "$RUNNER_TEMP/marketplace-package"
+          echo "Marketplace is up to date with tested source $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+          echo "[Installation instructions](https://github.com/$GITHUB_REPOSITORY/tree/marketplace#install)" >> "$GITHUB_STEP_SUMMARY"
