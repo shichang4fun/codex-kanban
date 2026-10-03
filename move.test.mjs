@@ -105,11 +105,11 @@ function detailUi(){
     DATA:{tasks:[pinned],sections:[...sections.map(s=>({sectionId:s.id,name:s.name})),{sectionId:'chats',name:'Tasks'}]},selectedTask:pinned,
     nativeConnected:true,nativeWritable:true,nativeToken:'csrf',nativePending:false,nativeMessage:'Connected',
     taskActionPending:()=>context.nativePending,taskKey:t=>t.hostId+':'+t.id,
-    updateRuntimeDetail(){},workflowStage:()=> 'todo',hostName:()=> 'Local',date:()=> 'Now'});
+    updateRuntimeDetail(){},appendGitDetail(){},hostName:()=> 'Local',date:()=> 'Now'});
   new Script(html.match(/function nativeCanEditGroup\([\s\S]*?(?=function nativeNotice)/)[0]
     +html.match(/function updateDetailProperties\([\s\S]*?(?=function showDetail)/)[0]
     +html.match(/async function changeDetailGroup\([\s\S]*?(?=\$\('detail-native'\).onchange)/)[0]).runInContext(context);
-  const group=()=>{const nodes=$('detail-meta').children;return nodes[nodes.findIndex(n=>n.tag==='dt'&&n.textContent==='Group')+1]?.textContent;};
+  const group=()=>$('detail-native').children.find(option=>option.value===$('detail-native').value)?.textContent;
   return {context,$,group,pinned};
 }
 test('detail editing includes Pinned and Ungrouped, allows pinned task dragging, and retains the selector across polling',()=>{
@@ -125,10 +125,10 @@ test('detail editing includes Pinned and Ungrouped, allows pinned task dragging,
 });
 test('detail saves refresh displayed properties and failed saves revert to authoritative membership',async()=>{
   const f=detailUi(),{context,$,pinned}=f;context.updateDetailProperties(pinned);
-  let sent;context.moveNative=async(t,destination)=>{sent=destination;context.DATA.tasks=[{...t,localSectionId:destination,nativeSectionId:destination??'chats',pinned:destination==='local-pin'}];$('workflow-toast').textContent='Group updated';return true;};
+  let sent;context.moveNative=async(t,destination)=>{sent=destination;context.DATA.tasks=[{...t,localSectionId:destination,nativeSectionId:destination??'chats',pinned:destination==='local-pin'}];$('task-toast').textContent='Group updated';return true;};
   $('detail-native').value='local-review';await context.changeDetailGroup();assert.equal(sent,'local-review');assert.equal(f.group(),'For Review');assert.equal($('detail-native').value,'local-review');
   $('detail-native').value='chats';await context.changeDetailGroup();assert.equal(sent,null);assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');
-  context.moveNative=async()=>{$('workflow-toast').textContent='Group changed again';return false;};
+  context.moveNative=async()=>{$('task-toast').textContent='Group changed again';return false;};
   $('detail-native').value='local-pin';await context.changeDetailGroup();assert.equal(f.group(),'Ungrouped');assert.equal($('detail-native').value,'chats');assert.equal($('native-edit-hint').textContent,'Group changed again');
 });
 test('project-default details use the merged group label without enabling inherited membership writes',()=>{

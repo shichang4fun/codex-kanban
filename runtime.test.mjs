@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {Script,createContext} from 'node:vm';
 
 const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
-const helpers=html.match(/function expireRuntimeSnapshot[\s\S]*?(?=const workflowStoragePrefix)/)[0];
+const helpers=html.match(/function expireRuntimeSnapshot[\s\S]*?(?=let draggedKey)/)[0];
 function harness(runtimeLive=false){
   const task={column:'running',rawStatus:'active',runtimeStatusSource:'desktopSnapshot',nativeSectionId:'review'};
   const board={tasks:[task],sync:{runtimeLive},runtimeCapturedAt:'2026-10-03T00:00:00Z',runtimeSnapshotMaxAgeMs:15000};

@@ -1,4 +1,59 @@
-# Archive bridge verification — 0.4.22
+# Verification
+
+## Project metadata refresh — 2026-10-04
+
+- Live Desktop list_threads/list_projects confirmed the current UI task belongs to codex-kanban. The previous Desktop snapshot predated the project and task; the separate local App Server reported a null projectId. Project labels intentionally use exact Desktop host/project IDs rather than inferring from a worktree directory name.
+- Refreshed the timestamped Desktop snapshot and project catalog, then regenerated the standalone board. No UI rendering change or native task write was needed. Project metadata still uses the Desktop snapshot; ordinary board polling refreshes local tasks/groups.
+- All 20 targeted local-board/UI tests passed. Port 8896 showed codex-kanban on both the task card and the Project detail field, independently of its native Group. Empty branch/PR information stayed hidden. No browser warnings/errors were observed. Screenshot: ui-project-refresh-preview.png (local ignored artifact).
+
+## Hide absent branch and PR information — 2026-10-04
+
+- All 110 automated tests passed. Board/List regressions confirm branch-only cards omit missing/loading/unavailable/unsupported PR placeholders; detached tasks omit the entire Git row and empty detail section while keeping commits and lookup diagnostics in collapsed Technical information. Existing actual PR links, multiple matches and stale-result labels remain covered.
+- The in-app browser at port 8896 showed zero Git rows for the current detached worktrees and no Detached/PR-not-linked placeholders on cards. The current task's details hid the empty branch/PR area; expanded technical information retained its commit, repository and lookup reason. Board and List both passed; Board and collapsed technical information were restored. No browser warnings/errors or native task writes occurred.
+- Regenerated the standalone preview. Screenshot: `ui-pr-visibility-preview.png` (local ignored artifact).
+
+## New worktree PR association fix — 2026-10-04
+
+- All 109 automated tests passed. Regressions reproduce detached worktrees starting at PR head/merge commits, reuse of a historical branch name, switching from a PR branch to detached HEAD, and suppression of inherited PR badges/search matches from old static data.
+- Detached HEAD no longer queries GitHub by commit. Named branches match same-repository PR head branches; merged/closed results also require the current HEAD to equal the PR head SHA. HEAD changes invalidate the associated cache key.
+- Live readback confirmed this worktree (`e3e8`) starts at `3d63c5f`, the merge commit of PR #1. The prior integration treated this historical base as a task PR association; that rule is superseded. The in-app browser at port 8896 now shows Detached and PR not linked, with no Merged badge or CI/review for that historical PR. Expanded technical information confirmed the actual task working directory, then was folded again. No browser warnings/errors or native task writes occurred.
+- Updated the standalone page and preview server. Screenshot: `ui-pr-association-fix-preview.png` (local ignored artifact).
+
+## Integrated branch and PR display — 2026-10-04
+
+- All 106 automated tests passed. Coverage includes repository/branch and exact-commit matching, rejection of fork or malformed results, cache freshness and failures, shared-directory deduplication, and reserved local Git capacity while GitHub requests are slow. Full-script UI regressions cover safe PR links, search, multiple matches, cached labels, remote-task exclusion, and the existing task-action disclosure.
+- In-app browser verified port 8896 with live data: the referenced PR-display task showed detached commit `3d63c5f`, PR #1 Merged, CI Passed, and no review decision. Expanded technical information confirmed repository, working directory, and exact head-or-merge-commit matching; it was folded again after checking. These are current-directory matches, not explicit task attachments.
+- Repository and PR-number searches, Board/List rendering, and the 666px CSS viewport passed. Branch and PR badges fit within the cards and the task menu stayed in the viewport. The viewport override was reset; no browser warnings or errors were observed. No existing user task was moved, pinned, or archived.
+- Preview screenshots: `ui-integrated-pr-board-preview.png` and `ui-integrated-pr-details-preview.png` (local ignored artifacts).
+
+## Card action redesign — 2026-10-04
+
+- All 91 automated tests passed. The new full-script regression checks single-menu exclusivity, outside/Escape dismissal, focus restoration, protected remote actions, exact Pin/Archive callback routing with mocks, and correct detail navigation.
+- Cards now have one persistent action disclosure instead of separate footer action icons. The native details/summary control exposes labeled operations, retains full title width, and requires no dependency. Native mutation guards and endpoints are unchanged; no user task was pinned or archived for verification.
+- In-app browser verified Board/List opening, Pin versus Unpin labels, Tab navigation, Escape focus restoration, outside-click closure, and correct detail selection. A reproduced clipped List first-row menu now opens downward and stays within the board. At CSS viewport width 666px, both menu and trigger remained within the visible board; the temporary viewport override was reset. No browser warnings or errors were observed.
+
+## UI layout optimization — 2026-10-04
+
+- All 90 automated tests passed; existing native-action eligibility, serialization, membership verification, ordering and runtime guards remain covered. No existing user task was modified for testing.
+- In-app browser measured a 176px desktop sidebar (previously 216px) and 199px title width in a 225px card (previously 139px). Pin/Archive retain 28px targets in the footer, appear on keyboard focus, and do not overlap title or timestamp. The moved details control opened the correct task.
+- Board collapsed groups measure 48px, retain names/counts and keyboard expansion, and keep the existing header/section drag handlers. List collapsed groups retain full-row width. Actual native dragging was not exercised against user tasks in this pass.
+- Responsive checks covered CSS viewport widths 800px and 666px: the mobile sidebar remains 58px, card controls and timestamp fit, filters stay within the main pane, and List retains deliberate horizontal scrolling. The viewport override and temporary collapsed states were restored. No browser warnings or errors were observed.
+
+## UI review fixes — 2026-10-04
+
+- All 90 automated tests passed. Four new regressions cover specific Group disabled reasons without widening write eligibility, visible stale-detail feedback and recovery, filtered versus unfiltered empty states in Board/List, and host-option synchronization with selection preservation and fallback.
+- In-app browser verified the connected preview at port 8896: the Tools project inheritance explanation, partial-search empty-group messages, a single zero-result state in Board and List, and preservation of Cloud selection after refresh. No browser warnings or errors were observed.
+- Task absence and host addition/removal were verified with isolated browser-script fixtures. Absence does not imply deletion or archive; details retain their Open chat link and disable group editing until the task returns. Native task writes were not performed for this verification.
+
+## UI simplification — 2026-10-04
+
+- Independent agent reviewed the proposed scope and completed implementation; no blockers or reproducible findings remained.
+- All 86 automated tests passed. Full browser-script regression coverage verifies startup against the current template, search/filter/layout changes, preserved retired storage, direct-link eligibility, clipboard failure fallback, and connection/read-only/unavailable-host warnings.
+- Existing native move, pin/archive/Undo, ordering, refresh-animation and runtime-expiration tests remain passing. Native mutation tests use mocks or isolated fixtures; no existing user tasks were moved, pinned or archived for this change.
+- In-app browser verified the connected worktree preview at port 8896: search result counts, Cloud host filtering, Board/List switching, editable local and protected cloud Group selectors, collapsed technical details, conditional copy controls, and in-place manual refresh. No browser warnings or errors were observed.
+- The original port 8876 service remains separate. Saved native ordering keys retain their original names; the worktree preview uses a separate origin and therefore its own browser layout preferences.
+
+## Archive bridge verification — 0.4.22
 
 Verified on 2026-10-04 with the bundled Codex CLI 0.160.0.
 

@@ -54,6 +54,7 @@ export function normalize(snapshot) {
     id: task.id, title: task.title ?? 'Untitled task', summary: task.summary ?? '',
     hostId: task.hostId ?? 'unknown', cwd: task.cwd ?? '', projectId: task.projectId,
     projectName: projectNames.get(`${task.hostId}:${task.projectId}`)??null,
+    git: task.hostId==='local'?task.git??null:null,
     updatedAt: task.updatedAt, isUnread: task.isUnread === true,
     unreadSource: task.unreadSource??'desktopSnapshot',unreadCapturedAt: task.unreadCapturedAt??snapshot.capturedAt??null,
     pinned: Boolean(task.pinnedIndex), sidebarOnly: task.sidebarOnly === true, placementSource: task.placementSource ?? null,

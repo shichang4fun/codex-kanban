@@ -13,9 +13,9 @@ const tasks=[
   {id:'p',hostId:'local',updatedAt:5,group:'pinned',workflow:'done',column:'unknown'}
 ];
 function harness(storage=new Map()){
-  const data={tasks:structuredClone(tasks)},nodes={grouping:{value:'native'},order:{value:'manual'}};
+  const data={tasks:structuredClone(tasks)},nodes={order:{value:'manual'}};
   let blocked=false,renders=0,message='';
-  const context=createContext({DATA:data,$:id=>nodes[id],taskKey:key,currentGroups:()=>[],nativeStage:t=>t.group,workflowStage:t=>t.workflow,
+  const context=createContext({DATA:data,$:id=>nodes[id],groupingMode:'native',taskKey:key,currentGroups:()=>[],nativeStage:t=>t.group,
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>{if(blocked)throw Error('quota exceeded');storage.set(k,v);}},
     announce:text=>message=text,render:()=>renders++});
   const api=new Script(helpers+'\n({orderedTasks,moveTaskOrder,taskOrderKey,restoreSortPreference,changeSort,setProjectView:(value,groupId="review")=>projectViews.set(projectViewKey(groupId),value)})').runInContext(context);
@@ -60,12 +60,11 @@ test('project view reorders only within the same project and preserves flat orde
 test('group and mode namespaces are independent and same task IDs on different hosts stay distinct',()=>{
   const h=harness();h.api.orderedTasks(review(h),'review');h.api.moveTaskOrder('cloud:a','local:a');
   assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['cloud:a','local:a','local:b']);
-  h.nodes.grouping.value='workflow';
-  assert.deepEqual(ids(h.api.orderedTasks(review(h),'todo')),['local:a','local:b','cloud:a']);
+  h.storage.set(h.api.taskOrderKey('todo','workflow'),'["local:b"]');
   assert.notEqual(h.api.taskOrderKey('review','native'),h.api.taskOrderKey('review','runtime'));
   assert.notEqual(h.api.taskOrderKey('review','native'),h.api.taskOrderKey('pinned','native'));
-  h.nodes.grouping.value='native';
   assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['cloud:a','local:a','local:b']);
+  assert.equal(h.storage.get(h.api.taskOrderKey('todo','workflow')),'["local:b"]');
 });
 test('malformed orders, duplicate keys and missing tasks are reconciled safely',()=>{
   const h=harness(),storageKey=h.api.taskOrderKey('review');
@@ -110,5 +109,5 @@ test('Ungrouped retains former Tasks and Projects orders across a manual reorder
   assert(h.api.moveTaskOrder('cloud:a','local:b'));
   const reload=harness(h.storage);for(const task of reload.data.tasks)task.group='chats';
   assert.deepEqual(ids(reload.api.orderedTasks(reload.data.tasks,'chats')),['cloud:a','local:b','local:a','local:p']);
-  h.nodes.grouping.value='workflow';assert.deepEqual(ids(h.api.orderedTasks(h.data.tasks,'chats')),['local:a','local:b','cloud:a','local:p']);
+  assert.deepEqual(ids(h.api.orderedTasks(h.data.tasks,'chats','workflow')),['local:a','local:b','cloud:a','local:p']);
 });
