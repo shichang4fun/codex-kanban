@@ -1,18 +1,19 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-kanban",
-  "version": "0.4.29",
-  "description": "Desktop-owned group changes and pinning, native readback, archive with Undo, and local workflow.",
+  "version": "0.4.31",
+  "description": "A Codex sidebar MCP App with Desktop-owned groups, pinning, live runtime and archive Undo.",
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Codex 看板",
-        "shortDescription": "按本机分组查看 Codex 任务",
-        "longDescription": "Linear 风格的任务工作台，自动读取本机分组，支持拖拽管理本地工作流程。运行状态快照带有时间和过期提示。支持看板与列表切换、筛选、详情和本机聊天跳转。",
+        "shortDescription": "从侧栏打开本机 Codex 任务看板",
+        "longDescription": "本地 MCP App 看板，读取本机任务与项目，支持 Desktop 分组移动、置顶、归档与 Undo。实时运行状态通过所属桌面连接读取，断线后过期。支持看板、列表、筛选和详情。",
         "developerName": "Personal",
         "category": "Productivity",
         "capabilities": [
-          "Read"
+          "Read",
+          "Write"
         ],
         "brandColor": "#9590ff",
         "defaultPrompt": [
