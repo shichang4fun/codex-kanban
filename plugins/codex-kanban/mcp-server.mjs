@@ -24,7 +24,7 @@ const result=payload=>({content:[{type:'text',text:payload.error??(payload.board
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.40',icons:boardIcons},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.41',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}
@@ -39,7 +39,21 @@ export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./d
     title:'Refresh Codex board',description:'Read current local groups, branch/PR information and Desktop runtime observations.',
     inputSchema:z.object({}).strict(),annotations:{readOnlyHint:true,openWorldHint:false},_meta:appOnly
   },read);
+  for(const [name,method,fields] of [
+    ['get_creation_options','creationOptions',{}],
+    ['get_creation_status','creationStatus',{requestId:z.string().uuid()}]
+  ])server.registerTool(name,{
+    description:name==='get_creation_options'?'Read verified local creation projects, groups and saved defaults':'Read a recorded creation outcome without creating again',
+    inputSchema:z.object(fields).strict(),annotations:{readOnlyHint:true,openWorldHint:false},_meta:appOnly
+  },async params=>{
+    try{return result(await service[method](params));}
+    catch(error){return result({error:error.status?error.message:'Creation information is unavailable.',status:error.status??503});}
+  });
+  const settingsSchema=z.object({projectId:z.string().min(1).max(256).nullable().optional(),environment:z.enum(['local','worktree']).optional(),branch:z.string().max(256).optional(),model:z.string().max(128).optional(),thinking:z.enum(['','none','minimal','low','medium','high','xhigh','max','ultra']).optional(),template:z.string().max(2000).optional()}).strict();
   const actions=[
+    ['save_group_settings','group-settings','Save defaults for a verified local group without creating a task',{sectionId:z.string().min(1).max(128).nullable(),settings:settingsSchema}],
+    ['create_task','create','Explicitly create and run one task using a durable request ID; never automatically retry',{requestId:z.string().uuid(),sectionId:z.string().min(1).max(128).nullable(),settings:settingsSchema,prompt:z.string().min(1).max(5000)}],
+    ['retry_creation_group','creation-group','Retry grouping an already confirmed creation; never create another task',{requestId:z.string().uuid()}],
     ['set_project','project','Assign or remove a local task project without changing its working directory',{...taskFields,projectId:z.string().min(1).max(128).nullable(),expectedProjectId:z.string().min(1).max(128).nullable()}],
     ['move_task','move','Move task to a verified native group',{...taskFields,sectionId:z.string().nullable(),expectedSectionId:z.string().nullable()}],
     ['pin_task','pin','Pin or unpin a local task',{...taskFields,pinned:z.boolean()}],

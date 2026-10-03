@@ -9,7 +9,7 @@ const source=dirname(fileURLToPath(import.meta.url));
 const defaultRoot=join(homedir(),'.codex','kanban-desktop');
 const appPath='/Applications/ChatGPT.app';
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
-const files=['desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','move.mjs','pin.mjs','local-read.mjs'];
+const files=['desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','move.mjs','pin.mjs','local-read.mjs'];
 export async function installDesktopBridge({root=defaultRoot,contextThreadId,app=appPath,chainedCli,nodePath}={}){
   if(!isAbsolute(root)||Buffer.byteLength(join(root,'desktop.sock'))>100)throw Error('A short, absolute installation directory is required.');
   if(typeof contextThreadId!=='string'||!/^[0-9a-f-]{36}$/i.test(contextThreadId))throw Error('An explicit existing local context task is required.');
