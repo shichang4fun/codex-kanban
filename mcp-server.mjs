@@ -14,7 +14,10 @@ const taskFields={threadId:z.string().uuid(),hostId:z.literal('local')};
 const writeToken={actionToken:z.string().uuid()};
 const appOnly={ui:{visibility:['app']}};
 // Sidebar entries use MCP tool icons, then server icons; plugin logos are separate.
-const boardIcons=[{src:`data:image/png;base64,${readFileSync(new URL('./assets/kanban-icon.png',import.meta.url)).toString('base64')}`,mimeType:'image/png'}];
+const boardIcons=['light','dark'].map(theme=>({
+  src:`data:image/png;base64,${readFileSync(new URL(`./assets/kanban-icon${theme==='dark'?'-dark':''}.png`,import.meta.url)).toString('base64')}`,
+  mimeType:'image/png',theme
+}));
 const result=payload=>({content:[{type:'text',text:payload.error??(payload.board?`${payload.board.tasks.length} Codex tasks loaded.`:'Task action verified.')}],
   structuredContent:payload,...(payload.error?{isError:true}:{})});
 

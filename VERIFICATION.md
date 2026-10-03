@@ -204,3 +204,8 @@ Verified on 2026-10-04 with the bundled Codex CLI 0.160.0.
 - MCP initialization now supplies the packaged PNG as a data URI in serverInfo.icons. The current SDK preserves server icons, while its high-level registerTool configuration does not forward tool icons. The client's supported server-icon fallback avoids SDK internals and external image requests.
 - All 166 tests pass. The real SDK initialization checks the exact icon bytes, and the official plugin-discovery lab verifies that the real App Server exposes serverInfo.icons with image/png and the embedded data URI.
 - Updated the local official installation to 0.4.33. Existing older MCP processes were left running; the native client must reload the plugin or restart normally to receive the corrected metadata. This verifies metadata delivery, not an observed native-sidebar repaint.
+
+## Sidebar icon contrast — 2026-10-04
+
+- The user's light-sidebar screenshot confirmed the icon appeared but was too pale. Replaced the light-theme asset with a dark graphite glyph and retained the previous purple asset for dark themes. Plugin logo/composer metadata and MCP server icons now supply both theme variants.
+- Existing SDK and packaging checks verify the selected theme and exact source bytes. The working tree passed all 170 tests and the official App Server discovery lab. Installed package readback confirms both PNG files and both MCP data URIs match source, with no task writes. Native repaint after the update remains unobserved; no Desktop restart was performed.
