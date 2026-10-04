@@ -17,6 +17,8 @@ export async function installDesktopBridge({root=defaultRoot,app=appPath,chained
   if(!isAbsolute(root)||Buffer.byteLength(join(root,'desktop.sock'))>100)throw Error('A short, absolute installation directory is required.');
   if(!isAbsolute(app))throw Error('An absolute Codex app path is required.');
   if(!isAbsolute(codexHome))throw Error('An absolute CODEX_HOME is required.');
+  const pluginVersion=JSON.parse(await readFile(join(source,'plugin.json'),'utf8')).version;
+  if(typeof pluginVersion!=='string'||!pluginVersion)throw Error('A valid plugin version is required.');
   nodePath??=join(app,'Contents/Resources/cua_node/bin/node');
   const native=join(app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex');
   if(!chainedCli){
@@ -54,7 +56,7 @@ export async function installDesktopBridge({root=defaultRoot,app=appPath,chained
     if(!file.endsWith('.mjs'))continue;
     await copyFile(join(source,'flow',file),join(runtime,'flow',file));await chmod(join(runtime,'flow',file),0o600);
   }
-  const config={version:1,root,app,nodePath,chainedCli,codexHome,...(autoFlow?{autoFlow:true}:{}),socketPath:join(root,'desktop.sock'),proxy:join(root,'codex-proxy')};
+  const config={version:1,pluginVersion,root,app,nodePath,chainedCli,codexHome,...(autoFlow?{autoFlow:true}:{}),socketPath:join(root,'desktop.sock'),proxy:join(root,'codex-proxy')};
   await writeFile(join(root,'connection.json'),JSON.stringify(config,null,2)+'\n',{mode:0o600});
   await writeFile(config.proxy,'#!/bin/sh\n# codex-kanban-desktop-v1\n'+
     `export CODEX_HOME=${quote(codexHome)}\n`+
