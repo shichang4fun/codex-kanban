@@ -74,7 +74,8 @@ try{
   const context=await request('thread/start',{cwd:root,ephemeral:true,approvalPolicy:'never',sandbox:'read-only'});
   assert(context.thread?.id);
   assert.equal((await desktopBridgeRequest(config.socketPath,'status')).connected,true);
-  assert.deepEqual((await desktopBridgeRequest(config.socketPath,'status')).autoFlow,{available:true,enabled:true,mode:'all-local'});
+  const flowStatus=(await desktopBridgeRequest(config.socketPath,'status')).autoFlow;
+  assert.equal(flowStatus.available,true);assert.equal(flowStatus.enabled,true);assert.equal(flowStatus.mode,'all-local');
   assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:false})).autoFlow.enabled,false);
   assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
   assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:true})).autoFlow.enabled,true);

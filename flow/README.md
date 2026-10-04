@@ -13,10 +13,19 @@ WebSocket client, Hook, model heartbeat, instruction injection, legacy installer
 or diagnostic log writer in this package.
 
 Classification reads current task identity, status and placement before moving
-and verifies the resulting placement. The only write is the native Desktop
+and verifies the resulting placement. Classification writes use the native Desktop
 `move_thread_to_sidebar_section` tool. It never starts or resumes a task or model
 turn. The optional `runExclusive` manager callback shares the whole guarded
 read/write/readback transaction with manual Kanban mutations.
+
+Kanban's bootstrap waits for a loaded local root chat and creates only missing
+In Progress, For Review and For Later groups using `create_sidebar_section`.
+Unique existing groups are reused; duplicate names stop initialization before
+writes. A private durable journal prevents replay of an unconfirmed create,
+including after restart. Readback resolves committed creates with lost replies;
+if the group remains absent, create it manually before enabling again. Explicit
+migrated Desktop/local UUID mappings must remain valid and are never replaced.
+Auto organize displays waiting, initialization and actionable error messages.
 
 The regular policy protects pinned tasks, custom groups, remote tasks and
 projects outside the ordinary Projects section. A fresh active Desktop snapshot

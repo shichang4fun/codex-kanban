@@ -13,13 +13,15 @@ import {archiveLocalTask} from './archive.mjs';
 import {setLocalProject} from './project.mjs';
 import {createKanbanServer} from './serve.mjs';
 import {createLocalBoard} from './local-board.mjs';
+import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
+import {installFlowSettings} from './flow-config.mjs';
 
 const fixtureHome=await realpath(await mkdtemp(join(tmpdir(),'kb-native-'))),previousHome=process.env.CODEX_HOME;
 process.env.CODEX_HOME=fixtureHome;
 const cli='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
 const child=spawn(cli,['--disable','hooks','app-server','--listen','stdio://'],{env:process.env,stdio:['pipe','pipe','pipe']});
 child.stderr.on('data',()=>{});child.stdout.setEncoding('utf8');
-let sequence=0,buffer='',desktopSequence=0,stop,server,fixtureProject=null,simulatedCreations=0;const pending=new Map(),desktopPending=new Map();
+let sequence=0,buffer='',desktopSequence=0,stop,server,autoFlow,fixtureProject=null,simulatedCreations=0,simulatedGroupCreations=0;const pending=new Map(),desktopPending=new Map();
 const creationDesktopProjectId='desktop-creation-project';
 child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);let m;try{m=JSON.parse(line);}catch{continue;}
   const p=pending.get(m.id);if(!p)continue;pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);
@@ -34,6 +36,7 @@ const relay=createDesktopRelay({toDesktop:message=>{const p=desktopPending.get(m
       const {tool,arguments:args}=message.params;
       if(tool==='set_thread_archived')return nativeRpc(args.archived?'thread/archive':'thread/unarchive',{threadId:args.threadId});
       if(tool==='list_projects')return {projects:fixtureProject?[{projectId:creationDesktopProjectId,projectKind:'local',hostId:'local',label:'Disposable Kanban project',path:fixtureHome,isGitRepository:false}]:[]};
+      if(tool==='create_sidebar_section'){simulatedGroupCreations++;return nativeRpc('threadSection/create',{name:args.name});}
       if(tool==='create_thread'){
         // Simulate Desktop's create tool using a real offline native thread.
         // No turn/start or model execution is sent by this fixture dispatcher.
@@ -85,8 +88,17 @@ try{
   }finally{reader.close();}};
   assert.equal((await getBoard()).tasks.length,1);
   await assert.rejects(archiveLocalTask(params,{tasks:[task]}),error=>error.status===409);
+  await installFlowSettings(fixtureHome);
+  autoFlow=await startAutoFlow({root:fixtureHome,relay,runExclusive:createTransactionGate()});
+  const initialized=await autoFlow.initialize();assert.equal(initialized.initialization.state,'ready');
+  const initialCreates=simulatedGroupCreations;
+  assert.equal(initialCreates,3);
+  await autoFlow.initialize();assert.equal(simulatedGroupCreations,initialCreates);
+  const nativeGroups=(await desktopRpc('threadSection/list',{limit:100})).data;
+  for(const name of ['In Progress','For Review','For Later'])assert.equal(nativeGroups.filter(s=>s.name===name).length,1);
+  await autoFlow.change(false);
   const socketPath=join(fixtureHome,'desktop.sock');
-  stop=await startDesktopArchiveBridge({socketPath,ready:()=>relay.ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
+  stop=await startDesktopArchiveBridge({socketPath,autoFlow,ready:()=>relay.ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
     request:(method,params)=>relay.request(method,params)});
   const projectWrites=[];
   server=createKanbanServer({port:0,getBoard,desktopBridgeSocket:socketPath,setProject:(params,board,{signal})=>setLocalProject(params,board,{signal,open:async()=>{
@@ -176,8 +188,10 @@ try{
   assert.equal(createdNative.projectId,project.id);assert.equal(createdNative.section.id,flow['For Review']);
   assert.equal(created.board.tasks.find(t=>t.id===created.threadId).projectName,'Disposable Kanban project');
   assert.equal((await(await post('/api/create',creationRequest)).json()).threadId,created.threadId);assert.equal(simulatedCreations,1);
+  console.log(JSON.stringify({flowGroupsAutomaticallyInitialized:true,flowGroupsCreated:initialCreates,duplicateFlowGroupsPrevented:true,realAppServer:true,simulatedDesktopMcp:true,isolated:true,modelTurnsStarted:0}));
   console.log(JSON.stringify({realNativeProjectSetChangeClearVerified:true,projectMetadataWrites:projectWrites.length,projectCwdSectionRuntimePreserved:true,isolated:true,realAppServer:true,simulatedDesktopMcp:true,simulatedProjectSnapshot:true,realNativeProjectPreserved:true,occupiedWriterReproduced:true,desktopGroupTransportVerified:true,desktopRuntimeReadVerified:true,nativeGroupMovesVerified:true,desktopPinUnpinVerified:true,projectInheritedTaskMoveVerified:true,clearedTaskRestoresProjectPlacement:true,detailPinnedAndTasksMovesVerified:true,laterNativeMoveFollowed:true,bridgeArchiveVerified:true,bridgeUndoVerified:true,offlineCreationAndGroupVerified:true,duplicateCreationPrevented:true,modelTurnsStarted:0}));
 }finally{
+  autoFlow?.stop();
   if(server)await new Promise(r=>server.close(r));if(stop)await stop();relay.close();
   for(const p of pending.values())clearTimeout(p.timer);
   if(child.exitCode===null&&child.signalCode===null){const exited=new Promise(r=>child.once('exit',r));child.kill('SIGTERM');await exited;}
