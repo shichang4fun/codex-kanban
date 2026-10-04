@@ -20,7 +20,9 @@ export async function publishMarketplace({packagePath,repository=process.cwd()}=
   }
   await validate(source);
   const entries=(await readdir(source)).sort();
-  if(JSON.stringify(entries)!==JSON.stringify(['.agents','Install Codex Kanban.command','README.md','plugins']))throw Error('Invalid marketplace package root.');
+  const required=['.agents','Install Codex Kanban.command','README.md','plugins'];
+  const allowed=[...required,'README.zh-CN.md'];
+  if(required.some(name=>!entries.includes(name))||entries.some(name=>!allowed.includes(name)))throw Error('Invalid marketplace package root.');
   if(!((await lstat(join(source,'Install Codex Kanban.command'))).mode&0o111))throw Error('Packaged installer must be executable.');
   const catalog=JSON.parse(await readFile(join(source,'.agents/plugins/marketplace.json'),'utf8'));
   if(catalog.name!=='codex-kanban'||catalog.plugins?.length!==1||catalog.plugins[0].name!=='codex-kanban'

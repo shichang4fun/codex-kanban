@@ -41,6 +41,18 @@ test('shallow CI checkout publishes hidden metadata, executable launcher and his
   assert.equal((await publishMarketplace(f)).published,false);assert.equal(git(f.origin,'rev-parse','marketplace'),published);
 });
 
+test('bilingual READMEs are published while unexpected root files remain rejected',async t=>{
+  const f=await fixture(t),before=git(f.origin,'rev-parse','marketplace');
+  await writeFile(join(f.packagePath,'README.zh-CN.md'),'中文安装说明');
+  await writeFile(join(f.packagePath,'unexpected.txt'),'Not part of the distribution');
+  await assert.rejects(publishMarketplace(f),/Invalid marketplace package root/);
+  assert.equal(git(f.origin,'rev-parse','marketplace'),before);
+  await rm(join(f.packagePath,'unexpected.txt'));
+  assert.equal((await publishMarketplace(f)).published,true);
+  assert.equal(git(f.origin,'show','marketplace:README.zh-CN.md'),'中文安装说明');
+  assert.equal(git(f.origin,'show','marketplace:README.md'),'Install Codex Kanban');
+});
+
 test('outdated source checkout cannot roll the public package back',async t=>{
   const f=await fixture(t),before=git(f.origin,'rev-parse','marketplace');
   await writeFile(join(f.seed,'new.txt'),'Newer source');git(f.seed,'add','.');commit(f.seed);git(f.seed,'push','origin','main');
