@@ -1,5 +1,49 @@
 # Verification
 
+## Card information integration 0.4.48 — 2026-10-04
+
+- Integrated descriptions, runtime attention and PR attention with main's three-second refresh, stable ordering, native Rename and automatic grouping. Two independent reviews identified and verified fixes for timestamp tooltip hit testing and clearing Cached on identical fresh reads without losing card DOM/focus. New text follows Aa scaling; PR notices wrap at narrow widths.
+- All 643 automated tests pass on Node 22; 106 focused tests pass on bundled Node 24. Marketplace build, official plugin discovery and repeat-install acceptance pass with 14 app-only tools. Real App Server tests in a disposable home pass for Rename, projects, groups, pinning, archive/Undo, creation and flow-group initialization; Desktop MCP dispatch is simulated and no model turns are started.
+- Synthetic in-app-browser acceptance covers Board/List, dark/light, 420px at 130%, empty/duplicate descriptions, long text, PR states/links and runtime expiry while an unsaved rename draft retains focus. Independent browser review verifies timestamp hover and forwarded card activation. Live Desktop acceptance after a normal restart remains a separate gate.
+
+## Remove card-wide tooltips — 2026-10-04
+
+- Removed the card overlay's open/drag instructions, duplicate description and recency disclaimer. Removed obsolete runtime-tooltip bookkeeping. Accessible open-task labels, native links, drag behavior, inline runtime/PR notices and individual control/time tooltips remain.
+- Focused card-info, UI, task-order and PR-attention tests pass, as do plugin build and `git diff --check`. In-app browser confirmed all 55 real cards have accessible names and no overlay title; List view also has no overlay title, and the timestamp retains its own tooltip. Restored Board and cleared the temporary search. Screenshot: `dist/card-no-overlay-tooltip.png` (ignored). Updated standalone board at port 18865; installed plugin unchanged.
+
+## PR attention on cards — 2026-10-04
+
+- Cards show linked CI failed, Changes requested and Review required notices using existing GitHub check/review metadata. Multiple PRs identify each notice by PR number. Drafts show CI failures only; merged/closed PRs suppress historical failures and review notices. Healthy, pending, unknown or unavailable states add no alert row.
+- PR or branch metadata older than 90 seconds, invalid or dated in the future labels notices Cached. During Options, task menus, creation or dragging, the timer qualifies notices in place without replacing the active card. Existing PR state badges, details, polling and native task actions remain intact. No recent-message/result extraction was added.
+- All 396 tests pass (`npm test`), including six PR-attention regression tests; plugin build (`npm run build:plugin`) and `git diff --check` pass.
+- Synthetic MCP App acceptance (`KANBAN_TEST_PR_ATTENTION=1 KANBAN_TEST_PORT=18866 node mcp-browser.integration.mjs`) verified simultaneous CI/review notices, review-required, drafts, healthy and merged PRs, multiple PRs, cached reads, valid PR links and no alert text overflow in Board/List and dark/light themes. Screenshots: `dist/pr-attention-board-dark.png`, `dist/pr-attention-board-light.png`, `dist/pr-attention-card.png` (ignored synthetic artifacts). Closed the test tab and stopped its server.
+- Regenerated and refreshed the real standalone board at port 18865. The 55-task board has no PR-attention notices in its observed snapshot, so actual anomalies were not fabricated. Installed plugin remains unchanged.
+
+## Concise description tooltips — 2026-10-04
+
+- Card tooltips retain the action hint, complete description and the single caveat `任务描述，可能不反映最新进展。`; removed technical source, Preview/Summary prefixes and duplicate timestamp explanation. Timestamp tooltips retain their own update-time explanation.
+- All 11 focused card-info tests, plugin build and `git diff --check` pass. In-app browser inspected current summary and local-preview tooltip attributes, including both Board and List, and confirmed the separate timestamp tooltip. Restored Board and cleared the temporary search. Card screenshot: `dist/card-tooltip-concise.png` (ignored; tooltip text verified through DOM attributes). Current standalone board at port 18865 is updated; installed plugin is unchanged.
+
+## Plain card descriptions — 2026-10-04
+
+- Removed visible Preview/Summary prefixes and their unused label style. Card tooltips retain the content type, provenance and recency caveat; attention notices are unchanged.
+- All 11 focused card-info tests, plugin build and `git diff --check` pass. In-app browser confirmed no preview-label nodes, preserved snapshot-source tooltip, and plain user-request text in both Board and List. Restored Board view and cleared the temporary search on the 55-task standalone board at port 18865. Screenshot: `dist/card-preview-no-prefix.png` (ignored). The installed plugin was not updated.
+
+## Preview context cleanup — 2026-10-04
+
+- Removed recognized leading browser ambient-context blocks before preview whitespace normalization. Legacy browser context is removed only when its explicit user-request boundary is present; context-only or truncated context is hidden. Ordinary request text, embedded markup and original task metadata are preserved.
+- Snapshot summaries display `Summary`; provenance remains in the card tooltip. Local previews retain `Preview`, with a tooltip explaining they usually contain the initial user request.
+- All 390 tests pass (`npm test`), plugin build passes (`npm run build:plugin`), and `git diff --check` passes. Regressions cover the reported example, repeated wrappers, legacy context, incomplete context, empty or duplicate requests, safe text rendering and tooltip sources.
+- Refreshed the current standalone board at port 18865. In-app browser confirmed the real Sebastian tutorial card displays its user request in Board and List, and all summary labels omit `(snapshot)`. Restored Board view and cleared the temporary search. Screenshot: `dist/card-preview-cleaned.png` (ignored). The installed plugin was not updated.
+
+## Card previews and attention notices — 2026-10-04
+
+- All 386 automated tests pass (`npm test`), plugin build passes (`npm run build:plugin`), and `git diff --check` passes. Independent implementation review found an interaction-paused expiry bug; the fix passed follow-up review and regressions covering Options, task menus, creation, task dragging and group dragging across waiting/error/running states.
+- Cards show existing task previews with explicit source labels, two lines in Board and one in List. Empty, invalid and title-duplicate content is hidden. Snapshot summaries are not presented as latest progress; timestamps identify task updates. No new conversation reads, model-generated summaries, dependencies or runtime writes were added.
+- In-app browser acceptance used only synthetic MCP App fixtures (`KANBAN_TEST_CARD_INFO=1 KANBAN_TEST_PORT=18864 node mcp-browser.integration.mjs`). Verified dark/light appearances, 390px Board/List layouts, long Chinese and unbroken English content, simultaneous input/approval notices, hidden empty/duplicate previews, multiple-PR details and task action menus. Measured preview heights were 36px in Board and 18px in List, with no text overflow beyond their own containers.
+- With Options held open, four waiting/error notices expired to zero after the observation window; all six previews and the open Options panel remained. The stale notice also disappeared from the card tooltip. Expiry removes indicators in place instead of interrupting active interactions. Temporary viewport overrides were reset.
+- Screenshot: `dist/card-info-board-dark.png` (ignored local artifact). No existing user task was moved, pinned, archived or executed. This verifies the built code in a synthetic MCP host; the installed plugin was not updated and actual native deep-link landing was not exercised.
+
 ## Native new-task navigation — 2026-10-04
 
 - The latest checkout now serves the real 55-task board at port 8898; port 8896 belongs to an older checkout. Each local group exposes a title-row plus link and a footer New task link, including when the creation bridge is unavailable. In-app browser checks confirm the title link is visible and points to codex://threads/new; screenshots are saved in outputs/real-kanban-new-task-entry.png.

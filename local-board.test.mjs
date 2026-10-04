@@ -48,6 +48,17 @@ test('projects, sections and recent tasks start together instead of waiting for 
   }};
   const board=await createLocalBoard(reader,f.desktop).getBoard();assert.equal(started.size,3);assert(board.tasks.length);
 });
+test('summary provenance survives normalization without claiming to be latest activity',async()=>{
+  const f=fixture();f.row.preview='Local preview';f.desktop.threads[0].summary='Snapshot summary';
+  let task=(await createLocalBoard(f.reader,f.desktop).getBoard()).tasks.find(t=>t.id===id);
+  assert.equal(task.summary,'Snapshot summary');assert.equal(task.summarySource,'desktopSnapshot');
+  delete f.desktop.threads[0].summary;
+  task=(await createLocalBoard(f.reader,f.desktop).getBoard()).tasks.find(t=>t.id===id);
+  assert.equal(task.summary,'Local preview');assert.equal(task.summarySource,'threadPreview');
+  delete f.row.preview;
+  task=(await createLocalBoard(f.reader,f.desktop).getBoard()).tasks.find(t=>t.id===id);
+  assert.equal(task.summary,'');assert.equal(task.summarySource,null);
+});
 test('local placement wins over stale Desktop membership without inventing live runtime state',async()=>{
   const f=fixture(),board=await createLocalBoard(f.reader,f.desktop,{clock:()=> '2026-10-03T00:00:01Z'}).getBoard();
   const task=board.tasks.find(t=>t.id===id);
