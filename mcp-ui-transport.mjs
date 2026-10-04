@@ -4,6 +4,7 @@ const routes={
   '/api/creation-options':['GET','get_creation_options'],
   '/api/create':['POST','create_task'],
   '/api/group-settings':['POST','save_group_settings'],
+  '/api/flow-settings':['POST','set_flow_settings'],
   '/api/creation-group':['POST','retry_creation_group'],
   '/api/move':['POST','move_task'],
   '/api/pin':['POST','pin_task'],

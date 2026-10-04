@@ -58,7 +58,7 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     let defaults={},settingsError=null;
     try{defaults=await settingsStore.read();}catch{settingsError='Creation defaults could not be read. Repair their storage before editing settings.';}
     const nativeCreationDefaults=Object.fromEntries(Object.entries(defaults).map(([key,settings])=>[key,{projectId:settings?.projectId??null,template:settings?.template??''}]));
-    return {...value,nativeCreationDefaults,creationOperations:status.creationOperations??[],sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,pinLocal:desktopGroupsConnected,projectLocal:value.sync?.projectCatalogConnected===true,
+    return {...value,autoFlow:status.autoFlow??{available:false},nativeCreationDefaults,creationOperations:status.creationOperations??[],sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,pinLocal:desktopGroupsConnected,projectLocal:value.sync?.projectCatalogConnected===true,
       createWritable:desktopArchiveConnected&&status.taskCreation===true&&!settingsError,creationError:settingsError??status.creationError??null,
       moveTransport:desktopGroupsConnected?'desktop':null,desktopGroupsConnected,
       archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
@@ -85,7 +85,8 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     async action(name,params,{signal:requestSignal}={}){
       if(closed)throw failure('The board connection is closed.',503);
       const signal=requestSignal?AbortSignal.any([requestSignal,lifetime.signal]):lifetime.signal;
-      if(!['project','move','pin','archive','unarchive','create','creation-group','group-settings'].includes(name))throw failure('Unknown task action.',400);
+      if(!['project','move','pin','archive','unarchive','create','creation-group','group-settings','flow-settings'].includes(name))throw failure('Unknown task action.',400);
+      if(name==='flow-settings'&&(!params||typeof params.enabled!=='boolean'||Object.keys(params).length!==1))throw failure('Auto organize requires an enabled boolean.',400);
       if(mutating)throw failure('Another task action is in progress.',409);
       const undo=name==='unarchive'?undoArchives.get(params?.undoToken):null;
       if(name==='unarchive'&&!undo)throw failure('Undo is no longer available here. Restore this task from Codex archived tasks.',409);
@@ -95,6 +96,13 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
       mutating=(async()=>{
         const write=async()=>{
           checkCanceled();
+          if(name==='flow-settings'){
+            const status=await desktopStatus();checkCanceled();
+            if(status.autoFlow?.available!==true)throw failure('Auto organize requires the integrated Codex Kanban Desktop runtime.',503);
+            const result=await bridgeRequest(desktopBridgeSocket,'flowSettings',params,60000,{signal});
+            if(result?.autoFlow?.available!==true||result.autoFlow.enabled!==params.enabled||typeof result.autoFlow.mode!=='string')throw failure('Auto organize could not be verified. Refresh before trying again.',503);
+            return result;
+          }
           if(['create','creation-group','group-settings'].includes(name)){
             if(name==='group-settings'){
               const options=await creationCatalog(),settings=creationSettings(params?.settings);

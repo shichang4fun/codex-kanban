@@ -11,6 +11,8 @@ async function main(){
   try{proxy=await import('./desktop-proxy.mjs');}
   catch{process.stderr.write('KANBAN_RUNTIME_UNAVAILABLE: using validated CLI chain\n');forward(chain,args,{...process.env,CODEX_CLI_PATH:chain});return;}
   process.env.KANBAN_REAL_CODEX=chain;process.env.KANBAN_BRIDGE_SOCKET=config.socketPath;
+  if(config.autoFlow===true)process.env.KANBAN_FLOW_ROOT=root;
+  else delete process.env.KANBAN_FLOW_ROOT;
   await proxy.startDesktopProxy();
 }
 main().catch(()=>{process.stderr.write('KANBAN_STARTUP_FAILED\n');process.exitCode=1;});

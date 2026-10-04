@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.44
+# Codex Kanban 0.4.45
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
@@ -7,12 +7,14 @@
 当前支持 macOS 与安装在 `/Applications/ChatGPT.app` 的 Codex Desktop。无需终端命令、全局 Codex CLI、单独安装 Node 或 npm 依赖：
 
 1. [下载安装包 ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip)，解压。
-2. 双击 **Install Codex Kanban.command**，自动安装插件、配置 Desktop 桥接并接入原来的 Codex 图标；重复运行会升级插件及桥接，并保留已有 Sidebar Flow。
+2. 双击 **Install Codex Kanban.command**，自动安装插件、Desktop 桥接、内置自动分类及原图标接入；重复运行会升级并保留分类设置。
 3. 如果 Codex 正在运行，正常退出（⌘Q）后，点击原来的 Codex 图标打开。打开任意本机聊天，再从侧栏打开「Codex Kanban」。以后照常从 Dock、Finder 或 Spotlight 启动，无需专用启动器。
 
 首次打开下载的脚本若被 macOS 拦截，右键选择「打开」并按系统提示确认。已有 `codex-kanban@codex-kanban-local` 开发副本时，先在 Codex 中禁用它，避免重复入口。
 
-安装包仅安装 Codex Kanban，不安装 Sidebar Flow。已有 Sidebar Flow 时自动复用；未安装时 Codex Kanban 可独立运行，但不提供 Sidebar Flow 的自动分类。
+安装包已包含 Sidebar Flow 当前的 Desktop 自动分类引擎，无需单独安装 Sidebar Flow。只保留结构化事件分类及有界补偿检查，不包含旧 Hook、模型 heartbeat、全局指令注入和旧安装器。已有安装的有效配置迁移到 `$CODEX_HOME/kanban-desktop/flow.json`，保留管理范围、排除任务、检查间隔和分组映射；原安装文件留作备份，新的启动链不再启动它。
+
+Options → **Auto organize** 可独立启停自动分类，不影响手动操作。新安装默认管理本机任务，每 60 秒补偿检查；需要 Codex 已有唯一命名的 **In Progress / For Review / For Later** 分组，否则不移动任务。运行且没有待输入／审批的任务进入 In Progress，等待处理或运行结束进入 For Review；未知状态和未观察到运行的历史空闲任务不据此分类。普通策略保护 Pinned、自定义分组、远程及临时任务；迁移的 `forceStatusSections` 显式策略保留原有跨自定义分组行为和更严格的 For Later 时间戳检查，详见 [运行时说明](flow/README.md)。自动分类不会启动模型任务，和手动操作共享完整读写事务锁。关闭后丢弃旧事件，重新开启使用新的观察器。
 
 仅需基础看板时，也可以使用官方 CLI：
 
@@ -23,9 +25,9 @@ codex plugin add codex-kanban@codex-kanban
 
 这两条 CLI 命令只安装基础插件；双击安装器则一并完成桥接及原图标接入，无需填写任务 ID、路径或编辑配置文件。首次启用需要正常退出并重新打开客户端，无需重启电脑，安装器不会退出正在运行的客户端。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。
 
-安装器使用一个用户级 LaunchAgent，在登录时恢复 `CODEX_CLI_PATH`。已有 Sidebar Flow 原图标接入时，复用它的同一个任务和稳定入口，保留原有 manifest／plist，并备份辅助脚本；没有 Sidebar Flow 时只启用 Kanban。不会修改应用包、签名或 Dock 图标。启动链为原图标 → Kanban → 已安装且健康的 Sidebar Flow → 官方 CLI。`CODEX_HOME` 在子进程中使用安装时的目录，不设置 GUI 全局 `CODEX_HOME`。
+安装器使用一个用户级 LaunchAgent，在登录时恢复 `CODEX_CLI_PATH`。已有 Sidebar Flow 原图标接入时，复用它的同一个任务和稳定入口，保留原有 manifest／plist，并备份辅助脚本。不会修改应用包、签名或 Dock 图标。启动链为原图标 → Kanban（含自动分类）→ 官方 CLI，只有一个原生子进程。`CODEX_HOME` 在子进程中使用安装时的目录，不设置 GUI 全局 `CODEX_HOME`。
 
-启动前检查运行时及模块链接；Kanban 不可用时跳过它，Sidebar Flow 不可用时直接使用应用内官方 CLI。Node 或路由配置缺失也有原生启动回退。进程开始处理输入后不会自动重启或重放请求。官方 CLI 本身不可用时明确退出，不启动未知程序。
+启动前检查运行时及模块链接；Kanban 不可用时直接使用应用内官方 CLI，不重新启用旧的独立分类器。自动分类引擎不可用时保留手动桥接；Node 或路由配置缺失也有原生启动回退。进程开始处理输入后不会自动重启或重放请求。官方 CLI 本身不可用时明确退出，不启动未知程序。
 
 需要撤销接入时，打开 `~/Library/Application Support/Codex Sidebar Flow Original Icon/Disable Kanban Original Icon.command`（无 Sidebar Flow 时目录为 `Codex Kanban Original Icon`）；它恢复原来的 Sidebar Flow 接入或移除 Kanban 自己的登录任务，不删除插件数据。若 Node 或模块损坏，使用同目录的 **Emergency Disable Original Icon.command**：它停用整条原图标自动接入并保留文件，随后正常退出并重新打开客户端。重装 Kanban 可恢复接入。旧版 Sidebar Flow 更新器可能恢复其原始辅助脚本；此时重跑 Kanban 安装器恢复，两者不需要各自增加后台任务。检测到不认识的启动设置或文件修改时会停止并保留现场。
 
@@ -123,7 +125,7 @@ Create & run 通过当前 Desktop 连接调用原生 `create_thread`，会启动
 
 可选桥接让现有 Codex Desktop 的 App Server 调用 `codex_app.set_thread_archived`，由客户端执行 Archive／Undo；独立连接只负责读取并验证同一任务 ID。健康桥接连接后，服务自动选择此通道，并在 Undo 令牌中记录原通道；已派发的客户端操作失败时不会自动改用独立写入进程。未连接时保留原来的本机独立归档功能，它仍可能遇到 active writer 拒绝。
 
-安装在私有目录中生成代理及备用启动器；一键安装还配置用户级原图标接入。不会覆盖 Sidebar Flow 的 Desktop 代理或修改应用签名。启动链为 Kanban → 已有 Sidebar Flow → 官方 CLI；网页提供归档、恢复、任务分组、Pin、显式新增任务及只读运行状态；已有任务移动允许三个流程分组、Pinned 及清除自身分组，新增任务可归入唯一可映射的原生自定义分组。Create & run 调用原生任务创建；项目容器移动保持关闭。代理保留原始初始化、请求 ID 和事件，等待客户端成功加载一个本机任务后才启用桥接。
+安装在私有目录中生成代理及备用启动器；一键安装还配置内置自动分类及用户级原图标接入。保留旧 Sidebar Flow 的代理备份，不修改应用签名。启动链为 Kanban（含自动分类）→ 官方 CLI；网页提供归档、恢复、任务分组、Pin、显式新增任务及只读运行状态；已有任务移动允许三个流程分组、Pinned 及清除自身分组，新增任务可归入唯一可映射的原生自定义分组。Create & run 调用原生任务创建；项目容器移动保持关闭。代理保留原始初始化、请求 ID 和事件，等待客户端成功加载一个本机任务后才启用任务操作桥接。
 
 ```sh
 node setup-desktop-bridge.mjs

@@ -69,7 +69,7 @@ async function fixture(t){
 
 test('creation MCP tools remain app-only and expose strict local creation schemas',async t=>{
   const f=await fixture(t),tools=(await f.mcp.client.listTools()).tools;
-  assert.equal(tools.length,12);assert(tools.every(tool=>JSON.stringify(tool._meta.ui.visibility)==='["app"]'));
+  assert.equal(tools.length,13);assert(tools.every(tool=>JSON.stringify(tool._meta.ui.visibility)==='["app"]'));
   for(const name of ['get_creation_options','get_creation_status'])assert.equal(tools.find(tool=>tool.name===name).annotations.readOnlyHint,true);
   for(const name of ['save_group_settings','create_task','retry_creation_group']){
     const tool=tools.find(tool=>tool.name===name);assert.equal(tool.inputSchema.additionalProperties,false);

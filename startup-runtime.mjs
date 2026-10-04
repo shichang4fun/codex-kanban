@@ -72,6 +72,7 @@ export async function sidebarCli(root,app){
 }
 export async function selectedChain(config){
   const native=await nativeCli(config.app);
+  if(config.autoFlow===true)return native;
   if(config.chainedCli===native)return native;
   if(!validPath(config.chainedCli)||config.chainedCli===config.proxy)return native;
   return sidebarCli(dirname(config.chainedCli),config.app);
