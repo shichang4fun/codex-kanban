@@ -24,7 +24,7 @@ const result=payload=>({content:[{type:'text',text:payload.error??(payload.board
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.46',icons:boardIcons},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.47',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}
@@ -52,6 +52,7 @@ export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./d
   const settingsSchema=z.object({projectId:z.string().min(1).max(256).nullable().optional(),environment:z.enum(['local','worktree']).optional(),branch:z.string().max(256).optional(),model:z.string().max(128).optional(),thinking:z.enum(['','none','minimal','low','medium','high','xhigh','max','ultra']).optional(),template:z.string().max(2000).optional()}).strict();
   const actions=[
     ['set_flow_settings','flow-settings','Enable or disable automatic local task grouping without changing classification rules',{enabled:z.boolean()}],
+    ['rename_task','rename','Rename a local task title and verify it without changing its project, group or execution',{...taskFields,title:z.string().trim().min(1).max(256),expectedTitle:z.string().min(1)}],
     ['save_group_settings','group-settings','Save defaults for a verified local group without creating a task',{sectionId:z.string().min(1).max(128).nullable(),settings:settingsSchema}],
     ['create_task','create','Explicitly create and run one task using a durable request ID; never automatically retry',{requestId:z.string().uuid(),sectionId:z.string().min(1).max(128).nullable(),settings:settingsSchema,prompt:z.string().min(1).max(5000)}],
     ['retry_creation_group','creation-group','Retry grouping an already confirmed creation; never create another task',{requestId:z.string().uuid()}],

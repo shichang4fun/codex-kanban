@@ -8,6 +8,7 @@ const routes={
   '/api/creation-group':['POST','retry_creation_group'],
   '/api/move':['POST','move_task'],
   '/api/pin':['POST','pin_task'],
+  '/api/rename':['POST','rename_task'],
   '/api/project':['POST','set_project'],
   '/api/archive':['POST','archive_task'],
   '/api/unarchive':['POST','undo_archive']

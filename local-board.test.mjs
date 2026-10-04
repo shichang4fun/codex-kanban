@@ -38,6 +38,16 @@ function fixture(){
     throw Error('Unexpected method');}};
   return {row,desktop,calls,reader};
 }
+test('projects, sections and recent tasks start together instead of waiting for one another',{timeout:1000},async()=>{
+  const f=fixture(),started=new Set(),waiters=[];
+  const reader={async request(method,params){
+    if(!params.sectionId){
+      started.add(method);await new Promise(resolve=>{waiters.push(resolve);if(started.size===3)waiters.forEach(done=>done());});
+    }
+    return f.reader.request(method,params);
+  }};
+  const board=await createLocalBoard(reader,f.desktop).getBoard();assert.equal(started.size,3);assert(board.tasks.length);
+});
 test('local placement wins over stale Desktop membership without inventing live runtime state',async()=>{
   const f=fixture(),board=await createLocalBoard(f.reader,f.desktop,{clock:()=> '2026-10-03T00:00:01Z'}).getBoard();
   const task=board.tasks.find(t=>t.id===id);

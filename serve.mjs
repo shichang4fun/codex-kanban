@@ -9,9 +9,9 @@ import {desktopBridgeRequest} from './bridge-transport.mjs';
 
 const port=Number(process.env.KANBAN_PORT??8876);
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
-export function createKanbanServer({port=8876,getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,settingsStore,htmlPath=new URL('./index.html',import.meta.url),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
+export function createKanbanServer({port=8876,getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,renameTask,settingsStore,htmlPath=new URL('./index.html',import.meta.url),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
 const source=getBoard?null:createBoardSource();
-const service=createKanbanService({getBoard:getBoard??source.getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,settingsStore,desktopBridgeSocket,bridgeRequest});
+const service=createKanbanService({getBoard:getBoard??source.getBoard,archiveTask,restoreTask,pinTask,moveTask,setProject,renameTask,settingsStore,desktopBridgeSocket,bridgeRequest});
 const server=createServer(async(req,res)=>{
   const listeningPort=port===0?req.socket.localPort:port;
   const origins=[`http://127.0.0.1:${listeningPort}`,`http://localhost:${listeningPort}`];
@@ -28,7 +28,7 @@ const server=createServer(async(req,res)=>{
       try{json(res,200,await service.creationStatus({requestId:new URL(req.url,'http://localhost').searchParams.get('requestId')}));}
       catch(error){json(res,error.status??503,{error:error.status?error.message:'Creation status is unavailable.'});}return;
     }
-    if(['/api/project','/api/move','/api/archive','/api/unarchive','/api/pin','/api/create','/api/creation-group','/api/group-settings','/api/flow-settings'].includes(req.url)&&req.method==='POST'){
+    if(['/api/rename','/api/project','/api/move','/api/archive','/api/unarchive','/api/pin','/api/create','/api/creation-group','/api/group-settings','/api/flow-settings'].includes(req.url)&&req.method==='POST'){
       const cancellation=new AbortController();
       req.once('aborted',()=>cancellation.abort());
       res.once('close',()=>{if(!res.writableEnded)cancellation.abort();});

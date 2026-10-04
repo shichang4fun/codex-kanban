@@ -82,10 +82,10 @@ try{
   const status=await request('mcpServerStatus/list',{limit:100,threadId:context.thread.id});
   const entry=status.data?.find(server=>server.name.includes('codex-kanban'));
   assert(entry,'Installed plugin was not discovered. '+diagnostic.slice(-2000));
-  assert.equal(Object.keys(entry.tools).length,13);
+  assert.equal(Object.keys(entry.tools).length,14);
   assert.equal(entry.serverInfo.version,manifest.version);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility[0]==='app'));
-  console.log(`PASS: native installer ${installed.version}, repeat install, original-icon shim, single simulated login agent, private bridge, dynamic context and 13 app-only tools; zero model turns, no GUI launchd changes.`);
+  console.log(`PASS: native installer ${installed.version}, repeat install, original-icon shim, single simulated login agent, private bridge, dynamic context and 14 app-only tools; zero model turns, no GUI launchd changes.`);
 }finally{
   for(const operation of pending.values())clearTimeout(operation.timer);
   if(child&&child.exitCode===null){const ended=once(child,'exit');child.stdin.end();child.kill();await ended;}

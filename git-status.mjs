@@ -21,28 +21,31 @@ export function checkSummary(checks){
 }
 
 // Bound subprocesses across all workspaces. GitHub refreshes never block board reads.
-export function createGitStatusReader({run=async(command,args)=>{
-  const {stdout}=await exec(command,args,{timeout:8000,maxBuffer:2*1024*1024,
+export function createGitStatusReader({run=async(command,args,{signal}={})=>{
+  const {stdout}=await exec(command,args,{signal,timeout:8000,maxBuffer:2*1024*1024,
     env:{...process.env,GIT_OPTIONAL_LOCKS:'0',GIT_TERMINAL_PROMPT:'0',GH_PROMPT_DISABLED:'1'}});
   return stdout.trim();
 },clock=()=>Date.now()}={}){
-  const workspaces=new Map(),requests=new Map(),queue=[];let active=0,githubActive=0;
+  const workspaces=new Map(),requests=new Map(),queue=[],lifetime=new AbortController();let active=0,githubActive=0,closed=false;
   function command(name,args){
+    if(closed)return Promise.reject(Error('Git status reader closed.'));
     return new Promise((resolve,reject)=>{queue.push({name,args,resolve,reject});pump();});
   }
   function pump(){
+    if(closed)return;
     while(active<4&&queue.length){
       // Leave slots for local Git reads even when GitHub is slow.
       const index=queue.findIndex(job=>job.name!=='gh'||githubActive<2);
       if(index<0)break;
       const job=queue.splice(index,1)[0];active++;if(job.name==='gh')githubActive++;
-      Promise.resolve().then(()=>run(job.name,job.args)).then(job.resolve,job.reject).finally(()=>{active--;if(job.name==='gh')githubActive--;pump();});
+      Promise.resolve().then(()=>{if(closed)throw Error('Git status reader closed.');return run(job.name,job.args,{signal:lifetime.signal});})
+        .then(job.resolve,job.reject).finally(()=>{active--;if(job.name==='gh')githubActive--;pump();});
     }
   }
   async function readWorkspace(cwd){
     const existing=workspaces.get(cwd);
     if(existing&&(existing.pending||clock()-existing.time<gitMaxAgeMs))return existing.pending??existing.value;
-    const entry={time:clock()};workspaces.set(cwd,entry);
+    const entry={time:clock(),value:existing?.value};workspaces.set(cwd,entry);
     entry.pending=(async()=>{
       const git=args=>command('git',['-C',cwd,...args]);
       try{
@@ -64,7 +67,7 @@ export function createGitStatusReader({run=async(command,args)=>{
     const key=JSON.stringify([git.repository,git.branch,git.sha]);
     let entry=requests.get(key);
     if(!entry){entry={value:{status:'loading',items:[]},time:-Infinity,pending:null};requests.set(key,entry);}
-    if(!entry.pending&&clock()-entry.time>=prMaxAgeMs){
+    if(!closed&&!entry.pending&&clock()-entry.time>=prMaxAgeMs){
       entry.pending=command('gh',['pr','list','--repo','github.com/'+git.repository,'--state','all','--head',git.branch,'--limit','100','--json',fields])
         .then(raw=>{
           const rows=JSON.parse(raw);
@@ -83,13 +86,20 @@ export function createGitStatusReader({run=async(command,args)=>{
     }
     return {...entry.value,refreshing:!!entry.pending};
   }
-  return {async enrich(board){
+  return {async enrich(board,{waitForFresh=true}={}){
+    if(closed)throw Error('Git status reader closed.');
     const directories=[...new Set(board.tasks.filter(t=>t.hostId==='local'&&!t.sidebarOnly&&typeof t.cwd==='string'&&t.cwd.startsWith('/')).map(t=>t.cwd))];
-    const values=await Promise.all(directories.map(async cwd=>[cwd,await readWorkspace(cwd)]));
+    const values=await Promise.all(directories.map(async cwd=>{
+      const pending=readWorkspace(cwd);
+      if(waitForFresh)return [cwd,await pending];
+      const entry=workspaces.get(cwd);
+      return [cwd,{...(entry.value??{status:'loading'}),refreshing:!!entry.pending}];
+    }));
     const byDirectory=new Map(values);
     return {...board,tasks:board.tasks.map(task=>{
       const git=task.hostId==='local'&&!task.sidebarOnly?byDirectory.get(task.cwd):null;
       return {...task,git:git?{...git,pullRequests:git.status==='ready'?readPullRequests(git):{status:'unavailable',items:[]}}:null};
     })};
-  },async settle(){while([...requests.values()].some(e=>e.pending))await Promise.all([...requests.values()].map(e=>e.pending));}};
+  },async settle(){while([...workspaces.values(),...requests.values()].some(e=>e.pending))await Promise.all([...workspaces.values(),...requests.values()].map(e=>e.pending));},
+  close(){closed=true;lifetime.abort();for(const job of queue.splice(0))job.reject(Error('Git status reader closed.'));}};
 }
