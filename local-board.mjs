@@ -1,4 +1,5 @@
 import {normalize} from './build.mjs';
+import {readWorktreeProjects} from './worktree-projects.mjs';
 
 export const runtimeSnapshotMaxAgeMs=15000;
 export function runtimeSnapshotFresh(capturedAt,now){
@@ -51,6 +52,8 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
       archived:false,useStateDbOnly:true,sectionId:section.id,limit:100,sortKey:'updated_at'
     })));
     const byId=new Map([...recent.data,...grouped.flat()].filter(t=>t.ephemeral===false&&t.parentThreadId==null).map(t=>[t.id,t]));
+    const worktreeProjects=await readWorktreeProjects([...new Set([...byId.values()]
+      .filter(t=>t.projectId===null&&typeof t.cwd==='string'&&t.cwd.startsWith('/')).map(t=>t.cwd))],nativeProjects??[]);
     const sections=nativeSections.map(s=>({sectionId:s.id,name:s.name,itemKeys:[]}));
     const tasksSection={sectionId:'chats',name:'Tasks',itemKeys:[]};
     const projectsSection={sectionId:'threads',name:'Projects',itemKeys:[]};
@@ -60,11 +63,13 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     for(const t of byId.values()){
       if(typeof t.id!=='string'||t.section===undefined)throw Error('Local task is missing its group field.');
       const desktop=desktopTasks.get(`local:${t.id}`);
-      const nativeProject=projectCatalog.find(p=>p.projectId===t.projectId);
-      // A supported native catalog makes an explicit null authoritative too.
-      // Legacy Desktop associations remain a fallback only on older readers.
-      const projectId=t.projectId?(nativeProject?.desktopProjectId??t.projectId)
-        :nativeProjects!==null&&t.projectId!==undefined?null:desktop?.projectId??null;
+      const inheritedProjectId=t.projectId===null?worktreeProjects.get(t.cwd):null;
+      const resolvedProjectId=t.projectId??inheritedProjectId;
+      const nativeProject=projectCatalog.find(p=>p.projectId===resolvedProjectId);
+      // Native assignment wins. Linked worktrees may inherit a verified project
+      // without a native assignment; stale Desktop associations never fill null.
+      const projectId=resolvedProjectId?(nativeProject?.desktopProjectId??resolvedProjectId)
+        :t.projectId!==undefined?null:desktop?.projectId??null;
       let destination;
       if(t.section!==null){
         destination=sections.find(s=>s.sectionId===t.section.id);
@@ -82,6 +87,7 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
         title:t.name??desktop?.title??'Untitled task',summary:desktop?.summary??t.preview??'',
         summarySource:desktop?.summary!=null?'desktopSnapshot':t.preview!=null?'threadPreview':null,
         cwd:t.cwd,updatedAt:t.updatedAt,projectId,localProjectId:t.projectId??null,
+        projectSource:inheritedProjectId?'worktree':t.projectId?'native':projectId?'desktopSnapshot':null,
         isUnread:unreadState.known?unreadIds.has(t.id):desktop?.isUnread===true,
         unreadSource:unreadState.known?'desktopPersistedReadState':desktop?'desktopSnapshot':'unavailable',
         unreadCapturedAt:unreadState.known?unreadState.capturedAt:desktop?desktopSnapshot.capturedAt:null,

@@ -11,7 +11,7 @@ const source=dirname(fileURLToPath(import.meta.url));
 const defaultRoot=join(process.env.CODEX_HOME||join(homedir(),'.codex'),'kanban-desktop');
 const appPath='/Applications/ChatGPT.app';
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
-const files=['desktop-startup.mjs','startup-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','rename.mjs','move.mjs','pin.mjs','local-read.mjs','flow-config.mjs','flow-runtime.mjs','flow-initialization.mjs'];
+const files=['desktop-startup.mjs','startup-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','worktree-projects.mjs','bridge-transport.mjs','archive.mjs','rename.mjs','move.mjs','pin.mjs','local-read.mjs','flow-config.mjs','flow-runtime.mjs','flow-initialization.mjs'];
 export async function installDesktopBridge({root=defaultRoot,app=appPath,chainedCli,nodePath,
   autoFlow=false,legacyFlowRoot,homeDir=homedir(),codexHome=process.env.CODEX_HOME||join(homedir(),'.codex')}={}){
   if(!isAbsolute(root)||Buffer.byteLength(join(root,'desktop.sock'))>100)throw Error('A short, absolute installation directory is required.');

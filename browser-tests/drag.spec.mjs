@@ -68,6 +68,44 @@ test('a pinned project task moves independently of its project',async({page})=>{
   expect(state.moves[0].expectedSectionId).toBeNull();expect(state.projectId).toBe('desktop-a');expect(state.navigationUrls).toEqual([]);
 });
 
+for(const view of ['Board','List']){
+  test(`${view}: worktree project displays with no explicit assignment or removal action`,async({page})=>{
+    await page.request.post('/fixture/reset',{data:{worktreeProject:true}});await open(page);
+    const app=page.frameLocator('iframe');
+    await app.getByRole('button',{name:view+' view',exact:true}).click();
+    await app.getByRole('switch',{name:'Project view: Ungrouped',exact:true}).click();
+    await expect(group(app,'chats').locator('.project-name')).toHaveText('Fixture A');
+    await card(app).locator('.project').click();
+    await expect(app.getByRole('menuitemradio',{name:'Fixture A',exact:true})).toHaveAttribute('aria-checked','false');
+    await expect(app.getByRole('menuitem',{name:/Remove from/})).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await card(app).locator('.card-details').click();
+    await app.getByRole('menuitem',{name:'View details',exact:true}).click();
+    await expect(app.locator('#detail-project')).toHaveValue('');
+    await expect(app.locator('#detail-project option').first()).toHaveText('Inherited from Fixture A');
+    expect((await status(page)).moves).toEqual([]);
+  });
+}
+
+for(const view of ['Board','List']){
+  test(`${view}: an inherited project can be explicitly assigned, changed and cleared without moving its group`,async({page})=>{
+    await page.request.post('/fixture/reset',{data:{worktreeProject:true}});await open(page);
+    const app=page.frameLocator('iframe');await app.getByRole('button',{name:view+' view',exact:true}).click();
+    const choose=async name=>{await card(app).locator('.project').click();await app.getByRole(name.startsWith('Remove from')?'menuitem':'menuitemradio',{name,exact:true}).click();};
+    await choose('Fixture A');await expect.poll(async()=>(await status(page)).localProjectId).toBe('project-a');
+    await card(app).locator('.project').click();
+    await expect(app.getByRole('menuitemradio',{name:'Fixture A',exact:true})).toHaveAttribute('aria-checked','true');
+    await expect(app.getByRole('menuitem',{name:'Remove from Fixture A',exact:true})).toBeVisible();
+    await app.getByRole('menuitemradio',{name:'Fixture B',exact:true}).click();
+    await expect.poll(async()=>(await status(page)).localProjectId).toBe('project-b');
+    await choose('Remove from Fixture B');
+    await expect.poll(async()=>(await status(page)).projectSource).toBe('worktree');
+    await card(app).locator('.project').click();await expect(app.getByRole('menuitem',{name:/Remove from/})).toHaveCount(0);
+    const state=await status(page);expect(state.localProjectId).toBeNull();expect(state.projectId).toBe('desktop-a');expect(state.sectionId).toBeNull();expect(state.moves).toEqual([]);
+    expect(state.projectWrites.map(p=>[p.projectId,p.expectedProjectId])).toEqual([['project-a',null],['project-b','project-a'],[null,'project-b']]);
+  });
+}
+
 test('disconnected group capability keeps cross-group dragging read only',async({page})=>{
   await page.request.post('/fixture/reset',{data:{groupActions:false}});await open(page);
   const app=page.frameLocator('iframe');

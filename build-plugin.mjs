@@ -22,7 +22,7 @@ export async function buildPlugin(){
   await build({entryPoints:[join(root,'mcp-sdk.mjs')],outfile:join(plugin,'mcp-sdk.mjs'),bundle:true,
     minify:true,format:'esm',platform:'node',target:'node22',
     banner:{js:'import {createRequire} from "node:module"; const require=createRequire(import.meta.url);'}});
-  const files=['mcp-server.mjs','kanban-service.mjs','local-read.mjs','local-board.mjs','build.mjs',
+  const files=['mcp-server.mjs','kanban-service.mjs','local-read.mjs','local-board.mjs','worktree-projects.mjs','build.mjs',
     'desktop-unread.mjs','desktop-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs',
     'git-status.mjs','archive.mjs','pin.mjs','move.mjs','project.mjs','rename.mjs','bridge-transport.mjs','setup-desktop-bridge.mjs','install.mjs',
     'startup-runtime.mjs','desktop-startup.mjs','original-icon.mjs','flow-config.mjs','flow-runtime.mjs','flow-initialization.mjs',
