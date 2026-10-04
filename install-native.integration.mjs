@@ -5,6 +5,7 @@ import {mkdtemp,mkdir,rm,readFile,realpath} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {spawn,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
+import {setTimeout as delay} from 'node:timers/promises';
 import {join,resolve} from 'node:path';
 import {installKanban} from './install.mjs';
 import {readDesktopBridgeConfig,installDesktopBridge} from './setup-desktop-bridge.mjs';
@@ -70,15 +71,28 @@ try{
   });
   await request('initialize',{clientInfo:{name:'kanban_installer_acceptance',version:'1'},capabilities:{experimentalApi:true}});
   child.stdin.write(JSON.stringify({method:'initialized'})+'\n');
-  assert.equal((await desktopBridgeRequest(config.socketPath,'status')).connected,false);
-  const context=await request('thread/start',{cwd:root,ephemeral:true,approvalPolicy:'never',sandbox:'read-only'});
+  await assert.rejects(desktopBridgeRequest(config.socketPath,'status'),{status:503});
+  const transient=await request('thread/start',{cwd:root,ephemeral:true,approvalPolicy:'never',sandbox:'read-only'});
+  assert(transient.thread?.id);
+  await assert.rejects(desktopBridgeRequest(config.socketPath,'status'),{status:503});
+  const context=await request('thread/start',{cwd:root,ephemeral:false,approvalPolicy:'never',sandbox:'read-only'});
   assert(context.thread?.id);
+  for(let attempt=0;attempt<50;attempt++){
+    try{if((await desktopBridgeRequest(config.socketPath,'status')).connected)break;}
+    catch(error){if(error.status!==503)throw error;}
+    await delay(100);
+  }
   assert.equal((await desktopBridgeRequest(config.socketPath,'status')).connected,true);
   const flowStatus=(await desktopBridgeRequest(config.socketPath,'status')).autoFlow;
   assert.equal(flowStatus.available,true);assert.equal(flowStatus.enabled,true);assert.equal(flowStatus.mode,'all-local');
   assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:false})).autoFlow.enabled,false);
   assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
-  assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:true})).autoFlow.enabled,true);
+  // This isolated App Server has no GUI tool dispatcher. Failed initialization
+  // must preserve the disabled policy instead of claiming readiness.
+  await assert.rejects(desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:true}),{status:409});
+  const enabledFlow=(await desktopBridgeRequest(config.socketPath,'status')).autoFlow;
+  assert.equal(enabledFlow.enabled,false);assert.equal(enabledFlow.initialization.state,'error');
+  assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
   const status=await request('mcpServerStatus/list',{limit:100,threadId:context.thread.id});
   const entry=status.data?.find(server=>server.name.includes('codex-kanban'));
   assert(entry,'Installed plugin was not discovered. '+diagnostic.slice(-2000));
