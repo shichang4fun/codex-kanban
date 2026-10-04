@@ -229,6 +229,31 @@ test('connection, read-only and unavailable-host warnings remain visible',()=>{
   assert(!h.nodes.get('native-note').hidden);assert.match(h.nodes.get('native-note').textContent,/Some hosts unavailable/);
 });
 
+test('Desktop disconnect shows affected actions and recovery, while reconnect clears the banner',()=>{
+  const h=harness(),board=fixture(),note=h.nodes.get('native-note'),banner=h.nodes.get('connection-notice');
+  board.sync.moveWritable=false;board.sync.desktopArchiveConnected=false;
+  h.api.applyNativeBoard(board);
+  assert(!banner.hidden);assert.match(note.textContent,/Desktop disconnected/);
+  assert.match(note.textContent,/Cross-group dragging and Pin\/Unpin are unavailable/);
+  assert.match(note.textContent,/Restart Codex.*open a local chat/);assert.match(note.textContent,/rechecks automatically/);
+  board.sync.desktopArchiveConnected=true;h.api.applyNativeBoard(board);
+  assert.match(note.textContent,/Desktop group connection unavailable/);assert.doesNotMatch(note.textContent,/Desktop disconnected/);
+  board.sync.moveWritable=true;h.api.applyNativeBoard(board);assert(banner.hidden);assert(note.hidden);
+});
+
+test('manual connection checking blocks duplicate reads, reports failure and recovers without reloading',async()=>{
+  const h=harness(),button=h.nodes.get('connection-retry');h.context.location.protocol='http:';
+  let finish,reads=0;h.context.fetchImpl=()=>{reads++;return new Promise(resolve=>finish=resolve);};
+  const checking=button.onclick();assert.equal(reads,1);assert(button.disabled);assert.equal(button.textContent,'Checking…');
+  await button.onclick();assert.equal(reads,1);
+  finish({ok:false});await checking;
+  assert(!button.disabled);assert.equal(button.textContent,'Check connection');
+  assert.match(h.nodes.get('native-note').textContent,/keeping the last loaded board/);
+  assert.equal(h.nodes.get('board').querySelectorAll('.card').length,2);
+  h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:fixture(),csrf:'fixture-token'})});
+  await button.onclick();assert(h.nodes.get('connection-notice').hidden);assert(!button.disabled);
+});
+
 test('Group explains every protected source and pending action while keeping write eligibility',()=>{
   const h=harness(),board=fixture(),task=board.tasks[0];
   new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
@@ -592,6 +617,23 @@ test('task dragging expands group hit areas and cancellation restores compact co
   new Script('nativePending=true').runInContext(h.context);
   prevented=false;board.querySelectorAll('.card')[0].listeners.dragstart(event);
   assert(prevented);assert(!board.classList.contains('task-dragging'));
+});
+test('Board and List drop into collapsed Ungrouped expands the display group and writes null once',()=>{
+  for(const view of ['board','list']){
+    const h=harness();h.context.moves=[];
+    new Script("nativeToken='csrf';collapsed.add('native:chats');moveNative=(task,section)=>moves.push({id:task.id,section});").runInContext(h.context);
+    h.api.applyNativeBoard(fixture());
+    h.api.setView(view);
+    const board=h.nodes.get('board'),card=board.querySelectorAll('.card').find(node=>node.dataset.taskKey==='local:'+localId),target=board.children.find(node=>node.dataset.groupId==='chats');
+    const event={target:card,dataTransfer:{setData(){}},preventDefault(){},stopPropagation(){}};
+    // The DOM stub stores one listener per event; native bubbling is covered
+    // by the real-browser tests. Set the active drag before testing the drop.
+    new Script("draggedKey='local:'+DATA.tasks[0].id;draggedTaskGroup='review';").runInContext(h.context);
+    target.listeners.drop(event);
+    assert.equal(h.context.moves.length,1);assert.equal(h.context.moves[0].section,null);
+    assert.equal(new Script("collapsed.has('native:chats')").runInContext(h.context),false);
+    assert.equal(new Script('draggedKey').runInContext(h.context),null);
+  }
 });
 test('filtered empty groups differ from empty data and zero matches share one state in Board and List',()=>{
   const h=harness(),board=h.nodes.get('board');

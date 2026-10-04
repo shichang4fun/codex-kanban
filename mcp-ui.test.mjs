@@ -72,7 +72,7 @@ test('MCP UI can refresh on sandbox protocols and recover Undo without reloading
     nativeReads:0,nativeEpoch:0,nativePending:false,taskMenu:null,draggedKey:null,draggedGroup:null,
     document:{hidden:false,activeElement:null,getElementById:()=>({open:false})},$:()=>({open:false}),nativeToken:null,
     fetch:async()=>({ok:true,json:async()=>({csrf:'token',board:{tasks:[]},undoArchives:[{undoToken:'recover'}]})}),
-    applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){}});
+    applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){},nativeNotice(){}});
   const refresh=new Script(code+'\nrefreshNativeBoard').runInContext(context);await refresh();
   assert.equal(applied,1);assert.equal(recovered,1);assert.equal(context.nativeToken,'token');
 });
@@ -118,7 +118,7 @@ test('connected clicks dispatch before queued rendering and coalesce duplicate n
 });
 test('pointer activation pauses refresh only for links and resets on release, cancellation and blur',async()=>{
   const h=await navigationHarness({});await h.connected();
-  for(const end of ['pointerup','pointercancel','blur']){
+  for(const end of ['pointerup','pointercancel','blur','dragstart','dragend']){
     h.events.pointerdown(navigationEvent('codex://threads/fixture'));assert(h.context.kanbanTransport.navigationPending);
     h.events[end]();
     if(end==='pointerup'){await Promise.resolve();assert(h.context.kanbanTransport.navigationPending);for(const callback of h.timers.values())callback();}

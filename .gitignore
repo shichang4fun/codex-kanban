@@ -25,3 +25,5 @@ flow-group-initialization.json.lock/
 .DS_Store
 coverage/
 dist/
+playwright-report/
+test-results/

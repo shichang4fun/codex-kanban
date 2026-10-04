@@ -1,6 +1,6 @@
 {
   "name": "codex-kanban",
-  "version": "0.4.50",
+  "version": "0.4.51",
   "private": true,
   "description": "A local Codex task board with native groups, pinning and archive Undo.",
   "type": "module",
@@ -16,6 +16,8 @@
     "start:mcp": "node mcp-server.mjs",
     "prepare:plugin": "node install-plugin.mjs",
     "test:ui": "node mcp-browser.integration.mjs",
+    "test:browser": "playwright test",
+    "test:regression": "npm test && npm run test:browser",
     "test:plugin-native": "node mcp-native.integration.mjs",
     "test:install-native": "node install-native.integration.mjs",
     "test:integration": "node desktop-native.integration.mjs"
@@ -26,6 +28,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "esbuild": "0.28.2"
   }
 }

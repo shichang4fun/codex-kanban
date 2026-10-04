@@ -17,6 +17,8 @@ const sections=[{sectionId:'chats',name:'Tasks'},...['For Later','In Progress','
 const defaults={};
 const settingsStore={read:async()=>structuredClone(defaults),update:async change=>change(defaults)};
 let archived=false,reads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
+const moves=[];
+let groupActions=true,moveFailure=false,desktopConnected=true;
 const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
 task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
@@ -79,7 +81,7 @@ const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();retur
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};
 const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'synthetic',
   bridgeRequest:async(_socket,method,params)=>{
-    if(method==='status')return {connected:true,groupActions:true,taskCreation:true,creationOperations:[],autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};
+    if(method==='status')return {connected:desktopConnected,groupActions,taskCreation:true,creationOperations:[],autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};
     if(method==='flowSettings'){flowEnabled=params.enabled;return {autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};}
     if(method==='creationCatalog')return {projects:projects.map(p=>({projectId:p.desktopProjectId,label:p.label,isGitRepository:true,nativeProjectId:p.projectId})),
       sections:[...sections.filter(s=>s.sectionId!=='chats'),{sectionId:null,name:'Ungrouped'}]};
@@ -91,7 +93,11 @@ const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'s
   },
   archiveTask:async()=>{archived=true;return {threadId:id,archived:true};},
   restoreTask:async()=>{archived=false;return {threadId:id,restored:true};},
-  moveTask:async params=>{task.localSectionId=params.sectionId;task.nativeSectionId=params.sectionId??'chats';
+  moveTask:async params=>{moves.push(params);if(moveFailure){
+    // An external client wins the race; the UI must read this new placement.
+    Object.assign(task,{localSectionId:'group-1',nativeSectionId:'group-1',pinned:false,nativeTaskPinned:false,placementSource:'localThreadSection'});
+    throw Object.assign(Error('Synthetic group conflict'),{status:409});}
+    task.localSectionId=params.sectionId;task.nativeSectionId=params.sectionId??'chats';
     task.pinned=task.nativeTaskPinned=params.sectionId==='group-3';task.placementSource=params.sectionId?'localThreadSection':'localDefault';
     return {threadId:id,sectionId:params.sectionId,changed:true};},
   pinTask:async params=>{task.pinned=params.pinned;task.nativeTaskPinned=params.pinned;task.localSectionId=params.pinned?'group-3':null;task.nativeSectionId=params.pinned?'group-3':'chats';
@@ -142,7 +148,16 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,navigationUrls}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,moves,navigationUrls}));return;}
+    if(req.url==='/fixture/reset'&&req.method==='POST'){
+      let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
+      const options=body?JSON.parse(body):{};
+      groupActions=options.groupActions!==false;moveFailure=options.moveFailure===true;
+      desktopConnected=options.desktopConnected!==false;
+      Object.assign(task,{localSectionId:null,nativeSectionId:'chats',placementSource:'localDefault',pinned:false,nativeTaskPinned:false});
+      if(options.inheritedProject)Object.assign(task,{nativeSectionId:'group-3',placementSource:'desktopProject',pinned:true});
+      moves.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
+    }
     if(req.url==='/fixture/navigation'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const {url}=JSON.parse(body);navigationUrls.push(url);

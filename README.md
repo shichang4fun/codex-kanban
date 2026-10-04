@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.50
+# Codex Kanban 0.4.51
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
@@ -189,7 +189,9 @@ npm run test:plugin-native
 npm run test:ui
 ```
 
-`test:ui` 启动只含合成任务的浏览器宿主，终端打印实际端口，可验证 SDK 握手、置顶、分组、归档、Undo 和列表。该测试不操作真实任务，也不代表真实客户端 sidebar 验收。
+固定回归入口为 `npm run test:regression`：全量 Node 测试及真实 Chromium 拖放检查均需通过。首次运行先执行 `npx playwright install chromium`；覆盖范围、断连/重连场景和发布门禁见 [回归测试标准](TESTING.md)。
+
+`test:ui` 启动只含合成任务的手工浏览器验收宿主，终端打印实际端口，可验证 SDK 握手、置顶、分组、归档、Undo 和列表。该命令只启动宿主，不会自动执行断言；自动浏览器验收使用 `npm run test:browser`。这些测试不操作真实任务，也不代表真实客户端 sidebar 验收。
 
 浏览器宿主同时模拟 Codex 强制透明的 body 背景；`KANBAN_TEST_HOST_THEME=light npm run test:ui` 用浅色宿主验证看板自身深色底色，不受透明画布影响。
 
