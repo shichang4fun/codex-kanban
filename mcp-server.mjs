@@ -24,7 +24,7 @@ const result=payload=>({content:[{type:'text',text:payload.error??(payload.board
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.53',icons:boardIcons},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.54',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}

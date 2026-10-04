@@ -10,6 +10,8 @@ npm run test:regression
 
 `test:regression` 顺序运行 Node 测试和真实 Chromium 交互测试。浏览器使用隔离的合成任务、正式构建的 MCP UI 和 SDK 宿主桥接；不启动模型，不更改真实任务。独立调试可用 `npm run test:browser`，或 `npm run test:browser -- --headed`。
 
+滚动条几何测试在 macOS 为临时 Chromium 进程传入 `AppleShowScrollBars=Always`，确保使用真实占用宽度的滚动条；不写入系统偏好，退出后删除临时启动文件。其他浏览器测试保持默认滚动条模式。
+
 ## 必须保持的交互契约
 
 | 场景 | 验收标准 | 自动覆盖 |
@@ -18,6 +20,7 @@ npm run test:regression
 | Board / List 跨组拖动 | 从卡片点击层起拖，拖入空组或已有卡片的组；三个流程组、Pinned、Ungrouped 均可接收 | 浏览器 |
 | 清除分组 | Ungrouped 写入 `null`，不写显示 ID `chats`；折叠时拖入会展开，刷新后保持，轮询恢复 | 浏览器、Node |
 | 项目继承、项目置顶 | 只移动任务，保留项目关联，使用任务自身的原分组校验 | 浏览器、Node |
+| worktree 项目识别 | 本机 projectId 为空时按唯一 Git 共享目录匹配正式项目，保留本机空字段与自身分组；显式归属优先，普通 checkout、异常 Git 边界不推断；空字段不恢复旧快照；继承项目可显式设置、切换及清除，写入次数和来源字段正确 | 浏览器、Node、真实 Git |
 | 组内排序、group 排序 | 只保存浏览器顺序，不调用原生移动；重载后保持 | 浏览器、Node |
 | 取消拖动 | Escape 取消，无写入、无聊天导航，轮询恢复 | 浏览器 |
 | 桥接断连与重连 | 使用中断连出现持续提示，说明受影响操作及恢复方式；提供手动检查；断连时不可跨组写入，恢复后提示消失，无需重载即可移动 | 浏览器、Node |
