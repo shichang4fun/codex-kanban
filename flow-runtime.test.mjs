@@ -127,11 +127,12 @@ test('flow list coalescing shares only identical unresolved requests, never a se
   }finally{relay.close();}
 });
 
-async function liveFixture(t,{enabled=true}={}){
+async function liveFixture(t,{enabled=true,ready=true}={}){
   const f=await fixture(t);await mkdir(f.root,{mode:0o700});await installFlowSettings(f.root);await updateFlowSettings(f.root,enabled);
   const calls=[],moves=[],listeners=new Set(),task={id:'task',kind:'codex',hostId:'local',projectId:null,status:{type:'active',activeFlags:[]}};
   let section='chats',held;
-  const relay={subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},async flowRequest(method,p){
+  const relay={ready,contextThreadId:'task',subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},async flowRequest(method,p){
+    if(method==='thread/read')return {thread:{...task,ephemeral:false,parentThreadId:null}};
     assert.equal(method,'mcpServer/tool/call');calls.push(p.tool);
     let result;
     if(p.tool==='list_threads')result={threads:[task],pinnedThreads:[],sections:[['chats','Tasks'],['progress','In Progress'],['review','For Review'],['later','For Later']]
@@ -144,7 +145,8 @@ async function liveFixture(t,{enabled=true}={}){
     return envelope;
   }};
   const runtime=await startAutoFlow({root:f.root,relay,runExclusive:createTransactionGate()});t.after(()=>runtime.stop());
-  return {...f,runtime,calls,moves,task,listeners,
+  await runtime.initialize();calls.length=0;
+  return {...f,runtime,relay,calls,moves,task,listeners,
     emit:message=>Promise.all([...listeners].map(listener=>listener(message))),
     block(tool){const entered=deferred(),released=deferred();held={tool,entered,released};return {entered:entered.promise,release:()=>released.resolve()};},
     start:{method:'turn/started',params:{threadId:'task',turn:{id:'one',status:'inProgress'}}},
@@ -177,10 +179,31 @@ test('disabling after move dispatch completes readonly readback before returning
 });
 
 test('persisted disabled runtime stays available but makes no automatic RPC calls',async t=>{
-  const f=await liveFixture(t,{enabled:false});assert.deepEqual(f.runtime.status(),{available:true,enabled:false,mode:'all-local'});
+  const f=await liveFixture(t,{enabled:false});assert.equal(f.runtime.status().available,true);assert.equal(f.runtime.status().enabled,false);assert.equal(f.runtime.status().mode,'all-local');
   await f.emit(f.start);assert.deepEqual(f.calls,[]);
   await assert.rejects(f.runtime.change('true'),/explicit/);
   assert.equal((await f.runtime.change(true)).enabled,true);await f.emit(f.start);assert.deepEqual(f.moves,['progress']);
+});
+
+test('lifecycle evidence received before initialization is replayed after verified groups become ready',async t=>{
+  const f=await liveFixture(t,{ready:false});await f.emit(f.start);assert.deepEqual(f.calls,[]);assert.deepEqual(f.moves,[]);
+  f.relay.ready=true;await f.runtime.initialize();
+  const deadline=Date.now()+2000;while(f.moves.length===0&&Date.now()<deadline)await later();
+  assert.deepEqual(f.moves,['progress']);
+});
+
+test('bootstrap relay permits only the three exact group names with no extra create arguments',async()=>{
+  const wire=[],relay=createDesktopRelay({toServer:message=>wire.push(message),toDesktop:()=>{}});
+  try{
+    relay.fromDesktop({id:1,method:'initialize'});relay.fromServer({id:1,result:{}});
+    for(const args of [{name:'Custom'},{name:'For Review',extra:true},{},null])
+      await assert.rejects(relay.flowRequest('mcpServer/tool/call',{server:'codex_app',threadId:'task',tool:'create_sidebar_section',arguments:args}),/not allowed/);
+    assert.equal(wire.length,1);
+    for(const name of ['In Progress','For Review','For Later']){
+      const pending=relay.flowRequest('mcpServer/tool/call',{server:'codex_app',threadId:'task',tool:'create_sidebar_section',arguments:{name}});
+      const outgoing=wire.at(-1);relay.fromServer({id:outgoing.id,result:{content:[{type:'text',text:'{}'}]}});await pending;
+    }
+  }finally{relay.close();}
 });
 
 test('shared transaction gate serializes whole operations and recovers after failure',async()=>{
@@ -189,4 +212,67 @@ test('shared transaction gate serializes whole operations and recovers after fai
   const second=gate(async()=>{order.push('auto-read');order.push('auto-write');order.push('auto-readback');});
   const failed=assert.rejects(first,/failed/);await later();assert.deepEqual(order,['manual-read']);held.resolve();
   await failed;await second;assert.deepEqual(order,['manual-read','manual-write','auto-read','auto-write','auto-readback']);
+});
+
+async function bootstrapFixture(t,{context=null,thread,read}={}){
+  const f=await fixture(t);await mkdir(f.root,{mode:0o700});await installFlowSettings(f.root);
+  const contexts=new Set(),listeners=new Set(),calls=[],groups=[];
+  const relay={ready:true,contextThreadId:context,subscribe:fn=>{listeners.add(fn);return ()=>listeners.delete(fn);},
+    subscribeContext:fn=>{contexts.add(fn);return ()=>contexts.delete(fn);},async flowRequest(method,p){
+      calls.push({method,params:p});
+      if(method==='thread/read')return {thread:await read?.(p.threadId)??{id:p.threadId,ephemeral:false,parentThreadId:null,...thread}};
+      assert.equal(method,'mcpServer/tool/call');
+      if(p.tool==='create_sidebar_section')groups.push({name:p.arguments.name,sectionId:p.arguments.name});
+      else assert.equal(p.tool,'list_threads');
+      return {content:[{type:'text',text:JSON.stringify({sections:groups})}]};
+    }};
+  const runtime=await startAutoFlow({root:f.root,relay,runExclusive:createTransactionGate()});t.after(()=>runtime.stop());
+  return {...f,relay,runtime,calls,groups,connect:async id=>{relay.contextThreadId=id;await Promise.all([...contexts].map(fn=>fn(id)));}};
+}
+test('bootstrap waits without a local context and initializes only when a local chat is loaded',async t=>{
+  const f=await bootstrapFixture(t);assert.equal(f.runtime.status().initialization.state,'waiting');assert.deepEqual(f.calls,[]);
+  await f.connect('local');assert.equal(f.runtime.status().initialization.state,'ready');assert.equal(f.groups.length,3);
+  await f.connect('another');assert.equal(f.groups.length,3);
+});
+test('remote, ephemeral and child contexts never create groups or start an observer',async t=>{
+  for(const thread of [{hostId:'remote'},{ephemeral:true},{parentThreadId:'parent'}]){
+    const f=await bootstrapFixture(t,{context:'unsuitable',thread});await f.runtime.initialize();
+    assert.equal(f.runtime.status().initialization.state,'waiting');assert.equal(f.calls.length,1);assert.equal(f.groups.length,0);
+  }
+});
+test('a local context arriving during a held remote read is retried after the old operation',async t=>{
+  const held=deferred(),begun=deferred();
+  const f=await bootstrapFixture(t,{context:'remote',read:async id=>{if(id==='remote'){begun.resolve();await held.promise;}
+    return {id,ephemeral:false,parentThreadId:null,hostId:id==='remote'?'remote':'local'};}});
+  await begun.promise;const changed=f.connect('local');held.resolve();await changed;
+  await later();await f.runtime.initialize();assert.equal(f.runtime.status().initialization.state,'ready');assert.equal(f.groups.length,3);
+});
+test('corrupted settings during a queued context retry do not escape into native transport',async t=>{
+  const held=deferred(),begun=deferred();
+  const f=await bootstrapFixture(t,{context:'remote',read:async id=>{begun.resolve();await held.promise;return {id,ephemeral:false,hostId:'remote'};}});
+  await begun.promise;const changed=f.connect('local');await put(join(f.root,'flow.json'),'{broken');held.resolve();
+  await changed;await later();assert.equal((await f.runtime.initialize()).available,false);assert.equal(f.groups.length,0);
+});
+test('disabling during bootstrap drains an already dispatched create without creating further groups',async t=>{
+  const f=await bootstrapFixture(t),held=deferred(),begun=deferred(),original=f.relay.flowRequest;
+  f.relay.flowRequest=async(method,p)=>{const result=await original(method,p);if(p.tool==='create_sidebar_section'){begun.resolve();await held.promise;}return result;};
+  const init=f.connect('local');await begun.promise;const off=f.runtime.change(false);
+  while(readFlowSettings(f.root).enabled)await later();held.resolve();await init;
+  assert.equal((await off).enabled,false);assert.equal(f.groups.length,1);
+  await f.connect('another');assert.equal(f.groups.length,1);
+});
+test('initialization errors roll back an enable switch and leave manual bridge capabilities available',async t=>{
+  const f=await bootstrapFixture(t);await f.runtime.change(false);
+  f.groups.push({name:'For Review',sectionId:'one'},{name:'For Review',sectionId:'two'});await f.connect('local');
+  await assert.rejects(f.runtime.change(true),/More than one group/);
+  assert.equal(f.runtime.status().enabled,false);assert.equal(f.runtime.status().available,true);assert.equal(f.groups.length,2);
+});
+test('a context loaded before initialize acknowledgment is delivered once transport becomes ready',async()=>{
+  const relay=createDesktopRelay({toServer:()=>{},toDesktop:()=>{}}),contexts=[];
+  try{
+    relay.subscribeContext(id=>contexts.push(id));
+    relay.fromDesktop({id:1,method:'initialize'});relay.fromDesktop({id:2,method:'thread/resume',params:{threadId:'task'}});
+    relay.fromServer({id:2,result:{thread:{id:'task'}}});assert.deepEqual(contexts,[]);
+    relay.fromServer({id:1,result:{}});assert.deepEqual(contexts,['task']);
+  }finally{relay.close();}
 });

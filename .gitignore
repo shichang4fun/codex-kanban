@@ -17,6 +17,9 @@ node_modules/
 connection.json
 group-creation-settings.json
 creation-operations.json
+flow.json
+flow-group-initialization.json
+flow-group-initialization.json.lock/
 *.sock
 *.log
 .DS_Store

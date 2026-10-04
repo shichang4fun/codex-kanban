@@ -95,6 +95,16 @@ function uiFixture(){
   return {...h,board};
 }
 
+test('Auto organize displays initialization progress and actionable errors while retaining its switch',()=>{
+  const h=uiFixture(),hint=h.nodes.get('auto-organize-hint'),control=h.nodes.get('auto-organize');
+  for(const state of ['waiting','initializing','ready','error']){
+    h.board.autoFlow.initialization={state,message:state==='error'?'Rename duplicate For Review groups.':'Open a local chat.'};
+    h.api.applyNativeBoard(h.board);assert.equal(hint.textContent,h.board.autoFlow.initialization.message);
+    assert.equal(hint.dataset.error,String(state==='error'));assert(!control.disabled);assert(control.checked);
+  }
+  h.board.autoFlow.enabled=false;h.api.applyNativeBoard(h.board);assert.match(hint.textContent,/off/);assert.equal(hint.dataset.error,'false');
+});
+
 test('Auto organize shows persisted availability without browser storage and disables unsupported runtimes',()=>{
   const h=uiFixture(),control=h.nodes.get('auto-organize');assert(control.checked);assert(!control.disabled);
   h.board.autoFlow={available:true,enabled:false,mode:'allowlist'};h.api.applyNativeBoard(h.board);assert(!control.checked);
