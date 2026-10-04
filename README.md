@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.53
+# Codex Kanban 0.4.54
 
 Installable GitHub marketplace for the local Codex task board. This branch contains the built plugin; source and tests are on [main](https://github.com/shichang4fun/codex-kanban/tree/main).
 
