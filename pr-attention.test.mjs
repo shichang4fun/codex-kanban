@@ -13,10 +13,60 @@ function boardWith(items=[pr(7)]){
 const alerts=root=>root.querySelectorAll('.pr-alert');
 const labels=root=>alerts(root).map(n=>n.textContent);
 
+test('background refresh keeps fresh branch and PR labels stable until their data expires',()=>{
+  for(const view of ['board','list']){
+    const board=boardWith(),git=board.tasks[0].git,now=Date.now();
+    git.checkedAt=git.pullRequests.checkedAt=new Date(now-6000).toISOString();
+    git.refreshing=git.pullRequests.refreshing=true;
+    const h=harness(board),root=h.nodes.get('board');h.api.setView(view);
+    const branchText=()=>root.querySelectorAll('.git-branch')[0].children[1].textContent;
+    assert.equal(branchText(),'codex/pr-attention');
+    assert.equal(root.querySelectorAll('.pr-badge')[0].textContent,'#7 · Open');
+    assert.deepEqual(labels(root),['CI failed','Changes requested']);
+
+    const fresh=boardWith();h.api.applyNativeBoard(fresh,{skipUnchanged:true});
+    assert.equal(branchText(),'codex/pr-attention');
+    assert.deepEqual(labels(root),['CI failed','Changes requested']);
+
+    h.context.expiredNow=Date.parse(fresh.tasks[0].git.checkedAt)+91000;
+    new Script('Date.now=()=>expiredNow').runInContext(h.context);
+    for(const tick of h.intervals)tick();
+    assert.equal(branchText(),'codex/pr-attention · Cached');
+    assert.equal(root.querySelectorAll('.pr-badge')[0].textContent,'#7 · Open · Cached');
+    assert.deepEqual(labels(root),['CI failed · Cached','Changes requested · Cached']);
+
+    const refreshed=boardWith();
+    refreshed.tasks[0].git.checkedAt=refreshed.tasks[0].git.pullRequests.checkedAt=new Date(h.context.expiredNow).toISOString();
+    h.api.applyNativeBoard(refreshed,{skipUnchanged:true});
+    assert.equal(branchText(),'codex/pr-attention');
+    assert.equal(root.querySelectorAll('.pr-badge')[0].textContent,'#7 · Open');
+    assert.deepEqual(labels(root),['CI failed','Changes requested']);
+  }
+});
+
+test('timestamp-only recovery clears all Cached labels without replacing cards or focus',()=>{
+  for(const view of ['board','list'])for(const count of [1,2])
+    for(const checkedAt of [undefined,null,'invalid',new Date(Date.now()+60000).toISOString(),new Date(Date.now()-120000).toISOString()]){
+      const board=boardWith(count===1?[pr(7)]:[pr(7),pr(8)]);
+      board.tasks[0].git.checkedAt=board.tasks[0].git.pullRequests.checkedAt=checkedAt;
+      const h=harness(board);h.api.setView(view);h.api.applyNativeBoard(board);
+      const root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],branch=card.querySelector('.git-branch');
+      const badges=card.querySelectorAll('.pr-badge');badges[0].focus();
+      assert.match(branch.children[1].textContent,/Cached/);assert(badges.every(b=>b.textContent.includes('Cached')));
+      const fresh=structuredClone(board);
+      fresh.tasks[0].git.checkedAt=fresh.tasks[0].git.pullRequests.checkedAt=new Date().toISOString();
+      h.api.applyNativeBoard(fresh,{skipUnchanged:true});
+      assert.equal(root.querySelectorAll('.card')[0],card);assert.equal(card.querySelector('.git-branch'),branch);
+      assert.equal(branch.children[1].textContent,'codex/pr-attention');
+      assert(badges.every(b=>!b.textContent.includes('Cached')));assert.deepEqual(card.querySelectorAll('.pr-badge'),badges);
+      assert.equal(h.context.document.activeElement,badges[0]);
+    }
+});
+
 test('fresh unchanged PR reads clear Cached without replacing cards or focus',()=>{
   const board=boardWith(),h=harness(board);h.api.applyNativeBoard(board);
   const root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],badge=alerts(card)[0];
-  badge.focus();h.nodes.get('view-options').open=true;
+  badge.focus();h.nodes.get('creation').open=true;
   h.context.expiredNow=Date.now()+100000;new Script('Date.now=()=>expiredNow').runInContext(h.context);
   for(const tick of h.intervals)tick();
   assert.deepEqual(labels(card),['CI failed · Cached','Changes requested · Cached']);
@@ -75,9 +125,8 @@ test('old or invalid Git and PR reads visibly qualify attention notices as cache
 });
 
 test('PR alerts gain Cached in place during interactions and disappear when fresh data resolves them',()=>{
-  for(const paused of ['options','taskMenu','creation','taskDrag','groupDrag']){
+  for(const paused of ['taskMenu','creation','taskDrag','groupDrag']){
     const h=harness(boardWith()),root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],before=alerts(card);
-    if(paused==='options')h.nodes.get('view-options').open=true;
     if(paused==='creation')h.nodes.get('creation').open=true;
     if(paused==='taskMenu')card.querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
     if(paused==='taskDrag')new Script("draggedKey='fixture'").runInContext(h.context);
@@ -91,7 +140,6 @@ test('PR alerts gain Cached in place during interactions and disappear when fres
     for(const tick of h.intervals)tick();
     assert.deepEqual(labels(card),['CI failed · Cached','Changes requested · Cached']);
     assert.match(alerts(card)[0].title,/CI failed · Cached$/);
-    if(paused==='options')assert(h.nodes.get('view-options').open);
     if(paused==='taskMenu')assert.equal(h.nodes.get('task-menu').hidden,false);
     if(paused==='creation')assert(h.nodes.get('creation').open);
     const resolved=boardWith([pr(7,{checks:'passed',review:'APPROVED'})]);

@@ -1,7 +1,7 @@
 import {App} from '@modelcontextprotocol/ext-apps';
 import {createMcpFetch} from './mcp-ui-transport.mjs';
 
-const app=new App({name:'Codex Kanban',version:'0.4.49'},{},{autoResize:false});
+const app=new App({name:'Codex Kanban',version:'0.4.50'},{},{autoResize:false});
 const ready=app.connect(undefined,{timeout:15000});
 // Attach a rejection handler immediately; the initial board request shows errors.
 void ready.catch(()=>{});

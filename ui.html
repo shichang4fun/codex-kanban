@@ -30,7 +30,7 @@ html{font-size:calc(16px * var(--font-scale,1))}
 .list .card-info{grid-column:1 / -1;grid-row:2;margin-top:0}
 .list .card-preview{-webkit-line-clamp:1}
 .card-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:0;opacity:0;pointer-events:none;transition:opacity 160ms ease}
-.card:hover .card-actions,.card:focus-within .card-actions{opacity:1;pointer-events:auto}
+.card:hover .card-actions,.card:has(:focus-visible) .card-actions,.card:has([aria-expanded=true]) .card-actions{opacity:1;pointer-events:auto}
 .card.has-actions .card-heading{padding-right:48px}
 .card-action{display:grid;place-items:center;width:24px;height:24px;padding:5px;border-radius:4px;color:var(--muted)}
 .card-action:hover{background:var(--hover);color:var(--ink)}
@@ -249,7 +249,7 @@ dialog dl{grid-template-columns:85px minmax(0,1fr)}.group-edit label{width:85px}
 .card-title,.card.is-unread .card-title{color:var(--ink)}
 .project{color:var(--muted);border:0;padding:1px 2px;border-radius:3px}
 .project-unassigned{justify-content:center;width:22px;height:20px;padding:3px;color:var(--dim);opacity:0;pointer-events:none;transition:opacity 140ms linear}
-.card:hover .project-unassigned,.card:focus-within .project-unassigned,.project-unassigned[aria-expanded=true]{opacity:1;pointer-events:auto}
+.card:hover .project-unassigned,.card:has(:focus-visible) .project-unassigned,.card:has([aria-expanded=true]) .project-unassigned{opacity:1;pointer-events:auto}
 button.project:hover{background:var(--hover);border-color:transparent;color:var(--ink)}
 .project-unassigned{color:var(--dim)}
 .card-details{color:var(--muted)}.card-details:hover{background:var(--hover);color:var(--ink)}
@@ -275,7 +275,7 @@ dialog::backdrop{background:var(--backdrop)}
 .unread-button .icon{width:18px;height:18px}.unread-button:hover{background:var(--hover);color:var(--ink)}.unread-button[aria-pressed=true]{background:var(--selected);color:var(--accent)}
 .unread-count{position:absolute;top:-3px;right:-4px;display:flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border:2px solid var(--bg);border-radius:10px;background:#2563eb;color:#fff;font-size:0.5625rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;pointer-events:none}.unread-count[hidden]{display:none}
 /* Reserve enough space for the controls as text size grows. */
-.page-head{display:grid;grid-template-columns:minmax(180px,1fr) minmax(220px,320px) auto;align-items:center;padding:18px 24px;column-gap:24px;row-gap:10px}
+.page-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,320px) minmax(0,1fr);align-items:center;padding:18px 24px;column-gap:24px;row-gap:10px}
 .header-title{display:flex;align-items:center;gap:10px;min-width:0}.header-title h1{display:grid;grid-template-areas:"title";grid-template-columns:minmax(0,1fr);font-size:1.125rem;white-space:nowrap;flex-shrink:0;overflow:hidden;transition:width 160ms linear}
 .header-title h1 span{grid-area:title;width:max-content;transition:opacity 160ms linear}.title-all{opacity:1}.title-unread{opacity:0}
 .header-title[data-unread=true] .title-all{opacity:0}.header-title[data-unread=true] .title-unread{opacity:1}
@@ -295,12 +295,6 @@ dialog::backdrop{background:var(--backdrop)}
 .toolbar-select select{appearance:none;width:100%;min-height:34px;padding:6px 18px 6px 26px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font-size:0.75rem;cursor:pointer;text-overflow:ellipsis}
 .font-control select{padding-left:calc(12px + .9rem)}
 .toolbar-select select:hover{background:var(--hover)}.toolbar-select option{background:var(--raised);color:var(--ink)}
-.view-options{position:relative;flex-shrink:0}.view-options>summary{display:flex;align-items:center;gap:6px;min-height:32px;padding:5px 8px;list-style:none;border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:0.75rem;cursor:pointer}
-.view-options>summary::-webkit-details-marker{display:none}.view-options>summary .icon{width:15px;height:15px}
-.view-options>summary:hover,.view-options[open]>summary{background:var(--hover);color:var(--ink)}
-.view-options>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.options-panel{position:absolute;z-index:8;right:0;top:calc(100% + 7px);width:270px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 150px);overflow:auto;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--raised);box-shadow:0 8px 28px var(--shadow)}
-.options-toggle{display:flex;align-items:center;gap:8px;margin:12px 0 5px;color:var(--ink);font-size:0.75rem}.options-toggle input{margin:0;accent-color:var(--accent)}.options-toggle:has(input:disabled){color:var(--dim)}.options-flow-hint{margin:0 0 12px 21px;color:var(--dim);font-size:0.6875rem;line-height:1.5}.options-flow-hint[data-error=true]{color:var(--state-error)}
 @media(max-width:1100px){.page-head{grid-template-columns:minmax(0,1fr) auto;gap:12px 20px}.header-search{grid-column:1/-1;grid-row:2}.header-title{width:auto}.filters{grid-row:3}.view-controls{grid-column:2;grid-row:1}}
 @media(max-width:800px){.page-head{padding:16px;grid-template-columns:minmax(0,1fr)}.header-title{flex-wrap:wrap}.header-search{grid-row:2}.view-controls{grid-column:1;grid-row:3;justify-self:start;justify-content:flex-start}.filters{grid-row:4}.header-title h1{font-size:1.125rem}}
 .group-create{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:8px 10px;border:1px dashed var(--line);border-radius:5px;color:var(--muted);font-size:0.6875rem;text-align:center}
@@ -329,7 +323,6 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
 <symbol id="i-down" viewBox="0 0 20 20"><path d="m6 8 4 4 4-4"/></symbol>
 <symbol id="i-board" viewBox="0 0 20 20"><rect x="3" y="4" width="4" height="12" rx="1"/><rect x="9" y="4" width="3" height="8" rx="1"/><rect x="14" y="4" width="3" height="10" rx="1"/></symbol>
 <symbol id="i-list" viewBox="0 0 20 20"><path d="M7 4h10M7 10h10M7 16h10M3 4h.01M3 10h.01M3 16h.01"/></symbol>
-<symbol id="i-sliders" viewBox="0 0 20 20"><path d="M3 5h4m4 0h6M3 10h8m4 0h2M3 15h2m4 0h8"/><circle cx="9" cy="5" r="2"/><circle cx="13" cy="10" r="2"/><circle cx="7" cy="15" r="2"/></symbol>
 <symbol id="i-search" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></symbol>
 <symbol id="i-run" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></symbol>
 <symbol id="i-wait" viewBox="0 0 20 20"><path d="m10 2 8 8-8 8-8-8Z"/><path d="M10 6v5m0 3h.01"/></symbol>
@@ -368,13 +361,7 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
         <label class="toolbar-select" title="Filter hosts"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg><select id="host" aria-label="Filter hosts"><option value="all">All hosts</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
         <label class="toolbar-select theme-control" title="Appearance"><svg class="icon" aria-hidden="true"><use href="#i-appearance"/></svg><select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
         <label class="toolbar-select font-control" title="Text size · 100% restores the default"><span class="font-icon" aria-hidden="true">Aa</span><select id="font-size" aria-label="Text size"><option value="90">90%</option><option value="100" selected>100%</option><option value="110">110%</option><option value="120">120%</option><option value="130">130%</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
-        <details class="view-options" id="view-options">
-          <summary id="view-options-trigger" role="button" aria-label="Automatic grouping settings" aria-expanded="false" title="Automatic grouping settings"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg></summary>
-          <div class="options-panel">
-            <label class="options-toggle"><input id="auto-organize" type="checkbox" disabled aria-describedby="auto-organize-hint">Auto organize</label>
-            <p class="options-flow-hint" id="auto-organize-hint" role="status">Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.</p>
-          </div>
-        </details></div>
+        </div>
       <div class="filters" id="active-filters" hidden>
         <button class="host-chip" id="host-chip" type="button" hidden><span id="host-chip-label"></span><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
         <button class="clear-filters" id="clear-filters" type="button" hidden>Clear filters</button>
@@ -583,7 +570,6 @@ let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nati
 let archivingKey=null;
 let pinningKey=null,restoringToken=null;
 let creationBusy=false,creationSession=null,creationOptions=null,nextCreationTarget=null;
-let flowSettingsBusy=false,flowSettingsError='';
 let renamingTask=null,renameBusy=false;
 const archiveNotices=new Map();
 const dismissedArchiveTokens=new Set();
@@ -597,7 +583,7 @@ function syncArchiveNotices(entries){
   }
   renderArchiveNotices();
 }
-function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken||creationBusy||renameBusy||flowSettingsBusy;}
+function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken||creationBusy||renameBusy;}
 function renameDisabledReason(task){
   if(task.hostId!=='local')return 'Renaming is available for local tasks only.';
   if(!nativeConnected||!nativeToken||DATA.sync?.renameLocal!==true)return 'Connect to the updated local service to rename tasks.';
@@ -1037,7 +1023,7 @@ function gitDisplay(task,now=Date.now()){
   const items=(pr.items??[]).filter(p=>states[p.state]&&Number.isSafeInteger(p.number)&&p.number>0
     &&typeof p.url==='string'&&p.url.toLowerCase()===`https://github.com/${git.repository}/pull/${p.number}`.toLowerCase()&&/^[\w.-]+\/[\w.-]+$/.test(git.repository??''));
   const messages={loading:'Checking PR…',none:'No matching PR',detached:'PR not linked',unsupported:'GitHub origin required',unavailable:'PR unavailable'};
-  return {branch:git.branch||null,gitCached:git.refreshing===true||stale(git.checkedAt),
+  return {branch:git.branch||null,gitCached:stale(git.checkedAt),
     items,states,cached:stale(pr.checkedAt),message:messages[pr.status]??(items.length>1?'Multiple matching PRs':''),pr};
 }
 function expireGitSnapshots(now=Date.now()){
@@ -1063,12 +1049,20 @@ function prAttention(git){
   });
 }
 function syncPrAlertFreshness(){
-  const cached=new Set((DATA?.tasks??[]).filter(task=>{const git=gitDisplay(task);return git&&(git.cached||git.gitCached);}).map(taskKey));
+  const displays=new Map((DATA?.tasks??[]).map(task=>[taskKey(task),gitDisplay(task)]));
   for(const card of $('board').querySelectorAll('.card')){
-    const suffix=cached.has(card.dataset.taskKey)?' · Cached':'';
-    for(const badge of card.querySelectorAll('.pr-alert')){
-      badge.textContent=badge.dataset.prAlertText+suffix;
-      badge.title=badge.title.replace(/ · Cached$/,'')+suffix;
+    const git=displays.get(card.dataset.taskKey);if(!git)continue;
+    const branch=card.querySelector('.git-branch');
+    if(branch)branch.children[1].textContent=git.branch+(git.gitCached?' · Cached':'');
+    for(const badge of card.querySelectorAll('.pr-badge')){
+      if(badge.dataset.prAlertText!==undefined){
+        const suffix=git.cached||git.gitCached?' · Cached':'';
+        badge.textContent=badge.dataset.prAlertText+suffix;
+        badge.title=badge.title.replace(/ · Cached$/,'')+suffix;
+      }else{
+        const text=git.items.length===1?`#${git.items[0].number} · ${git.states[git.items[0].state]}`:git.items.length+' PRs';
+        badge.textContent=text+(git.cached?' · Cached':'');
+      }
     }
   }
 }
@@ -1094,7 +1088,7 @@ function appendGitDetail(task){
 function cardPreviewText(value){
   if(typeof value!=='string')return '';
   let text=value.trim(),removedContext=false;
-  // Only strip recognized leading ambient context, never markup inside the request.
+  // Only strip recognized leading metadata, never markup inside the request.
   while(/^<in-app-browser-context\b/i.test(text)){
     const end=/<\/in-app-browser-context\s*>/i.exec(text);
     if(!end)return ''; // A truncated context contains no recoverable request.
@@ -1102,6 +1096,14 @@ function cardPreviewText(value){
   }
   if(/^# (?:Chrome tabs|In app browser):\s*\n- The user has the (?:Chrome extension side panel|in-app browser) open\b/.test(text)){
     const request=/^## My request:\s*$/m.exec(text);
+    if(!request)return '';
+    text=text.slice(request.index+request[0].length).trim();removedContext=true;
+  }
+  const filesHeading='# Files mentioned by the user:';
+  if(text===filesHeading)return '';
+  if(text.startsWith(filesHeading)&&/^\s+## [^\r\n:]+:\s*(?:\/|[A-Za-z]:[\\/]|…|\.\.\.)/.test(text.slice(filesHeading.length))){
+    // Thread previews may flatten or truncate the generated attachment list.
+    const request=/(?:^|\s)## My request:\s*/.exec(text);
     if(!request)return '';
     text=text.slice(request.index+request[0].length).trim();removedContext=true;
   }
@@ -1255,7 +1257,7 @@ function animateBoardRefresh(before){
 }
 function render({animate=false}={}){
   if(!DATA)return;
-  const focused=document.activeElement,focusedKey=focused?.closest('.card')?.dataset.taskKey,focusedClass=focused?.className;
+  const focused=document.activeElement,focusedKey=focused?.matches(':focus-visible')?focused.closest('.card')?.dataset.taskKey:null,focusedClass=focused?.className;
   closeTaskMenu();
   if(!$('board').classList.contains('list'))for(const section of $('board').querySelectorAll('.column'))if(!section.classList.contains('collapsed'))columnScroll.set(section.dataset.groupId,section.querySelector('.cards').scrollTop);
   const animateLayout=animate&&!draggedKey&&!draggedGroup&&!document.hidden&&!matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1371,33 +1373,7 @@ function updateHeaderControls(){
   $('unread-only').setAttribute('aria-label',unread+' unread '+(unread===1?'task':'tasks'));
   $('unread-only').title=unread+' unread '+(unread===1?'task':'tasks')+' · '+(onlyUnread?'Click to show all tasks':'Click to show only unread tasks')+'\n'+(DATA.sync?.localUnreadConnected?'Local unread markers refresh every 3 seconds; other hosts use a desktop snapshot.':'Unread replies from the desktop snapshot.');
   $('active-filters').hidden=!$('search').value.trim()&&host==='all';
-  $('view-options-trigger').title='Automatic grouping settings';
-  syncFlowSettings();
 }
-function syncFlowSettings(){
-  const setting=DATA?.autoFlow,available=nativeConnected&&!!nativeToken&&setting?.available===true,control=$('auto-organize'),hint=$('auto-organize-hint');
-  control.checked=setting?.enabled===true;
-  control.disabled=!available||!!taskActionPending();
-  control.setAttribute('aria-busy',String(flowSettingsBusy));
-  hint.dataset.error=String(!!flowSettingsError||setting?.enabled&&setting?.initialization?.state==='error');
-  hint.textContent=flowSettingsError||(flowSettingsBusy?'Saving automatic grouping…':!available?'Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.':setting.enabled?(setting.initialization?.message||'Running tasks move to In Progress; completed tasks move to For Review.'):'Automatic grouping is off. Existing groups and rules are preserved.');
-}
-$('auto-organize').onchange=async()=>{
-  const enabled=$('auto-organize').checked;
-  if(taskActionPending()||!nativeConnected||!nativeToken||DATA?.autoFlow?.available!==true){syncFlowSettings();return;}
-  flowSettingsError='';flowSettingsBusy=true;++nativeEpoch;render();renderArchiveNotices();
-  try{
-    const response=await fetch('/api/flow-settings',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({enabled})}),payload=await response.json();
-    if(!response.ok)throw Error(payload.error||'Automatic grouping could not be verified.');
-    if(payload.autoFlow?.available!==true||payload.autoFlow.enabled!==enabled)throw Error('Automatic grouping could not be verified. Refresh before trying again.');
-    nativeToken=payload.csrf??nativeToken;
-    if(payload.board)applyNativeBoard(payload.board);else DATA={...DATA,autoFlow:payload.autoFlow};
-  }catch(error){flowSettingsError=error.message;}
-  finally{flowSettingsBusy=false;render();renderArchiveNotices();}
-};
-function closeViewOptions(){$('view-options').open=false;}
-$('view-options').addEventListener('toggle',()=>{$('view-options-trigger').setAttribute('aria-expanded',String($('view-options').open));});
-$('view-options').addEventListener('focusout',e=>{if(e.relatedTarget&&!$('view-options').contains(e.relatedTarget))closeViewOptions();});
 $('host-chip').onclick=()=>{$('host').value='all';render();$('search').focus();};
 function setFilter(next){filter=next==='unread'?'unread':'all';$('unread-only').setAttribute('aria-pressed',String(filter==='unread'));render();}
 function clearFilters(){$('search').value='';$('host').value='all';setFilter('all');$('search').focus();}
@@ -1632,7 +1608,6 @@ $('close').onclick=()=>$('detail').close();
 $('detail').onclick=e=>{if(e.target===$('detail')){const rect=$('detail').getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)$('detail').close();}};
 $('copy').onclick=async()=>{const prompt=`Please open the Codex chat “${selectedTask.title}”, threadId=${selectedTask.id}，hostId=${selectedTask.hostId}.`;try{await navigator.clipboard.writeText(prompt);$('copy').textContent='Copied';}catch{$('open-prompt').value=prompt;$('open-prompt').style.display='block';$('open-prompt').focus();$('open-prompt').select();$('copy').textContent='Copy the instruction below';}};
 document.addEventListener('keydown',e=>{
-  if($('view-options').open&&e.key==='Escape'){e.preventDefault();closeViewOptions();$('view-options-trigger').focus();return;}
   if(taskMenu){
     if(e.key==='Escape'){e.preventDefault();closeTaskMenu(true);return;}
     const menuPanel=$('task-submenu').contains(e.target)?$('task-submenu'):$('task-menu').contains(e.target)?$('task-menu'):null;
@@ -1652,7 +1627,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'&&!e.metaKey&&!e.ctrlKey&&!e.altKey){e.preventDefault();$('search').focus();}
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='b'){e.preventDefault();setView(view==='board'?'list':'board');}
 });
-document.addEventListener('click',e=>{if($('view-options').open&&!$('view-options').contains(e.target))closeViewOptions();if(taskMenu&&!$('task-menu').contains(e.target)&&!$('task-submenu').contains(e.target)&&!taskMenu.anchor.contains(e.target))closeTaskMenu();});
+document.addEventListener('click',e=>{if(taskMenu&&!$('task-menu').contains(e.target)&&!$('task-submenu').contains(e.target)&&!taskMenu.anchor.contains(e.target))closeTaskMenu();});
 document.addEventListener('scroll',e=>{if(taskMenu&&!$('task-menu').contains(e.target)&&!$('task-submenu').contains(e.target))closeTaskMenu();},true);
 window.addEventListener('resize',positionTaskMenu);
 restoreTextSize();
@@ -1668,7 +1643,7 @@ setInterval(()=>{
   const runtimeChanged=expireRuntimeSnapshot();
   if(runtimeChanged){removeExpiredCardRuntime();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);}
   syncPrAlertFreshness();
-  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('view-options').open&&!$('creation').open&&!$('rename-task').open){
+  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('creation').open&&!$('rename-task').open){
     const gitChanged=expireGitSnapshots();
     if(runtimeChanged||gitChanged){refreshSummary();render();}
   }
