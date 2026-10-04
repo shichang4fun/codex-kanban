@@ -20,6 +20,7 @@ export function harness(board=fixture(),{animations=false,dark=true,theme,textSi
     }
     append(...children){children.forEach(child=>{child.parentElement=this;this.children.push(child);});}
     replaceChildren(...children){this.children=[];this.append(...children);}
+    remove(){if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(n=>n!==this);this.parentElement=null;}
     setAttribute(key,value){this.attributes[key]=value;}
     getAttribute(key){return this.attributes[key]??null;}
     removeAttribute(key){delete this.attributes[key];}

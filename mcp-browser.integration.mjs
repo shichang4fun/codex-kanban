@@ -22,7 +22,47 @@ task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
   id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),title:'Synthetic scrolling task '+(index+1),isUnread:index%2===0,
   nativeSectionId:'group-0',localSectionId:'group-0',placementSource:'localThreadSection'}));
-const getBoard=async()=>{reads++;return {tasks:[...(archived?[]:[{...task}]),...passiveTasks],projects,sections,capturedAt:new Date().toISOString(),runtimeCapturedAt:null,
+// Opt-in acceptance cases for previews, waiting reasons and narrow layouts.
+if(process.env.KANBAN_TEST_CARD_INFO==='1'){
+  Object.assign(task,{title:'修复 Kanban 排序',summary:'需要确认刷新后顺序保持不变，同时保留未保存的任务草稿。',summarySource:'threadPreview',
+    column:'attention',rawStatus:{type:'active',activeFlags:['waitingOnUserInput','waitingOnApproval']},runtimeStatusSource:'desktopRuntime'});
+  const cases=[
+    {title:'Investigate a runtime issue',summary:'The runtime reported an error; the task outcome has not been determined.',summarySource:'desktopSnapshot',column:'error',rawStatus:{type:'systemError'}},
+    {title:'长中文摘要和很长的英文标识符',summary:'检查长文本在窄窗口下的表现。'+('long_identifier_without_spaces_'.repeat(12)),summarySource:'threadPreview',column:'idle',rawStatus:{type:'idle'}},
+    {title:'No summary',summary:'  ',column:'idle',rawStatus:{type:'idle'},projectId:null,projectName:null},
+    {title:'Duplicate summary',summary:'Duplicate\n summary',column:'idle',rawStatus:{type:'idle'}},
+    {title:'Expired runtime observation',summary:'Keep the preview visible after the waiting observation expires.',column:'attention',rawStatus:{type:'active',activeFlags:['waitingOnUserInput']},runtimeStatusStale:true},
+    {title:'Remote snapshot',summary:'Summary from a remote desktop snapshot, not the most recent reply.',summarySource:'desktopSnapshot',hostId:'remote-control:fixture',runtimeStatusSource:'desktopSnapshot',column:'attention',rawStatus:{type:'active',activeFlags:['waitingOnApproval']}},
+    {title:'Multiple branch PR matches',summary:'These PRs match the working directory branch; they are not explicitly attached to this task.',summarySource:'threadPreview',column:'idle',rawStatus:{type:'idle'},
+      git:{status:'ready',branch:'codex/card-info',repository:'fixture/kanban',pullRequests:{status:'matched',match:'branch',items:[
+        {number:12,state:'OPEN',url:'https://github.com/fixture/kanban/pull/12'},
+        {number:13,state:'DRAFT',url:'https://github.com/fixture/kanban/pull/13'}]}}}
+  ];
+  passiveTasks.splice(0,passiveTasks.length,...cases.map((entry,index)=>({...task,
+    id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-'+(index%3),localSectionId:'group-'+(index%3),
+    placementSource:'localThreadSection',isUnread:index%2===0,...entry})));
+}
+if(process.env.KANBAN_TEST_PR_ATTENTION==='1'){
+  const git=(items)=>({status:'ready',branch:'codex/pr-attention',repository:'fixture/kanban',
+    pullRequests:{status:'ready',match:'branch',items}});
+  const pr=(number,fields={})=>({number,state:'OPEN',url:'https://github.com/fixture/kanban/pull/'+number,checks:'failed',review:'CHANGES_REQUESTED',...fields});
+  Object.assign(task,{title:'PR checks need attention',summary:'Synthetic fixture: CI failed and review requested changes.',git:git([pr(12)])});
+  const cases=[
+    {title:'Review required',git:git([pr(13,{checks:'passed',review:'REVIEW_REQUIRED'})])},
+    {title:'Draft CI failure',git:git([pr(14,{state:'DRAFT',review:'REVIEW_REQUIRED'})])},
+    {title:'Healthy PR',git:git([pr(15,{checks:'passed',review:'APPROVED'})])},
+    {title:'Merged historical failure',git:git([pr(16,{state:'MERGED'})])},
+    {title:'Multiple PR alerts',git:git([pr(17),pr(18,{checks:'passed',review:'REVIEW_REQUIRED'})])},
+    {title:'Cached PR alerts',git:git([pr(19)]),fixtureGitStale:true}
+  ];
+  passiveTasks.splice(0,passiveTasks.length,...cases.map((entry,index)=>({...task,
+    id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-'+(index%3),localSectionId:'group-'+(index%3),
+    placementSource:'localThreadSection',isUnread:false,...entry})));
+}
+const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived?[]:[{...task}]),...passiveTasks].map(t=>({...t,
+  ...(t.runtimeStatusSource?{runtimeCapturedAt:capturedAt}:{}),...(t.git?{git:{...t.git,checkedAt:capturedAt,pullRequests:{...t.git.pullRequests,
+    checkedAt:t.fixtureGitStale?new Date(Date.now()-120000).toISOString():capturedAt}}}:{})})),
+  projects,sections,capturedAt,runtimeCapturedAt:process.env.KANBAN_TEST_CARD_INFO==='1'?capturedAt:null,
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};
 const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'synthetic',
   bridgeRequest:async(_socket,method,params)=>{

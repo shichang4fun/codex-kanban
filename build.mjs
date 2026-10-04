@@ -52,6 +52,7 @@ export function normalize(snapshot) {
   }
   const allTasks = [...byId.values()].map(task => ({
     id: task.id, title: task.title ?? 'Untitled task', summary: task.summary ?? '',
+    summarySource: task.summarySource ?? (task.summary ? 'desktopSnapshot' : null),
     hostId: task.hostId ?? 'unknown', cwd: task.cwd ?? '', projectId: task.projectId,
     projectName: projectNames.get(`${task.hostId}:${task.projectId}`)??null,
     git: task.hostId==='local'?task.git??null:null,
