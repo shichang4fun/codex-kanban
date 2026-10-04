@@ -27,7 +27,7 @@ codex plugin add codex-kanban@codex-kanban
 
 需要撤销接入时，打开 `~/Library/Application Support/Codex Sidebar Flow Original Icon/Disable Kanban Original Icon.command`（无 Sidebar Flow 时目录为 `Codex Kanban Original Icon`）；它恢复原来的 Sidebar Flow 接入或移除 Kanban 自己的登录任务，不删除插件数据。若 Node 或模块损坏，使用同目录的 **Emergency Disable Original Icon.command**：它停用整条原图标自动接入并保留文件，随后正常退出并重新打开客户端。重装 Kanban 可恢复接入。旧版 Sidebar Flow 更新器可能恢复其原始辅助脚本；此时重跑 Kanban 安装器恢复，两者不需要各自增加后台任务。检测到不认识的启动设置或文件修改时会停止并保留现场。
 
-发布者合并到 `main` 后，在 [Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 点击 **Run workflow** 即可发布新版；完整步骤见 [发布说明](#发布者一键发布新版)。
+发布者合并到 `main` 后，[Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 自动测试并发布新版；完整步骤见 [发布说明](#发布者自动发布新版)。
 
 ## 功能与行为
 
@@ -195,11 +195,11 @@ codex plugin add codex-kanban@codex-kanban
 
 这是自托管的 GitHub marketplace，不属于 OpenAI 官方公开目录。双击安装器包含桥接配置；仅使用 CLI 安装的基础看板可按需单独配置桥接。桥接自动使用客户端成功加载的本机任务，无需提供固定任务 ID；目录默认位于 `$CODEX_HOME/kanban-desktop`（未设置时为 `~/.codex/kanban-desktop`）。
 
-### 发布者：一键发布新版
+### 发布者：自动发布新版
 
-合并代码到 `main` 后，打开 [Actions → Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml)，点击 **Run workflow**，选择 **main** 并运行。无需手动复制文件、切换分支或配置额外 token。
+每次合并代码或推送到 `main` 后，[Actions → Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 自动运行。需要重试时仍可点击 **Run workflow**，选择 **main** 并运行。无需手动复制文件、切换分支或配置额外 token。
 
-工作流先安装依赖、执行全部测试，再构建分发包。测试通过后，仅将 `dist/marketplace/` 更新到 `marketplace` 分支，保留原有历史；隐藏的插件目录与启动器权限通过 tar 传递。构建任务只有读取权限，发布任务才拥有仓库内容写权限。重复发布相同内容不新增提交；主干变更或远端写入冲突会停止发布，重新运行即可。合并 `main` 本身不自动发布。
+工作流先安装依赖、执行全部测试，再构建分发包。测试通过后，仅将 `dist/marketplace/` 更新到 `marketplace` 分支，保留原有历史；隐藏的插件目录与启动器权限通过 tar 传递。构建任务只有读取权限，发布任务才拥有仓库内容写权限。重复发布相同内容不新增提交；主干变更或远端写入冲突会停止发布，后续 `main` 推送会触发新一轮发布，也可手动重试。`marketplace` 分支更新不会触发发布工作流。
 
 仓库需要启用 GitHub Actions 并允许发布任务写入 `marketplace` 分支。成功后可查看 [分发包](https://github.com/shichang4fun/codex-kanban/tree/marketplace)，其 README 标明当前版本与安装命令。本机构建使用 `npm run package:marketplace`；不要发布本机安装器生成的私有目录。
 
