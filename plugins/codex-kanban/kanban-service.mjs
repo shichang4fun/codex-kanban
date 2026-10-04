@@ -40,7 +40,19 @@ const failure=(message,status)=>Object.assign(Error(message),{status});
 // HTTP and MCP share one write lock and one token-bound Undo registry.
 export function createKanbanService({getBoard,archiveTask=archiveLocalTask,restoreTask=restoreArchivedTask,
   pinTask=null,moveTask=null,setProject=setLocalProject,renameTask=renameLocalTask,settingsStore=defaultCreationSettingsStore(),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
-  const csrf=randomUUID(),undoArchives=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
+  const csrf=randomUUID(),undoArchives=new Map(),pendingArchives=new Set(),pendingRestores=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
+  const currentBoard=async()=>{
+    const board=await getBoard();
+    // A long-lived reader can lag behind a verified archive. Keep that task
+    // hidden until the reader catches up, then allow later external restores.
+    for(const id of pendingArchives)if(!board.tasks.some(t=>t.hostId==='local'&&t.id===id))pendingArchives.delete(id);
+    // Keep a verified restore visible while the same reader catches up.
+    for(const id of pendingRestores.keys())if(board.tasks.some(t=>t.hostId==='local'&&t.id===id))pendingRestores.delete(id);
+    if(!pendingArchives.size&&!pendingRestores.size)return board;
+    const itemKeys=new Set([...pendingArchives].map(id=>'codex:thread:local:'+id));
+    return {...board,tasks:[...board.tasks.filter(t=>t.hostId!=='local'||!pendingArchives.has(t.id)),...pendingRestores.values()],
+      ...(board.sections?{sections:board.sections.map(section=>({...section,...(section.itemKeys?{itemKeys:section.itemKeys.filter(key=>!itemKeys.has(key))}:{})}))}:{})};
+  };
   const desktopStatus=async()=>{
     if(desktopBridgeSocket)try{return await bridgeRequest(desktopBridgeSocket,'status',{},1500);}catch{}
     return {connected:false};
@@ -54,7 +66,7 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
   };
   const connectedBoard=async()=>{
     const [current,status,storedDefaults]=await Promise.all([
-      getBoard(),desktopStatus(),Promise.resolve().then(()=>settingsStore.read()).then(defaults=>({defaults})).catch(()=>({defaults:{},error:'Creation defaults could not be read. Repair their storage before editing settings.'}))
+      currentBoard(),desktopStatus(),Promise.resolve().then(()=>settingsStore.read()).then(defaults=>({defaults})).catch(()=>({defaults:{},error:'Creation defaults could not be read. Repair their storage before editing settings.'}))
     ]);
     let value=current;const desktopArchiveConnected=status.connected===true,
       desktopGroupsConnected=desktopArchiveConnected&&status.groupActions===true;
@@ -64,7 +76,8 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     return {...value,autoFlow:status.autoFlow??{available:false},nativeCreationDefaults,creationOperations:status.creationOperations??[],sync:{...value.sync,writable:true,moveWritable:desktopGroupsConnected,archiveLocal:true,renameLocal:true,pinLocal:desktopGroupsConnected,projectLocal:value.sync?.projectCatalogConnected===true,
       createWritable:desktopArchiveConnected&&status.taskCreation===true&&!settingsError,creationError:settingsError??status.creationError??null,
       moveTransport:desktopGroupsConnected?'desktop':null,desktopGroupsConnected,
-      archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected}};
+      archiveTransport:desktopArchiveConnected?'desktop':'local',desktopArchiveConnected,
+      renameTransport:desktopArchiveConnected&&status.renameActions===true?'desktop':'local'}};
   };
   return {
     csrf,
@@ -123,14 +136,26 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
           if(undo)return undo.transport==='desktop'
             ?bridgeRequest(desktopBridgeSocket,'archive',{threadId:undo.threadId,hostId:'local',archived:false})
             :restoreTask({threadId:undo.threadId,hostId:'local'},{signal});
-          const current=await getBoard();
+          const current=await currentBoard();
           checkCanceled();
-          if(name==='rename')return renameTask(params,current,{signal});
+          // The recovery snapshot proves visibility, not current editable
+          // metadata. Wait for the reader before editing that restored task.
+          if(['rename','project','move','pin'].includes(name)&&params?.hostId==='local'&&pendingRestores.has(params.threadId))
+            throw failure('The restored task is still syncing. Refresh and try again.',409);
+          if(name==='rename'){
+            const status=await desktopStatus();checkCanceled();
+            if(status.connected!==true||status.renameActions!==true)return renameTask(params,current,{signal});
+            if(params?.hostId!=='local'||!current.tasks.some(t=>t.id===params?.threadId&&t.hostId==='local'&&!t.sidebarOnly&&t.title===params?.expectedTitle))
+              throw failure('This task has changed. Refresh and try again.',409);
+            return bridgeRequest(desktopBridgeSocket,'rename',params,45000,{signal});
+          }
           if(name==='project'){
             if(current.sync?.projectCatalogConnected!==true)throw failure('Local projects are unavailable. Refresh and try again.',503);
             return setProject(params,current,{signal});
           }
           archivedTask=current.tasks.find(t=>t.id===params?.threadId&&t.hostId==='local');
+          if(name==='archive'&&(!archivedTask||archivedTask.sidebarOnly||params?.hostId!=='local'))
+            throw failure('This local task is no longer in the board. Refresh and try again.',409);
           const status=await desktopStatus();
           checkCanceled();
           if(name==='move'||name==='pin'){
@@ -158,10 +183,15 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
           if(undo){
             if(result.restored!==true||result.threadId!==undo.threadId)throw Error('Restore not verified');
             undoArchives.delete(params.undoToken);
+            pendingArchives.delete(undo.threadId);
+            pendingRestores.set(undo.threadId,undo.boardTask);
           }else if(name==='archive'){
             if(result.archived!==true||result.threadId!==params.threadId)throw Error('Archive not verified');
+            for(const [token,entry]of undoArchives)if(entry.threadId===result.threadId)undoArchives.delete(token);
+            pendingArchives.add(result.threadId);
+            pendingRestores.delete(result.threadId);
             const undoToken=randomUUID();undoArchives.set(undoToken,{threadId:result.threadId,transport:archiveTransport,
-              task:{id:result.threadId,hostId:'local',title:archivedTask?.title??'Archived task'}});
+              task:{id:result.threadId,hostId:'local',title:archivedTask?.title??'Archived task'},boardTask:{...archivedTask}});
             result={...result,undoToken};
           }
         }catch(error){throw failure(error.status?error.message:'Task action could not be confirmed. Refresh before trying again.',error.status??503);}
@@ -172,6 +202,6 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
       try{return await mutating;}
       finally{mutating=null;}
     },
-    async close(){closed=true;lifetime.abort();await mutating?.catch(()=>{});undoArchives.clear();}
+    async close(){closed=true;lifetime.abort();await mutating?.catch(()=>{});undoArchives.clear();pendingArchives.clear();pendingRestores.clear();}
   };
 }
