@@ -989,7 +989,7 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
   DATA=board;nativeConnected=true;nativeWritable=board.sync.scope==='localSections'?board.sync.moveWritable===true:board.sync.writable===true;
   nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop':
     (board.sync.desktopArchiveConnected===false?'Desktop disconnected. ':'Desktop group connection unavailable. ')
-    +'Cross-group dragging and Pin/Unpin are unavailable. Restart Codex with the updated Kanban launcher or its configured original icon, then open a local chat. Kanban rechecks automatically.'):
+    +'Cross-group dragging and Pin/Unpin are unavailable. Kanban reconnects automatically when Codex recovers; open a local chat. If the connection stays unavailable, reopen Codex with the updated Kanban launcher or its configured original icon. Kanban rechecks automatically.'):
     nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
   expireRuntimeSnapshot();
   refreshSummary();
