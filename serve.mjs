@@ -18,8 +18,8 @@ const server=createServer(async(req,res)=>{
   if(!origins.includes('http://'+req.headers.host)||(req.headers.origin&&!origins.includes(req.headers.origin))
     ||['cross-site','same-site'].includes(req.headers['sec-fetch-site'])){res.writeHead(403).end('Forbidden');return;}
   try{
-    if(req.url==='/api/board'&&req.method==='GET'){
-      json(res,200,await service.read());return;
+    if((req.url==='/api/board'||req.url==='/api/board?forceGit=1')&&req.method==='GET'){
+      json(res,200,await service.read({forceGit:req.url==='/api/board?forceGit=1'}));return;
     }
     if(req.url==='/api/creation-options'&&req.method==='GET'){
       try{json(res,200,await service.creationOptions());}catch(error){json(res,error.status??503,{error:error.status?error.message:'Creation options are unavailable.'});}return;

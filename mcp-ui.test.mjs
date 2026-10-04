@@ -7,6 +7,15 @@ import {AppBridge} from '@modelcontextprotocol/ext-apps/app-bridge';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {createMcpFetch} from './mcp-ui-transport.mjs';
 
+test('MCP fetch passes manual Git refresh only for the explicit read-only route',async()=>{
+  const calls=[],fetch=createMcpFetch({callServerTool:async params=>{calls.push(params);return {content:[],structuredContent:{board:{tasks:[]}}};}},Promise.resolve());
+  await fetch('/api/board');await fetch('/api/board?forceGit=1');await fetch('/api/board');
+  assert.deepEqual(calls.map(c=>c.arguments),[{}, {forceGit:true}, {}]);
+  assert(calls.every(c=>c.name==='get_board'));
+  for(const url of ['/api/board?forceGit=0','/api/board?forceGit=1&extra=1'])await assert.rejects(fetch(url),/Unsupported/);
+  await assert.rejects(fetch('/api/board?forceGit=1',{method:'POST'}),/Unsupported/);
+});
+
 test('MCP transport forwards project assignment and removal with the current app token',async()=>{
   const calls=[],fetch=createMcpFetch({callServerTool:async params=>{calls.push(params);return {structuredContent:{projectId:params.arguments.projectId},content:[]};}},Promise.resolve());
   for(const projectId of ['native-project',null]){
@@ -69,7 +78,7 @@ test('MCP UI can refresh on sandbox protocols and recover Undo without reloading
   const code=html.match(/async function refreshNativeBoard[\s\S]*?(?=async function moveNative)/)[0];
   let applied=0,recovered=0;
   const context=createContext({kanbanTransport:{},location:{protocol:'about:'},taskActionPending:()=>false,
-    nativeReads:0,nativeEpoch:0,nativePending:false,taskMenu:null,draggedKey:null,draggedGroup:null,
+    nativeReads:0,nativeEpoch:0,nativePending:false,refreshPressed:false,taskMenu:null,draggedKey:null,draggedGroup:null,
     document:{hidden:false,activeElement:null,getElementById:()=>({open:false})},$:()=>({open:false}),nativeToken:null,
     fetch:async()=>({ok:true,json:async()=>({csrf:'token',board:{tasks:[]},undoArchives:[{undoToken:'recover'}]})}),
     applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){},nativeNotice(){}});

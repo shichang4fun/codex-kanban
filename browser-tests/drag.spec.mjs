@@ -16,6 +16,33 @@ test.beforeEach(async({page})=>{
   await open(page);
 });
 
+test('manual Refresh forwards Git intent once; subsequent polls preserve tasks without writes',async({page})=>{
+  await page.setViewportSize({width:360,height:850});
+  const app=page.frameLocator('iframe'),before=await status(page),count=await app.locator('.card').count();
+  const refresh=app.getByRole('button',{name:'Refresh board',exact:true});
+  await expect(refresh).toBeVisible();const box=await refresh.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(360);
+  await refresh.click();
+  await expect.poll(async()=>(await status(page)).forcedGitReads).toBe(before.forcedGitReads+1);
+  const refreshed=await status(page);
+  await expect.poll(async()=>(await status(page)).reads,{timeout:6000}).toBeGreaterThan(refreshed.reads);
+  const after=await status(page);
+  expect(after.forcedGitReads).toBe(before.forcedGitReads+1);expect(after.moves).toEqual([]);expect(after.archived).toBe(false);
+  expect(after.navigationUrls).toEqual([]);expect(after.projectId).toBe(before.projectId);
+  await expect(app.locator('.card')).toHaveCount(count);
+});
+
+test('releasing Refresh outside the iframe preserves automatic polling',async({page})=>{
+  const refresh=page.frameLocator('iframe').getByRole('button',{name:'Refresh board',exact:true});
+  await expect(refresh).toBeEnabled();const box=await refresh.boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+  await page.mouse.move(10,10);await page.mouse.up();
+  const before=await status(page);
+  await expect.poll(async()=>(await status(page)).reads,{timeout:6000}).toBeGreaterThan(before.reads);
+  expect((await status(page)).forcedGitReads).toBe(before.forcedGitReads);
+  await expect(refresh).toBeEnabled();
+});
+
 for(const view of ['Board','List']){
   test(`${view}: drag from the title across empty, populated, pinned and Ungrouped groups`,async({page})=>{
     const app=page.frameLocator('iframe');

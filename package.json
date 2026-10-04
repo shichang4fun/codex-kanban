@@ -17,6 +17,7 @@
     "prepare:plugin": "node install-plugin.mjs",
     "test:ui": "node mcp-browser.integration.mjs",
     "test:browser": "playwright test",
+    "test:performance": "node performance-benchmark.mjs",
     "test:regression": "npm test && npm run test:browser",
     "test:plugin-native": "node mcp-native.integration.mjs",
     "test:install-native": "node install-native.integration.mjs",

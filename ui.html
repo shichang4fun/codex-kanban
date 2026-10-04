@@ -355,6 +355,7 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
 <symbol id="i-appearance" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 1 0 14Z" fill="currentColor"/></symbol>
 <symbol id="i-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 20 20"><path d="M6 14 14 6M6 6h8v8"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 20 20"><path d="M16 7a6.5 6.5 0 1 0 .2 5M16 3v4h-4"/></symbol>
 </defs></svg>
 <div class="shell" id="shell">
   <main class="main">
@@ -367,6 +368,7 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
         <label class="toolbar-select" title="Filter hosts"><svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg><select id="host" aria-label="Filter hosts"><option value="all">All hosts</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
         <label class="toolbar-select theme-control" title="Appearance"><svg class="icon" aria-hidden="true"><use href="#i-appearance"/></svg><select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
         <label class="toolbar-select font-control" title="Text size · 100% restores the default"><span class="font-icon" aria-hidden="true">Aa</span><select id="font-size" aria-label="Text size"><option value="90">90%</option><option value="100" selected>100%</option><option value="110">110%</option><option value="120">120%</option><option value="130">130%</option></select><svg class="icon select-chevron" aria-hidden="true"><use href="#i-down"/></svg></label>
+        <button class="icon-button" id="refresh-board" type="button" aria-label="Refresh board" title="Refresh tasks, branch and pull requests"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg></button>
         </div>
       <div class="filters" id="active-filters" hidden>
         <button class="host-chip" id="host-chip" type="button" hidden><span id="host-chip-label"></span><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button>
@@ -576,6 +578,7 @@ function removeExpiredCardRuntime(){
 }
 let draggedKey=null,draggedTaskGroup=null,suppressClickUntil=0,toastTimer;
 let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nativePending=false,nativeReads=0;
+let refreshPressed=false;
 let archivingKey=null;
 let pinningKey=null,restoringToken=null;
 let creationBusy=false,creationSession=null,creationOptions=null,nextCreationTarget=null;
@@ -861,6 +864,8 @@ function nativeNotice(){
   $('connection-notice').hidden=$('native-note').hidden=!messages.length;
   const message=messages.join(' · ');if($('native-note').textContent!==message)$('native-note').textContent=message;
   $('connection-retry').disabled=!!(taskActionPending()||nativeReads||draggedKey||draggedGroup||globalThis.kanbanTransport?.navigationPending);
+  $('refresh-board').disabled=$('connection-retry').disabled||!!(taskMenu||$('creation').open||$('rename-task').open);
+  $('refresh-board').setAttribute('aria-busy',String(nativeReads>0));
   $('connection-retry').textContent=nativeReads?'Checking…':'Check connection';
   const format=value=>Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'medium',hour12:false}).format(new Date(value)):'Unknown';
   $('visible-count').title=[nativeConnected?'Groups auto-refresh every 3 seconds':'Showing saved groups',
@@ -899,13 +904,13 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
   }else render({animate:true});
   renderCreationNotices();
 }
-async function refreshNativeBoard(force=false){
-  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads)))return;
+async function refreshNativeBoard(force=false,{forceGit=false}={}){
+  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(refreshPressed||globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads)))return;
   nativeReads++;
   nativeNotice();
   const epoch=++nativeEpoch;
   try{
-    const response=await fetch('/api/board',{cache:'no-store'});
+    const response=await fetch(forceGit?'/api/board?forceGit=1':'/api/board',{cache:'no-store'});
     if(!response.ok)throw Error('Local groups unavailable; keeping the latest snapshot.');
     const payload=await response.json();
     if(epoch!==nativeEpoch)return;
@@ -1635,6 +1640,16 @@ window.addEventListener('storage',e=>{
 });
 $('unread-only').onclick=()=>setFilter(filter==='unread'?'all':'unread');
 $('view-board').onclick=()=>setView('board');$('view-list').onclick=()=>setView('list');
+// Focusing the iframe during a press must not disable Refresh before its click.
+$('refresh-board').onpointerdown=event=>{if(event.button===0)refreshPressed=true;};
+$('refresh-board').onpointerleave=()=>{refreshPressed=false;};
+document.addEventListener('pointerup',()=>{if(refreshPressed)setTimeout(()=>{refreshPressed=false;},0);});
+document.addEventListener('pointercancel',()=>{refreshPressed=false;});
+window.addEventListener('blur',()=>{refreshPressed=false;});
+$('refresh-board').onclick=async()=>{
+  if(taskActionPending()||nativeReads||draggedKey||draggedGroup||taskMenu||$('creation').open||$('rename-task').open||globalThis.kanbanTransport?.navigationPending)return;
+  await refreshNativeBoard(true,{forceGit:true});
+};
 $('connection-retry').onclick=async()=>{
   if(taskActionPending()||nativeReads||draggedKey||draggedGroup||globalThis.kanbanTransport?.navigationPending)return;
   await refreshNativeBoard(true);

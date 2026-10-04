@@ -17,6 +17,38 @@ const id='11111111-1111-4111-8111-111111111111';
 const task={id,hostId:'local',title:'Fixture task',cwd:'/fixture'};
 const board=()=>({tasks:[task],sections:[],sync:{connected:true}});
 
+test('MCP forwards a boolean manual Git refresh and keeps open_board schema unchanged',async()=>{
+  const calls=[],f=await harness({getBoard:async options=>{calls.push(options);return board();}});
+  try{
+    for(const [name,args] of [['get_board',{}],['get_board',{forceGit:true}],['get_board',{forceGit:false}],['open_board',{}]]){
+      assert(!(await f.client.callTool({name,arguments:args})).isError);
+    }
+    assert.deepEqual(calls,[{forceGit:false},{forceGit:true},{forceGit:false},{forceGit:false}]);
+    for(const [name,args] of [['get_board',{forceGit:'true'}],['get_board',{forceGit:true,extra:1}],['open_board',{forceGit:true}]]){
+      assert((await f.client.callTool({name,arguments:args})).isError);
+    }
+    assert.equal(calls.length,4);
+  }finally{await f.close();}
+});
+test('forced board reads keep Git intent when sharing an in-flight metadata read',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'kanban-force-'));let release,started,opens=0,reads=0,closed=0;
+  const began=new Promise(resolve=>started=resolve),waiting=new Promise(resolve=>release=resolve),calls=[];
+  const source=createBoardSource({snapshotPath:join(root,'missing.json'),allowMissingSnapshot:true,readUnread:async()=>({known:false}),
+    gitStatus:{async enrich(board,options){calls.push(options);return board;},close(){closed++;}},
+    openReader:async()=>{opens++;return {close(){},async request(method){
+      if(method!=='thread/list')return {data:[]};
+      reads++;started();await waiting;
+      return {data:[{id,name:'Fixture',ephemeral:false,parentThreadId:null,section:null,updatedAt:1,cwd:'/fixture'}]};
+    }};}});
+  try{
+    const ordinary=source.getBoard();await began;const forced=source.getBoard({forceGit:true});
+    release();const results=await Promise.all([ordinary,forced]);
+    assert(results.every(b=>b.tasks.length===1));assert.equal(opens,1);assert.equal(reads,1);
+    assert.deepEqual(calls,[{waitForFresh:false,force:false},{waitForFresh:false,force:true}]);
+  }finally{release();await source.close();await rm(root,{recursive:true,force:true});}
+  assert.equal(closed,1);await assert.rejects(source.getBoard({forceGit:true}),/closed/);
+});
+
 test('MCP project changes require the app token, preserve null clearing and verify the target',async()=>{
   let writes=0,projectId='project-a';
   const f=await harness({getBoard:async()=>({tasks:[{...task,localProjectId:projectId}],sections:[],sync:{connected:true,projectCatalogConnected:true}}),

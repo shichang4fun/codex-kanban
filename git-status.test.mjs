@@ -30,6 +30,7 @@ function fixture(){
   const calls=[],state={branch:'codex/feature',sha,time:0,rows:[pr],fail:false};
   const reader=createGitStatusReader({clock:()=>state.time,run:async(name,args)=>{
     calls.push({name,args});
+    if(name==='git'&&state.gitWait)await state.gitWait;
     if(name==='gh'){if(state.fail)throw Error('Private diagnostics');return JSON.stringify(state.rows);}
     if(args.includes('rev-parse'))return state.sha;
     if(args.includes('symbolic-ref')){if(!state.branch)throw Error('Detached');return state.branch;}
@@ -53,6 +54,70 @@ test('shared workspaces read once; remote tasks never use local Git and GitHub r
   assert.equal(f.calls.filter(c=>c.name==='git').length,3);assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
   assert(f.calls.find(c=>c.name==='gh').args.includes('github.com/example/board'));
 });
+test('3-second board polls refresh Git at 30 seconds and PRs at 60 seconds',async()=>{
+  const f=fixture();
+  try{
+    for(let time=0;time<=27000;time+=3000){f.state.time=time;await f.read();}
+    assert.equal(f.calls.filter(c=>c.name==='git').length,3);
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
+    f.state.time=30000;await f.read();
+    assert.equal(f.calls.filter(c=>c.name==='git').length,6);
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
+    f.state.time=60000;await f.read();
+    assert.equal(f.calls.filter(c=>c.name==='git').length,9);
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,2);
+  }finally{f.reader.close();}
+});
+test('manual refresh queries the actual new branch PR even when both branch caches are fresh',{timeout:1000},async()=>{
+  const f=fixture();let release;
+  try{
+    await f.read();
+    f.state.branch='codex/other';f.state.rows=[{...pr,headRefName:'codex/other'}];f.state.time=1000;
+    await f.reader.enrich(board,{force:true});await f.reader.settle();
+    f.state.branch='codex/feature';f.state.rows=[pr];f.state.time=2000;
+    await f.reader.enrich(board,{force:true});await f.reader.settle();
+    const previous=(await f.read()).tasks[0].git,calls=f.calls.length;
+    f.state.branch='codex/other';f.state.rows=[{...pr,headRefName:'codex/other'}];f.state.time=3000;
+    f.state.gitWait=new Promise(resolve=>release=resolve);
+    const cached=await f.reader.enrich(board,{force:true,waitForFresh:false});
+    assert.equal(cached.tasks[0].git.branch,'codex/feature');
+    assert.equal(cached.tasks[0].git.checkedAt,previous.checkedAt);
+    assert.equal(cached.tasks[0].git.pullRequests.checkedAt,previous.pullRequests.checkedAt);
+    assert(cached.tasks[0].git.refreshing);
+    assert.equal(f.calls.slice(calls).filter(c=>c.name==='gh').length,0);
+    release();await f.reader.settle();
+    const queries=f.calls.slice(calls).filter(c=>c.name==='gh');
+    assert.equal(queries.length,1);assert.equal(queries[0].args[queries[0].args.indexOf('--head')+1],'codex/other');
+    const fresh=(await f.read()).tasks[0].git;
+    assert.equal(fresh.branch,'codex/other');assert.equal(fresh.checkedAt,new Date(3000).toISOString());
+    assert.equal(fresh.pullRequests.checkedAt,new Date(3000).toISOString());
+  }finally{release?.();f.reader.close();await f.reader.settle();}
+});
+test('cold and concurrent manual refreshes reuse pending Git and PR queries',{timeout:1000},async()=>{
+  const f=fixture();let release;
+  try{
+    f.state.gitWait=new Promise(resolve=>release=resolve);
+    const reads=await Promise.all(Array.from({length:5},()=>f.reader.enrich(board,{force:true,waitForFresh:false})));
+    assert(reads.every(r=>r.tasks[0].git.status==='loading'));
+    assert.equal(f.calls.filter(c=>c.name==='git').length,3);
+    release();await f.reader.settle();
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
+    assert.equal((await f.read()).tasks[0].git.pullRequests.status,'ready');
+  }finally{release?.();f.reader.close();await f.reader.settle();}
+});
+test('manual refresh joining an ordinary Git query preserves PR refresh intent',{timeout:1000},async()=>{
+  const f=fixture();let release;
+  try{
+    await f.read();f.state.time=30000;
+    f.state.gitWait=new Promise(resolve=>release=resolve);
+    await f.reader.enrich(board,{waitForFresh:false});
+    await f.reader.enrich(board,{force:true,waitForFresh:false});
+    assert.equal(f.calls.filter(c=>c.name==='git').length,6);
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
+    release();await f.reader.settle();
+    assert.equal(f.calls.filter(c=>c.name==='gh').length,2);
+  }finally{release?.();f.reader.close();await f.reader.settle();}
+});
 test('branch matches reject other branches and cross-repository PRs; draft and historical states stay distinct',async()=>{
   const f=fixture();f.state.rows=[{...pr,headRefName:'wrong'}, {...pr,isCrossRepository:true}, {...pr,isDraft:true},
     {...pr,number:8,url:pr.url.replace('/7','/8'),state:'MERGED'}, {...pr,number:9,url:pr.url.replace('/7','/9'),state:'CLOSED'}];
@@ -73,11 +138,11 @@ test('a reused branch does not inherit historical PRs from a merge base or old h
   const f=fixture();f.state.sha=merged;
   f.state.rows=[{...pr,state:'MERGED',mergeCommit:{oid:merged}}, {...pr,state:'CLOSED'}];
   assert.equal((await f.read()).tasks[0].git.pullRequests.status,'none');
-  f.state.sha=sha;f.state.time=5001;
+  f.state.sha=sha;f.state.time=30001;
   assert.deepEqual((await f.read()).tasks[0].git.pullRequests.items.map(p=>p.state),['MERGED','CLOSED']);
 });
 test('switching from a PR branch to a detached worktree clears the previous association',async()=>{
-  const f=fixture();await f.read();f.state.branch=null;f.state.time=5001;
+  const f=fixture();await f.read();f.state.branch=null;f.state.time=30001;
   const result=(await f.read()).tasks[0].git.pullRequests;
   assert.equal(result.status,'detached');assert.deepEqual(result.items,[]);
   assert.equal(f.calls.filter(c=>c.name==='gh').length,1);
@@ -99,7 +164,7 @@ test('GitHub failures clear obsolete PR states and retry only at the cache inter
   assert.equal((await f.read()).tasks[0].git.pullRequests.status,'ready');
 });
 test('a branch switch cannot reuse the old branch PR result',async()=>{
-  const f=fixture();await f.read();f.state.branch='codex/other';f.state.time=5001;
+  const f=fixture();await f.read();f.state.branch='codex/other';f.state.time=30001;
   const switched=(await f.read()).tasks[0].git;
   assert.equal(switched.branch,'codex/other');assert.equal(switched.pullRequests.status,'none');
   assert.equal(f.calls.filter(c=>c.name==='gh').length,2);
@@ -115,7 +180,7 @@ test('slow GitHub requests leave capacity for local Git refreshes',async()=>{
   }});
   const workspaces={tasks:Array.from({length:4},(_,i)=>({id:String(i),hostId:'local',cwd:'/workspace/repo'+i}))};
   try{
-    await reader.enrich(workspaces);now=5001;
+    await reader.enrich(workspaces);now=30001;
     const result=await Promise.race([reader.enrich(workspaces),new Promise(resolve=>timer=setTimeout(()=>resolve(null),200))]);
     assert(result,'Git refresh waited for GitHub');assert.equal(waiting.length,2);
   }finally{clearTimeout(timer);releasing=true;waiting.forEach(resolve=>resolve('[]'));await reader.settle();}
@@ -141,7 +206,7 @@ test('background Git enrichment never holds task status behind cold or slow work
     await reader.enrich(board,{waitForFresh:false});assert.equal(calls,3);
     release();await reader.settle();
     const fresh=await reader.enrich(board,{waitForFresh:false});assert.equal(fresh.tasks[0].git.branch,'feature');
-    branch='other';now=5001;
+    branch='other';now=30001;
     const cached=await reader.enrich(board,{waitForFresh:false});assert(cached.tasks[0].git.refreshing);assert.equal(cached.tasks[0].git.branch,'feature');
     await reader.settle();assert.equal((await reader.enrich(board,{waitForFresh:false})).tasks[0].git.branch,'other');
   }finally{release();await reader.settle();}
@@ -154,7 +219,7 @@ test('real Git reads track branch changes and detached HEAD without changing rep
   try{
     git(['init','--initial-branch=feature']);git(['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture']);
     const first=await read();assert.equal(first.branch,'feature');assert.equal(first.pullRequests.status,'unsupported');
-    git(['switch','--detach']);now=5001;
+    git(['switch','--detach']);now=30001;
     const detached=await read();assert.equal(detached.branch,null);assert.equal(detached.sha,first.sha);
     assert.equal(detached.pullRequests.status,'detached');
     assert.equal(git(['status','--porcelain']),'');

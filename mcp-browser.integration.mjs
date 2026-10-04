@@ -16,7 +16,7 @@ const task={id,hostId:'local',title:'Sidebar integration fixture',summary:'Synth
 const sections=[{sectionId:'chats',name:'Tasks'},...['For Later','In Progress','For Review','Pinned'].map((name,index)=>({sectionId:'group-'+index,name}))];
 const defaults={};
 const settingsStore={read:async()=>structuredClone(defaults),update:async change=>change(defaults)};
-let archived=false,reads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
+let archived=false,reads=0,forcedGitReads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
 const moves=[];
 let groupActions=true,moveFailure=false,desktopConnected=true;
 let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false,worktreeProject=false;
@@ -78,7 +78,7 @@ if(process.env.KANBAN_TEST_UI_CLEANUP==='1'){
   passiveTasks.splice(0,passiveTasks.length,...cases.map((entry,index)=>({...task,
     id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-0',localSectionId:'group-0',placementSource:'localThreadSection',...entry})));
 }
-const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived&&!staleArchiveBoard||restored&&staleRestoreBoard?[]:[{...task}]),...passiveTasks].map(t=>({...t,
+const getBoard=async({forceGit=false}={})=>{reads++;if(forceGit)forcedGitReads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived&&!staleArchiveBoard||restored&&staleRestoreBoard?[]:[{...task}]),...passiveTasks].map(t=>({...t,
   ...(t.runtimeStatusSource?{runtimeCapturedAt:capturedAt}:{}),...(t.git?{git:{...t.git,checkedAt:t.fixtureBranchStale?new Date(Date.now()-120000).toISOString():capturedAt,pullRequests:{...t.git.pullRequests,
     checkedAt:t.fixtureGitStale?new Date(Date.now()-120000).toISOString():capturedAt}}}:{})})),
   projects,sections,capturedAt,runtimeCapturedAt:process.env.KANBAN_TEST_CARD_INFO==='1'?capturedAt:null,
@@ -167,7 +167,7 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,localProjectId:task.localProjectId,projectSource:task.projectSource,projectWrites,moves,archives,renames,navigationUrls}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,forcedGitReads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,localProjectId:task.localProjectId,projectSource:task.projectSource,projectWrites,moves,archives,renames,navigationUrls}));return;}
     if(req.url==='/fixture/reset'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
       const options=body?JSON.parse(body):{};
