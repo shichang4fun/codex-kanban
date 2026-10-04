@@ -60,7 +60,7 @@ export async function startDesktopArchiveBridge({socketPath,...options}){
   const creation=createDesktopCreation({...options,store:options.creationStore??createJsonStore(join(dirname(socketPath),'creation-operations.json'))});
   return startLocalBridge({socketPath,dispatch:async(method,params,context)=>{
     if(method==='status'){
-      const status={...controller.status(),groupActions:true,runtimeAvailable:runtime!==null,autoFlow:options.autoFlow?.status()??{available:false}};
+      const status={...controller.status(),bridgeVersion:options.bridgeVersion??null,groupActions:true,runtimeAvailable:runtime!==null,autoFlow:options.autoFlow?.status()??{available:false}};
       try{return {...status,taskCreation:true,creationOperations:await creation.operations()};}
       catch{return {...status,taskCreation:false,creationError:'Creation history could not be read. Task creation is disabled until its storage is repaired.'};}
     }

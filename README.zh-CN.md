@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.56
+# Codex Kanban 0.4.57
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
@@ -55,18 +55,15 @@ Codex Kanban 把聊天任务变成侧栏看板：查看进行中与待审阅任�
 
 重启并打开本机聊天后，执行以下只读检查：
 
+**安装结果**：安装器会说明桥接是否可用、是否需要重启，以及本机聊天或分组初始化是否仍在等待。重启后，可以双击 `$CODEX_HOME/kanban-desktop`（默认 `~/.codex/kanban-desktop`）里的 `Check Codex Kanban.command` 再次检查。检查为只读，不开启自动分类，也不创建任务。
+
+Agent 可以执行同一入口获取 JSON：
+
 ```sh
-"/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" plugin list --json
-"/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" --input-type=module <<'JS'
-import {homedir} from 'node:os';
-import {join} from 'node:path';
-import {pathToFileURL} from 'node:url';
-const root=join(process.env.CODEX_HOME||join(homedir(),'.codex'),'kanban-desktop');
-const {desktopBridgeRequest}=await import(pathToFileURL(join(root,'runtime','bridge-transport.mjs')));
-const {connected,groupActions,autoFlow}=await desktopBridgeRequest(join(root,'desktop.sock'),'status');
-console.log(JSON.stringify({connected,groupActions,autoFlow},null,2));
-JS
+"${CODEX_HOME:-$HOME/.codex}/kanban-desktop/Check Codex Kanban.command" --json </dev/null
 ```
+
+退出码：`0` 表示桥接可用，`2` 表示等待用户步骤，`1` 表示需要处理问题。结果包含已安装版本，并始终返回 `guiVerified: false`；仍需打开侧栏看板完成 GUI 验收。
 
 只有 `codex-kanban@codex-kanban` 已安装且启用、`connected` 和 `groupActions` 为 true、侧栏看板可以打开，才能报告「**可用**」。自动分类还需确认 `autoFlow.available`、`autoFlow.enabled` 为 true，`autoFlow.initialization.state === "ready"`，并看到 In Progress、For Review、For Later 三个分组。已有策略若处于关闭状态，保持关闭并如实说明。
 
