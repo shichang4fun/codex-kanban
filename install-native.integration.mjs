@@ -94,8 +94,9 @@ try{
   assert.equal(enabledFlow.enabled,false);assert.equal(enabledFlow.initialization.state,'error');
   assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
   const status=await request('mcpServerStatus/list',{limit:100,threadId:context.thread.id});
-  const entry=status.data?.find(server=>server.name.includes('codex-kanban'));
-  assert(entry,'Installed plugin was not discovered. '+diagnostic.slice(-2000));
+  const candidates=status.data?.filter(server=>server.name.includes('codex-kanban'))??[];
+  const entry=candidates.find(server=>server.serverInfo?.version===manifest.version);
+  assert(entry,'Installed plugin was not discovered. '+JSON.stringify(candidates.map(({name,serverInfo})=>({name,version:serverInfo?.version})))+' '+diagnostic.slice(-2000));
   assert.equal(Object.keys(entry.tools).length,14);
   assert.equal(entry.serverInfo.version,manifest.version);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility[0]==='app'));
