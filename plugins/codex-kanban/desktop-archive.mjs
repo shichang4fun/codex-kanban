@@ -45,17 +45,22 @@ export async function startDesktopArchiveBridge({socketPath,...options}){
   const creation=createDesktopCreation({...options,store:options.creationStore??createJsonStore(join(dirname(socketPath),'creation-operations.json'))});
   return startLocalBridge({socketPath,dispatch:async(method,params,context)=>{
     if(method==='status'){
-      const status={...controller.status(),groupActions:true,runtimeAvailable:runtime!==null};
+      const status={...controller.status(),groupActions:true,runtimeAvailable:runtime!==null,autoFlow:options.autoFlow?.status()??{available:false}};
       try{return {...status,taskCreation:true,creationOperations:await creation.operations()};}
       catch{return {...status,taskCreation:false,creationError:'Creation history could not be read. Task creation is disabled until its storage is repaired.'};}
     }
     if(method==='runtime'&&runtime)return runtime.read(params,context);
     if(method==='creationCatalog')return creation.catalog();
     if(method==='creationStatus')return creation.operation(params);
+    if(method==='flowSettings'){
+      if(typeof params?.enabled!=='boolean'||!options.autoFlow)throw bridgeError('An available auto organize runtime and explicit switch are required.',400);
+      return {autoFlow:await options.autoFlow.change(params.enabled)};
+    }
     if(!['archive','move','pin','create','retryCreationGroup'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore, task group changes and explicit task creation.',400);
     if(busy)throw bridgeError('Another desktop task action is in progress.',409);
     busy=true;
-    try{return await (method==='archive'?controller.change(params,context):method==='create'?creation.create(params,context):method==='retryCreationGroup'?creation.retryGroup(params,context):groups[method](params,context));}
+    const change=()=>method==='archive'?controller.change(params,context):method==='create'?creation.create(params,context):method==='retryCreationGroup'?creation.retryGroup(params,context):groups[method](params,context);
+    try{return await (options.runExclusive?options.runExclusive(change):change());}
     finally{busy=false;}
   }});
 }

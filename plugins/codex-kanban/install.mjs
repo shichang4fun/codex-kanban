@@ -27,7 +27,7 @@ export async function installKanban({app='/Applications/ChatGPT.app',home=proces
   const existing=await lstat(root).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
   const previous=existing&&(await setup.readDesktopBridgeConfig(root));
   const config=await setup.installDesktopBridge({root,codexHome:home,app:previous?.app??app,
-    nodePath:previous?.nodePath??nodePath,chainedCli:previous?.chainedCli});
+    nodePath:previous?.nodePath??nodePath,chainedCli:previous?.chainedCli,autoFlow:true,homeDir});
   let startup;
   if(originalIcon){
     const integration=await import(pathToFileURL(join(plugin.installedPath,'original-icon.mjs')));
@@ -47,7 +47,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
     console.log('Installing Codex Kanban and its Desktop bridge…');
     const result=await installKanban({launch:values.launch});
     console.log(`Codex Kanban ${result.version}: plugin and Desktop bridge installed.`);
-    if(result.phase==='restart-required')console.log('Quit Codex normally, then reopen it using its original icon. Kanban and any installed Sidebar Flow will be enabled automatically.');
+    if(result.phase==='restart-required')console.log('Quit Codex normally, then reopen it using its original icon. Kanban and its integrated auto organize will be enabled automatically.');
     else if(result.phase==='launching')console.log('Codex is starting. Open a local chat, then open Codex Kanban in the sidebar.');
     else console.log('Open Codex using its original icon. No dedicated launcher is required.');
     console.log('No task ID or manual bridge configuration is required.');

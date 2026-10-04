@@ -158,7 +158,7 @@ export async function installKanbanOriginalIcon({root,pluginPath,pluginId,homeDi
   }else if(hasOwn){await privateDirectory(c.support);if(await readFile(join(c.support,'.owner'),'utf8')!==OWNER)throw Error('Unowned integration directory');}
   const previous=await stat(c.route)?await readRoute(c.support):null;
   const route={owner:OWNER,root,pluginPath,pluginId,app:config.app,nodePath:config.nodePath,codexHome:config.codexHome,
-    legacy:hasLegacy,agentNode:legacyState?.nodePath??config.nodePath,sidebarRoot:legacyState?.root??join(homeDir,'Applications/Codex Sidebar Flow')};
+    legacy:hasLegacy,agentNode:legacyState?.nodePath??config.nodePath,sidebarRoot:legacyState?.root??join(homeDir,'Applications/Codex Sidebar Flow'),integratedFlow:config.autoFlow===true};
   if(![route.nodePath,route.agentNode,route.codexHome].every(validPath))throw Error('Invalid startup paths');
   if(config.chainedCli===c.shim||config.chainedCli===config.proxy||config.chainedCli===c.module)throw Error('Proxy cycle refused');
   const current=system.run('/bin/launchctl',['getenv','CODEX_CLI_PATH']);
@@ -267,7 +267,7 @@ export async function dispatchOriginalIcon(support,args,{app}={}){
     forward(native,args,env);return;
   }
   const native=await nativeCli(route.app);
-  let selected=await sidebarCli(route.sidebarRoot,route.app);
+  let selected=route.integratedFlow===true?native:await sidebarCli(route.sidebarRoot,route.app);
   if(await pluginActive(route)){
     try{
       await privateDirectory(route.root);await regular(join(route.root,'connection.json'),{privateFile:true});

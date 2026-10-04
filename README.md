@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.44
+# Codex Kanban 0.4.45
 
 Installable GitHub marketplace for the local Codex task board. This branch contains the built plugin; source and tests are on [main](https://github.com/shichang4fun/codex-kanban/tree/main).
 
@@ -7,14 +7,14 @@ Installable GitHub marketplace for the local Codex task board. This branch conta
 Requires macOS and the current ChatGPT desktop app with Codex installed at /Applications/ChatGPT.app. The installer uses the app's bundled CLI and Node; no global CLI, separate Node installation or npm install is needed.
 
 1. [Download the marketplace ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip) and extract it.
-2. Double-click **Install Codex Kanban.command**. It installs or upgrades the plugin, Desktop bridge and original-icon integration together, preserving existing Sidebar Flow.
+2. Double-click **Install Codex Kanban.command**. It installs or upgrades the plugin, Desktop bridge, integrated auto organization and original-icon integration together, preserving classification settings.
 3. If Codex is running, quit it normally (⌘Q) and reopen its original icon. Open a local chat, then open Codex Kanban in the sidebar. Continue using the original Dock/Finder/Spotlight entry on later starts; no separate launcher is required.
 
 If macOS blocks the downloaded script, right-click it and select Open, then follow the system prompt. Disable an existing codex-kanban@codex-kanban-local development copy before installing to avoid duplicate entries. No task ID, path configuration or config-file editing is needed. The installer never stops a running client.
 
-This package installs Codex Kanban only. It reuses Sidebar Flow if already installed; it does not install Sidebar Flow. Codex Kanban works independently without Sidebar Flow's automatic task classification.
+This package includes the current Sidebar Flow Desktop classification engine; no separate Sidebar Flow installation is required. It excludes legacy Hooks, model heartbeats, instruction injection and old installers. Existing effective policies migrate to CODEX_HOME/kanban-desktop/flow.json without changing their scope, exclusions, interval or destination mapping. Previous installation files remain as backups, but the new chain does not run the standalone classifier. Options → Auto organize switches classification independently of manual board actions. A fresh installation requires uniquely named In Progress, For Review and For Later groups in Codex; missing or ambiguous groups cause no moves.
 
-A single user LaunchAgent restores the original-icon CLI route at login. An existing Sidebar Flow agent is reused with its manifest/plist preserved and its helper backed up. The app bundle, signature and Dock icon are unchanged. The startup chain is Kanban → healthy installed Sidebar Flow → official CLI; pre-start runtime failures bypass unavailable components without replaying started requests. The first normal restart and GUI login ordering still require live acceptance on your desktop.
+A single user LaunchAgent restores the original-icon CLI route at login. An existing Sidebar Flow agent is reused with its manifest/plist preserved and its helper backed up. The app bundle, signature and Dock icon are unchanged. The startup chain is Kanban (including auto organization) → official CLI, with one native child. An unavailable optional classification engine leaves manual features active; core pre-start failures use the official CLI without reactivating the old classifier or replaying started requests. The first normal restart and GUI login ordering still require live acceptance on your desktop.
 
 To detach Kanban, run **Disable Kanban Original Icon.command** in ~/Library/Application Support/Codex Sidebar Flow Original Icon (or Codex Kanban Original Icon without Sidebar Flow). It restores the prior Sidebar Flow integration or removes Kanban's own agent. **Emergency Disable Original Icon.command** works without Node and disables the whole original-icon integration, preserving all files and data. Quit normally and reopen afterward. Re-running the installer restores the route; after an older Sidebar Flow updater overwrites its own helper, re-run the Kanban installer. Foreign or modified startup settings are preserved and reported.
 
