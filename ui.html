@@ -133,6 +133,8 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 
 .card.layout-moving,.col-head.layout-moving{position:relative;z-index:2;will-change:transform}
 .card[draggable=true] .card-open{cursor:grab}
+.card.opening,.card.opening:hover{border-color:var(--accent)}
+.card.opening .card-open,.native-groups .card.opening .card-open{cursor:progress}
 .card.task-drop-before::before,.card.task-drop-after::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--accent);pointer-events:none;z-index:3}
 .card.task-drop-before::before{top:-5px}.card.task-drop-after::after{bottom:-5px}
 .list .card.task-drop-before::before{top:0}.list .card.task-drop-after::after{bottom:0}
@@ -883,7 +885,7 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
   renderCreationNotices();
 }
 async function refreshNativeBoard(force=false){
-  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&($('creation').open||$('rename-task').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads)))return;
+  if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads)))return;
   nativeReads++;
   const epoch=++nativeEpoch;
   try{
@@ -891,11 +893,11 @@ async function refreshNativeBoard(force=false){
     if(!response.ok)throw Error('Local groups unavailable; keeping the latest snapshot.');
     const payload=await response.json();
     if(epoch!==nativeEpoch)return;
-    if(!force&&($('creation').open||$('rename-task').open||taskMenu))return;
+    if(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu))return;
     if(!response.ok)throw Error(payload.error||'Desktop bridge unavailable.');
     nativeToken=payload.csrf;syncArchiveNotices(payload.undoArchives);applyNativeBoard(payload.board,{skipUnchanged:!force});
   }catch(error){
-    if(epoch!==nativeEpoch||(!force&&($('creation').open||$('rename-task').open||taskMenu)))return;
+    if(epoch!==nativeEpoch||(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu)))return;
     nativeConnected=false;nativeWritable=false;nativeMessage=error.message;render();
   }
   finally{nativeReads--;}
@@ -1661,6 +1663,8 @@ else{
 }
 refreshNativeBoard();
 setInterval(()=>{
+  // Expiry can resize cards or wrap PR links, moving a pressed click target.
+  if(globalThis.kanbanTransport?.navigationPending)return;
   const runtimeChanged=expireRuntimeSnapshot();
   if(runtimeChanged){removeExpiredCardRuntime();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);}
   syncPrAlertFreshness();
