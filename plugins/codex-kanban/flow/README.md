@@ -25,7 +25,9 @@ writes. A private durable journal prevents replay of an unconfirmed create,
 including after restart. Readback resolves committed creates with lost replies;
 if the group remains absent, create it manually before enabling again. Explicit
 migrated Desktop/local UUID mappings must remain valid and are never replaced.
-Auto organize displays waiting, initialization and actionable error messages.
+Initialization status and errors remain available in the Desktop bridge status.
+The board has no automatic-grouping settings control. The private flow.json
+enabled boolean controls classification; restart Codex normally after editing it.
 
 The regular policy protects pinned tasks, custom groups, remote tasks and
 projects outside the ordinary Projects section. A fresh active Desktop snapshot
