@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.54
+# Codex Kanban 0.4.55
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
