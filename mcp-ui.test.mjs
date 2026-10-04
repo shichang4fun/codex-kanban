@@ -76,17 +76,79 @@ test('MCP UI can refresh on sandbox protocols and recover Undo without reloading
   const refresh=new Script(code+'\nrefreshNativeBoard').runInContext(context);await refresh();
   assert.equal(applied,1);assert.equal(recovered,1);assert.equal(context.nativeToken,'token');
 });
-test('MCP chat and PR navigation uses the host and reports rejected links in the current toast',async()=>{
+async function navigationHarness(app,ready=Promise.resolve()){
   const code=await readFile(new URL('./mcp-ui.mjs',import.meta.url),'utf8');
-  const handlerCode=code.slice(code.indexOf("document.addEventListener('click'"),code.indexOf("window.addEventListener('pagehide'"));
-  let handler;const toast={hidden:true,textContent:''},links=[];
-  const context=createContext({ready:Promise.resolve(),app:{async openLink(params){links.push(params.url);return {isError:true};}},
-    document:{addEventListener(_event,callback){handler=callback;},getElementById(id){assert.equal(id,'task-toast');return toast;}}});
-  new Script(handlerCode).runInContext(context);
+  const events={},toast={hidden:true,textContent:''},timers=new Map();let timerId=0;
+  const runtimeApp={connect:()=>ready,getHostContext:()=>app.getHostContext?.()??{},openLink:params=>app.openLink(params),close:()=>app.close?.()};
+  const context=createContext({App:class{constructor(){return runtimeApp;}},createMcpFetch:()=>()=>{},
+    setTimeout:callback=>{timers.set(++timerId,callback);return timerId;},clearTimeout:id=>timers.delete(id),
+    window:{addEventListener(name,callback){events[name]=callback;},dispatchEvent(){}},
+    CustomEvent:class{},document:{addEventListener(name,callback){events[name]=callback;},getElementById(id){assert.equal(id,'task-toast');return toast;}}});
+  new Script(code.replace(/^import .*;\n/gm,'')).runInContext(context);
+  return {app:runtimeApp,events,toast,context,timers,async connected(){await ready;await Promise.resolve();}};
+}
+function navigationEvent(href,fields={}){
+  const attributes=new Map(),classes=new Set(),card={classList:{add:name=>classes.add(name),remove:name=>classes.delete(name)}};
+  const link={href,closest:()=>card,setAttribute:(key,value)=>attributes.set(key,value),removeAttribute:key=>attributes.delete(key)};
+  return {button:0,defaultPrevented:false,target:{closest(selector){assert(selector.includes('https://'));assert(selector.includes('codex://new?'));return link;}},
+    preventDefault(){this.defaultPrevented=true;},link,classes,attributes,...fields};
+}
+test('MCP chat and PR navigation uses the host and reports rejected links in the current toast',async()=>{
+  const links=[],h=await navigationHarness({async openLink(params){links.push(params.url);return {isError:true};}});
+  await h.connected();
   for(const href of ['codex://threads/fixture','https://github.com/example/repo/pull/1','codex://threads/new','codex://new?projectId=desktop-project&prompt=Review']){
-    let prevented=false;
-    await handler({target:{closest(selector){assert(selector.includes('https://'));assert(selector.includes('codex://new?'));return {href};}},preventDefault(){prevented=true;}});
-    assert(prevented);assert.equal(toast.hidden,false);assert(toast.textContent.includes('unavailable'));
+    const event=navigationEvent(href);await h.events.click(event);
+    assert(event.defaultPrevented);assert.equal(h.toast.hidden,false);assert(h.toast.textContent.includes('unavailable'));
+    assert(!event.classes.has('opening'));assert(!event.attributes.has('aria-busy'));assert(!h.context.kanbanTransport.navigationPending);
   }
   assert.equal(links.length,4);
+});
+test('connected clicks dispatch before queued rendering and coalesce duplicate navigation until acknowledgement',async()=>{
+  const order=[];let finish;
+  const h=await navigationHarness({openLink({url}){order.push(url);return new Promise(resolve=>finish=resolve);}});await h.connected();
+  const event=navigationEvent('codex://threads/fixture');
+  queueMicrotask(()=>order.push('background render'));
+  const pending=h.events.click(event);
+  assert.deepEqual(order,['codex://threads/fixture']);
+  assert(event.classes.has('opening'));assert.equal(event.attributes.get('aria-busy'),'true');assert(h.context.kanbanTransport.navigationPending);
+  await h.events.click(navigationEvent(event.link.href));assert.equal(order.filter(item=>item===event.link.href).length,1);
+  finish({});await pending;
+  assert(!h.context.kanbanTransport.navigationPending);assert(!event.classes.has('opening'));assert(!event.attributes.has('aria-busy'));assert(h.toast.hidden);
+  const retry=h.events.click(navigationEvent(event.link.href));assert.equal(order.filter(item=>item===event.link.href).length,2);finish({});await retry;
+});
+test('pointer activation pauses refresh only for links and resets on release, cancellation and blur',async()=>{
+  const h=await navigationHarness({});await h.connected();
+  for(const end of ['pointerup','pointercancel','blur']){
+    h.events.pointerdown(navigationEvent('codex://threads/fixture'));assert(h.context.kanbanTransport.navigationPending);
+    h.events[end]();
+    if(end==='pointerup'){await Promise.resolve();assert(h.context.kanbanTransport.navigationPending);for(const callback of h.timers.values())callback();}
+    assert(!h.context.kanbanTransport.navigationPending);assert.equal(h.timers.size,0);
+  }
+  h.events.pointerdown(navigationEvent('codex://threads/fixture',{button:2}));assert(!h.context.kanbanTransport.navigationPending);
+  h.events.pointerdown({button:0,target:{closest:()=>null}});assert(!h.context.kanbanTransport.navigationPending);
+});
+test('navigation respects drag cancellation, waits for initialization and releases failures for retry',async()=>{
+  let connect,calls=0;const ready=new Promise(resolve=>connect=resolve);
+  const h=await navigationHarness({async openLink(){calls++;throw Error('Rejected');}},ready);
+  await h.events.click(navigationEvent('codex://threads/fixture',{defaultPrevented:true}));assert.equal(calls,0);
+  const pending=h.events.click(navigationEvent('codex://threads/fixture'));assert.equal(calls,0);assert(h.context.kanbanTransport.navigationPending);
+  connect();await pending;assert.equal(calls,1);assert(!h.context.kanbanTransport.navigationPending);assert(!h.toast.hidden);
+  await h.events.click(navigationEvent('codex://threads/fixture'));assert.equal(calls,2);
+  await h.app.onteardown();await h.events.click(navigationEvent('codex://threads/fixture'));assert.equal(calls,2);
+});
+test('real SDK forwards navigation while a board tool is still waiting on the server',async()=>{
+  const app=new App({name:'navigation-fixture',version:'1'},{},{autoResize:false});
+  const bridge=new AppBridge(null,{name:'fixture-host',version:'1'},{serverTools:{},openLinks:{}},{hostContext:{}});
+  let releaseBoard,started,finishLink;const boardStarted=new Promise(resolve=>started=resolve),linkReceived=new Promise(resolve=>finishLink=resolve),urls=[];
+  bridge.oncalltool=()=>{started();return new Promise(resolve=>releaseBoard=()=>resolve({content:[],structuredContent:{board:{tasks:[]},csrf:'token'}}));};
+  bridge.onopenlink=async({url})=>{urls.push(url);finishLink();return {};};
+  const [host,ui]=InMemoryTransport.createLinkedPair();await bridge.connect(host);
+  const ready=app.connect(ui),h=await navigationHarness(app,ready);
+  try{
+    await h.connected();const reading=createMcpFetch(app,ready)('/api/board');await boardStarted;
+    const url='codex://threads/11111111-1111-4111-8111-111111111111';
+    const opening=h.events.click(navigationEvent(url));await linkReceived;await opening;
+    assert.deepEqual(urls,[url]);assert(!h.context.kanbanTransport.navigationPending);
+    releaseBoard();await reading;
+  }finally{await app.close();await bridge.close();}
 });

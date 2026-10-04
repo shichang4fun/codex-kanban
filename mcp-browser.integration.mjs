@@ -102,12 +102,16 @@ const parentScript=await build({stdin:{contents:`
   const bridge=new AppBridge(null,{name:'Kanban acceptance fixture',version:'1'},{serverTools:{},openLinks:{}},{hostContext:{displayMode:'fullscreen',theme:'dark'}});
   bridge.oninitialized=()=>document.querySelector('#status').textContent='MCP App initialized';
   bridge.oncalltool=async params=>await (await fetch('/tools',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(params)})).json();
-  bridge.onopenlink=async()=>({isError:true});
+  bridge.onopenlink=async({url})=>{
+    await fetch('/fixture/navigation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    return {isError:true};
+  };
   await bridge.connect(new PostMessageTransport(frame.contentWindow,frame.contentWindow));
   document.querySelector('button').onclick=()=>{frame.hidden=false;frame.src='/app.html';};
 `,resolveDir:process.cwd(),sourcefile:'fixture-host.mjs'},bundle:true,write:false,format:'esm',platform:'browser',target:'es2022'});
 const hostBackground=process.env.KANBAN_TEST_HOST_THEME==='light'?'#f8f8f8':'#181818';
 const port=Number(process.env.KANBAN_TEST_PORT??0);
+const navigationUrls=[];
 const server=createServer(async(req,res)=>{
   try{
     if(new URL(req.url,'http://localhost').pathname==='/'&&req.method==='GET'){
@@ -125,7 +129,13 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,navigationUrls}));return;}
+    if(req.url==='/fixture/navigation'&&req.method==='POST'){
+      let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
+      const {url}=JSON.parse(body);navigationUrls.push(url);
+      await new Promise(resolve=>setTimeout(resolve,Number(process.env.KANBAN_TEST_NAVIGATION_DELAY_MS??0)));
+      res.writeHead(204).end();return;
+    }
     if(req.url==='/fixture/title'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
       const update=JSON.parse(body);if(typeof update.title!=='string'||!update.title.trim())throw Error('Invalid fixture title');

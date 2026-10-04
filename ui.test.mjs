@@ -326,6 +326,54 @@ test('three-second polling avoids redundant renders, serializes slow reads and r
   assert.equal(calls,2);assert.notEqual(h.nodes.get('board').children[0],original);
   assert(h.nodes.get('board').querySelectorAll('.progress-ring').length);
 });
+test('navigation preserves the pressed card against in-flight polling, failures and timer redraws, then polling resumes',async()=>{
+  for(const fail of [false,true]){
+    const h=harness(),transport={navigationPending:false};h.api.applyNativeBoard(fixture());h.context.kanbanTransport=transport;
+    const root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0];let finish,reads=0;
+    h.context.fetchImpl=()=>{reads++;return new Promise((resolve,reject)=>finish=fail?()=>reject(Error('Read failed')):resolve);};
+    const reading=h.api.refreshNativeBoard();assert.equal(reads,1);
+    transport.navigationPending=true;
+    const next=fixture();next.tasks[0].title='Refreshed after navigation';
+    finish({ok:true,json:async()=>({board:next,csrf:'csrf'})});await reading;
+    assert.equal(root.querySelectorAll('.card')[0],card);assert(h.nodes.get('native-note').hidden);
+    h.intervals[0]();h.events.focus();h.events.visibilitychange();assert.equal(reads,1);assert.equal(root.querySelectorAll('.card')[0],card);
+    transport.navigationPending=false;
+    h.context.fetchImpl=async()=>{reads++;return {ok:true,json:async()=>({board:next,csrf:'csrf'})};};
+    await h.api.refreshNativeBoard();assert.equal(reads,2);
+    assert(root.querySelectorAll('.card-title').some(node=>node.textContent==='Refreshed after navigation'));
+  }
+});
+test('timestamp presses protect the same card through concurrent reads in Board and List',async()=>{
+  const transport=readFileSync(new URL('./mcp-ui.mjs',import.meta.url),'utf8');
+  const pointerCode=transport.slice(transport.indexOf('function navigationLink'),transport.indexOf("document.addEventListener('click'"));
+  for(const view of ['board','list']){
+    const h=harness();h.api.applyNativeBoard(fixture());h.api.setView(view);
+    new Script("let pointerLink=null,pointerReleaseTimer=null;const openingLinks=new Set();globalThis.kanbanTransport={get navigationPending(){return pointerLink!==null||openingLinks.size>0;}};"+pointerCode).runInContext(h.context);
+    const root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],time=card.querySelector('.time');
+    let finish;h.context.fetchImpl=()=>new Promise(resolve=>finish=resolve);
+    const reading=h.api.refreshNativeBoard();h.events.pointerdown({button:0,target:time});
+    assert(h.context.kanbanTransport.navigationPending);
+    const next=fixture();next.tasks[0].title='Updated after timestamp release';
+    finish({ok:true,json:async()=>({board:next,csrf:'token'})});await reading;
+    assert.equal(root.querySelectorAll('.card')[0],card);assert(card.contains(time));
+    let opened=0;card.querySelector('.card-open').click=()=>opened++;time.onclick({stopPropagation(){}});assert.equal(opened,1);
+    h.events.pointercancel();assert(!h.context.kanbanTransport.navigationPending);
+    h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'token'})});await h.api.refreshNativeBoard();
+    assert.notEqual(root.querySelectorAll('.card')[0],card);
+  }
+});
+test('navigation defers runtime and PR expiry geometry changes and applies them after release',()=>{
+  const board=fixture(),observed=new Date().toISOString();
+  Object.assign(board.tasks[0],{column:'attention',rawStatus:{type:'active',activeFlags:['waitingOnUserInput']},runtimeStatusSource:'desktopRuntime',runtimeCapturedAt:observed,
+    git:{status:'ready',branch:'codex/fixture',repository:'example/board',checkedAt:observed,pullRequests:{status:'ready',checkedAt:observed,
+      items:[{number:7,url:'https://github.com/example/board/pull/7',state:'OPEN',checks:'failed'}]}}});
+  const h=harness(board),root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],info=card.querySelector('.card-info'),attention=card.querySelector('.card-attention'),alert=card.querySelectorAll('.pr-alert')[0];
+  h.context.kanbanTransport={navigationPending:true};h.context.expiredNow=Date.now()+100000;new Script('Date.now=()=>expiredNow').runInContext(h.context);
+  h.intervals[0]();assert.equal(root.querySelectorAll('.card')[0],card);assert.equal(card.querySelector('.card-info'),info);assert.equal(card.querySelector('.card-attention'),attention);
+  assert.equal(alert.textContent,'CI failed');assert.notEqual(h.api.DATA.tasks[0].runtimeStatusStale,true);
+  delete h.context.kanbanTransport;h.intervals[0]();
+  assert.equal(root.querySelectorAll('.attention-badge').length,0);assert.equal(root.querySelectorAll('.pr-alert')[0].textContent,'CI failed · Cached');
+});
 test('polling resumes after Escape and rename cancel while card focus survives status redraws',async()=>{
   for(const exit of ['escape','rename-cancel']){
     const h=harness();new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(fixture());h.context.location.protocol='http:';

@@ -1,5 +1,19 @@
 # Verification
 
+## Navigation integration 0.4.49 — 2026-10-04
+
+- Integrated the navigation changes with current main. Two independent reviewers found timestamp presses missing the pointer guard and runtime/PR expiry updates still changing click-target geometry. Both are fixed with regressions, and both reviewers verified the final changes without remaining P1/P2 findings.
+- All 650 automated tests pass on Node 22; 88 focused tests pass on bundled Node 24. Marketplace packaging, repeat native install and official App Server discovery pass with 14 app-only tools. Real App Server tests in a disposable home verify Rename, projects, groups, Pin/Unpin, Archive/Undo, offline creation and duplicate-safe flow initialization; Desktop MCP dispatch is simulated and zero model turns are started.
+- Synthetic in-app-browser acceptance verifies immediate opening/aria-busy feedback, duplicate suppression, timestamp forwarding, failure cleanup/retry and List keyboard activation with the official SDK and a host delaying responses by four seconds. No existing user tasks were modified. Actual Desktop chat landing and end-to-end latency improvement remain unmeasured.
+- Updated the existing local plugin and private Desktop runtime to 0.4.49 with a recoverable backup. Flow policy, the original LaunchAgent/manifest, legacy configuration/proxy and CODEX_CLI_PATH are preserved; the original-icon CLI probe passes. The running client was not restarted; a normal next launch is required for loaded code to change.
+
+## Card navigation responsiveness — 2026-10-04
+
+- Connected MCP App clicks dispatch `openLink` in the current turn, coalesce repeated clicks on the same URL until acknowledgement, and show an opening border/cursor with `aria-busy`. Initialization and rejected-link feedback remain supported; drag-cancelled clicks do not navigate.
+- Polling, in-flight read success/failure and timer redraws defer while a link is pressed or opening. The pointer guard lasts through pointerup's microtask checkpoint and clears on click, cancellation, blur or release outside the link. Polling resumes normally after navigation completes.
+- All 648 automated tests pass, including real SDK navigation concurrent with an unresolved board tool, synchronous dispatch ordering, duplicate suppression, retry and full-script polling preservation. Plugin build and `git diff --check` pass.
+- In-app browser acceptance with a synthetic MCP host delaying navigation by four seconds confirms immediate `aria-busy`/opening state, two clicks producing one host request, rejection cleanup and Board/List operation. The installed plugin cache is unchanged. Actual Desktop chat landing and end-to-end latency improvement are unmeasured; the host still owns deep-link resolution and chat loading.
+
 ## Card information integration 0.4.48 — 2026-10-04
 
 - Integrated descriptions, runtime attention and PR attention with main's three-second refresh, stable ordering, native Rename and automatic grouping. Two independent reviews identified and verified fixes for timestamp tooltip hit testing and clearing Cached on identical fresh reads without losing card DOM/focus. New text follows Aa scaling; PR notices wrap at narrow widths.
