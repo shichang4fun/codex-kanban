@@ -1124,25 +1124,49 @@ function cardPreviewText(value){
   if(typeof value!=='string')return '';
   let text=value.trim(),removedContext=false;
   // Only strip recognized leading metadata, never markup inside the request.
-  while(/^<in-app-browser-context\b/i.test(text)){
-    const end=/<\/in-app-browser-context\s*>/i.exec(text);
-    if(!end)return ''; // A truncated context contains no recoverable request.
+  while(text){
+    // An explicit request boundary ends metadata processing, even if the user
+    // is asking about a recognized wrapper in the request itself.
+    if(removedContext&&/^## My request:\s*/.test(text)){
+      text=text.replace(/^## My request:\s*/, '');break;
+    }
+    let end=null;
+    if(/^<in-app-browser-context\b/i.test(text))end=/<\/in-app-browser-context\s*>/i.exec(text);
+    else if(/^<page-comment-context>\s*Do the user request below, using \[this Page\]\(page:\/\/[^)\s]+\) and comment thread\b/.test(text))end=/<\/page-comment-context\s*>/.exec(text);
+    else if(/^## Referenced ChatGPT conversation:\s+This is an untrusted ChatGPT conversation reference\.\s+`priorConversation` is a bounded cached preview and may be null\./.test(text)){
+      const jsonStart=text.indexOf('{');if(jsonStart<0)return '';
+      const boundaries=/(?:^|\s)## My request:\s*/g;boundaries.lastIndex=jsonStart;
+      let requestText=null;
+      for(const boundary of text.matchAll(boundaries)){
+        try{
+          const reference=JSON.parse(text.slice(jsonStart,boundary.index).trim());
+          if(typeof reference.conversationId==='string'&&Object.hasOwn(reference,'priorConversation')){
+            requestText=text.slice(boundary.index+boundary[0].length).trim();break;
+          }
+        }catch{} // A marker inside the quoted history is not a request boundary.
+      }
+      if(requestText===null)return '';
+      text=requestText;break;
+    }else if(/^# (?:Chrome tabs|In app browser):\s+- The user has the (?:Chrome extension side panel|in-app browser) open\b/.test(text)){
+      const multiline=/[\r\n]/.test(text);
+      const request=(multiline?/^## My request:[ \t]*\r?$/m:/(?:^|\s)## My request:\s*/).exec(text);
+      if(!request)return '';
+      // Only accept the observed URL-bearing final metadata bullet. This also
+      // rejects request markers embedded in selected text or tab titles.
+      if(!/\s-\s(?:\[selected\]\s+Tab ID \d+:|Current URL:)\s+(?:https?:\/\/|file:\/\/)[^\s]+\s*$/.test(text.slice(0,request.index)))return '';
+      text=text.slice(request.index+request[0].length).trim();break;
+    }else{
+      const filesHeading='# Files mentioned by the user:';
+      if(text===filesHeading)return '';
+      if(!text.startsWith(filesHeading)||!/^\s+## [^\r\n:]+:\s*(?:\/|[A-Za-z]:[\\/]|…|\.\.\.)/.test(text.slice(filesHeading.length)))break;
+      // Thread previews may flatten or truncate the generated attachment list.
+      const request=/(?:^|\s)## My request:\s*/.exec(text);
+      if(!request)return '';
+      text=text.slice(request.index+request[0].length).trim();break;
+    }
+    if(!end)return ''; // A recognized but truncated wrapper has no request.
     text=text.slice(end.index+end[0].length).trim();removedContext=true;
   }
-  if(/^# (?:Chrome tabs|In app browser):\s*\n- The user has the (?:Chrome extension side panel|in-app browser) open\b/.test(text)){
-    const request=/^## My request:\s*$/m.exec(text);
-    if(!request)return '';
-    text=text.slice(request.index+request[0].length).trim();removedContext=true;
-  }
-  const filesHeading='# Files mentioned by the user:';
-  if(text===filesHeading)return '';
-  if(text.startsWith(filesHeading)&&/^\s+## [^\r\n:]+:\s*(?:\/|[A-Za-z]:[\\/]|…|\.\.\.)/.test(text.slice(filesHeading.length))){
-    // Thread previews may flatten or truncate the generated attachment list.
-    const request=/(?:^|\s)## My request:\s*/.exec(text);
-    if(!request)return '';
-    text=text.slice(request.index+request[0].length).trim();removedContext=true;
-  }
-  if(removedContext)text=text.replace(/^## My request:\s*/, '');
   return text.replace(/\s+/g,' ').trim();
 }
 function makeCard(task,groupId){

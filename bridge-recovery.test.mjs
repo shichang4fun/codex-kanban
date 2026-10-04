@@ -123,7 +123,7 @@ test('native backend failure exits its proxy despite open Desktop stdin, and a n
 import readline from 'node:readline';
 for await(const line of readline.createInterface({input:process.stdin})){
   const m=JSON.parse(line);if(m.method==='fail')process.exit(7);
-  console.log(JSON.stringify({id:m.id,result:m.method==='thread/resume'?{thread:{id:m.params.threadId}}:{}}));
+  console.log(JSON.stringify({id:m.id,result:m.method==='thread/resume'?{thread:{id:m.params.threadId,ephemeral:false,parentThreadId:null}}:{}}));
 }
 `,{mode:0o700});
   const proxies=[];t.after(async()=>{for(const child of proxies)if(child.exitCode===null&&child.signalCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}});
@@ -147,7 +147,7 @@ import readline from 'node:readline';import {appendFileSync} from 'node:fs';
 for await(const line of readline.createInterface({input:process.stdin})){
   const m=JSON.parse(line);if(m.method==='fail')process.exit(7);
   appendFileSync(process.env.RECOVERY_TEST_TRACE,JSON.stringify({proxy:process.ppid,method:m.method})+'\\n');
-  console.log(JSON.stringify({id:m.id,result:['thread/resume','thread/read'].includes(m.method)?{thread:{id:m.params.threadId,ephemeral:true,parentThreadId:null}}:{}}));
+  console.log(JSON.stringify({id:m.id,result:['thread/resume','thread/read'].includes(m.method)?{thread:{id:m.params.threadId,ephemeral:m.method!=='thread/resume',parentThreadId:null}}:{}}));
 }
 `,{mode:0o700});
   const children=[];t.after(async()=>{for(const child of children)if(child.exitCode===null&&child.signalCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}});
