@@ -28,11 +28,15 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
   async function read(){
     // Native project IDs differ from Desktop IDs. Match containers only by
     // exact registered roots; never infer a project from a task's cwd or title.
-    let nativeProjects=null;
-    try{nativeProjects=await pages('project/list',{limit:100});
+    const [nativeProjects,nativeSections,recent]=await Promise.all([
+      pages('project/list',{limit:100}).catch(error=>{if(error.code===-32601)return null;throw error;}),
+      pages('threadSection/list',{limit:100}),
+      reader.request('thread/list',{archived:false,useStateDbOnly:true,limit:50,sortKey:'updated_at'})
+    ]);
+    if(nativeProjects!==null){
       if(nativeProjects.some(p=>typeof p.id!=='string'||!p.id||typeof p.name!=='string'||!p.name.trim()||!Array.isArray(p.roots)||p.roots.some(r=>typeof r?.path!=='string'))
         ||new Set(nativeProjects.map(p=>p.id)).size!==nativeProjects.length)throw Error('Invalid local project catalog.');
-    }catch(error){if(error.code===-32601)nativeProjects=null;else throw error;}
+    }
     const projectCatalog=(nativeProjects??[]).map(p=>{
       const matches=(desktopSnapshot.projects??[]).filter(d=>d.hostId==='local'&&typeof d.path==='string'&&p.roots.some(r=>r.path===d.path));
       const unique=matches.length===1&&nativeProjects.filter(n=>n.roots.some(r=>r.path===matches[0].path)).length===1;
@@ -40,10 +44,8 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     });
     const projectNames=[...(desktopSnapshot.projects??[]),...projectCatalog,
       ...projectCatalog.filter(p=>p.desktopProjectId).map(p=>({...p,projectId:p.desktopProjectId}))];
-    const nativeSections=await pages('threadSection/list',{limit:100});
     if(nativeSections.some(s=>typeof s.id!=='string'||typeof s.name!=='string')
       ||new Set(nativeSections.map(s=>s.id)).size!==nativeSections.length)throw Error('Invalid local group identifiers.');
-    const recent=await reader.request('thread/list',{archived:false,useStateDbOnly:true,limit:50,sortKey:'updated_at'});
     if(!Array.isArray(recent?.data))throw Error('Incomplete local task data.');
     const grouped=await Promise.all(nativeSections.map(section=>pages('thread/list',{
       archived:false,useStateDbOnly:true,sectionId:section.id,limit:100,sortKey:'updated_at'
