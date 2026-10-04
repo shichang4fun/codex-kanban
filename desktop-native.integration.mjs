@@ -15,6 +15,7 @@ import {createKanbanServer} from './serve.mjs';
 import {createLocalBoard} from './local-board.mjs';
 import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
 import {installFlowSettings} from './flow-config.mjs';
+import {renameLocalTask} from './rename.mjs';
 
 const fixtureHome=await realpath(await mkdtemp(join(tmpdir(),'kb-native-'))),previousHome=process.env.CODEX_HOME;
 process.env.CODEX_HOME=fixtureHome;
@@ -141,6 +142,19 @@ try{
   }
   const same=await post('/api/project',{...params,projectId:project.id,expectedProjectId:project.id});
   assert.equal(same.status,200);assert.equal((await same.json()).changed,false);assert.equal(projectWrites.length,5);
+  const beforeRename=(await nativeRpc('thread/read',{threadId:thread.id,includeTurns:true})).thread;
+  const renamedTitle='Disposable renamed task';
+  const renameResponse=await post('/api/rename',{...params,title:renamedTitle,expectedTitle:beforeRename.name}),renamed=await renameResponse.json();
+  assert.equal(renameResponse.status,200,JSON.stringify(renamed));assert.equal(renamed.title,renamedTitle);
+  assert.equal(renamed.board.tasks[0].title,renamedTitle);
+  const afterRename=(await nativeRpc('thread/read',{threadId:thread.id,includeTurns:true})).thread;
+  assert.equal(afterRename.name,renamedTitle);assert.equal(afterRename.projectId,beforeRename.projectId);
+  assert.equal(afterRename.cwd,beforeRename.cwd);assert.deepEqual(afterRename.section,beforeRename.section);
+  assert.deepEqual(afterRename.status,beforeRename.status);assert.deepEqual(afterRename.turns,beforeRename.turns);
+  assert.equal((await getBoard()).tasks[0].title,renamedTitle);
+  const staleRename=await post('/api/rename',{...params,title:'Stale rename',expectedTitle:beforeRename.name});
+  assert.equal(staleRename.status,409);assert.equal((await getBoard()).tasks[0].title,renamedTitle);
+  console.log('PASS: native task rename persisted across readers; project, group, runtime and turns preserved; stale rename rejected.');
   await desktopRpc('thread/section/move',{threadId:thread.id,sectionId:null});
   // Native group writes do not require taking over the active thread writer.
   let expectedSectionId=null;
@@ -179,6 +193,9 @@ try{
   await desktopRpc('thread/section/move',{threadId:thread.id,sectionId:flow['For Later']});
   assert.equal((await(await fetch(base+'/api/board')).json()).board.tasks[0].localSectionId,flow['For Later']);
   const archived=await(await post('/api/archive',params)).json();assert.equal(archived.archived,true);assert.equal(archived.board.tasks.length,0);
+  await assert.rejects(renameLocalTask({...params,title:'Must not rename archived task',expectedTitle:renamedTitle},
+    {tasks:[{...task,title:renamedTitle}]}),error=>error.status===409&&/archived/.test(error.message));
+  assert.equal((await nativeRpc('thread/read',{threadId:thread.id,includeTurns:false})).thread.name,renamedTitle);
   const restored=await(await post('/api/unarchive',{undoToken:archived.undoToken})).json();assert.equal(restored.restored,true);assert.equal(restored.board.tasks[0].id,thread.id);
   assert.equal(projectWrites.length,5);
   const creationRequest={requestId:randomUUID(),sectionId:flow['For Review'],prompt:'Disposable creation test; no model turn.',settings:{projectId:creationDesktopProjectId}};

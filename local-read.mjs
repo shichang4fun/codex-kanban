@@ -55,6 +55,7 @@ export const openLocalReader=options=>openLocalMetadata(options);
 export const openLocalArchiver=options=>openLocalMetadata(options,new Set(['thread/archive','thread/unarchive']));
 export const openLocalPinner=options=>openLocalMetadata(options,new Set(['thread/section/move']));
 export const openLocalProjectEditor=options=>openLocalMetadata(options,new Set(['thread/metadata/update']));
+export const openLocalRenamer=options=>openLocalMetadata(options,new Set(['thread/name/set']));
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   let reader;

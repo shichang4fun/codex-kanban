@@ -48,7 +48,7 @@ test('MCP lists the sidebar entry, app-only tools and independent UI resource',a
       assert.deepEqual(Buffer.from(icon.src.split(',')[1],'base64'),await readFile(new URL(`./assets/kanban-icon${icon.theme==='dark'?'-dark':''}.png`,import.meta.url)));
     }
     const tools=(await f.client.listTools()).tools;
-    assert.equal(tools.length,13);
+    assert.equal(tools.length,14);
     assert(tools.every(t=>t._meta.ui.visibility.length===1&&t._meta.ui.visibility[0]==='app'));
     assert.deepEqual(tools[0]._meta['openai/ui'].entrypoints,[{type:'global'}]);
     assert.equal(tools[0]._meta.ui.resourceUri,boardResourceUri);

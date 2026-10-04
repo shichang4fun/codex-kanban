@@ -5,65 +5,58 @@ import {readFileSync} from 'node:fs';
 import {harness,fixture,localId} from './ui-test-helpers.mjs';
 const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
 
-test('a failed background read preserves a newly opened task menu or Options',async()=>{
-  for(const menu of ['task','options']){
-    const h=harness();h.context.location.protocol='http:';let rejectRead;
-    h.context.fetchImpl=()=>new Promise((_,reject)=>rejectRead=reject);
-    const pending=h.api.refreshNativeBoard(),board=h.nodes.get('board').children[0];
-    const panel=h.nodes.get(menu==='task'?'task-menu':'view-options');
-    if(menu==='task')h.nodes.get('board').querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
-    else panel.open=true;
-    rejectRead(Error('Temporary disconnection'));await pending;
-    assert.equal(h.nodes.get('board').children[0],board);
-    if(menu==='task')assert(!panel.hidden);else assert(panel.open);
-  }
+test('a failed background read preserves a newly opened task menu',async()=>{
+  const h=harness();h.context.location.protocol='http:';let rejectRead;
+  h.context.fetchImpl=()=>new Promise((_,reject)=>rejectRead=reject);
+  const pending=h.api.refreshNativeBoard(),board=h.nodes.get('board').children[0];
+  h.nodes.get('board').querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
+  rejectRead(Error('Temporary disconnection'));await pending;
+  assert.equal(h.nodes.get('board').children[0],board);assert(!h.nodes.get('task-menu').hidden);
 });
 
-test('Options preserves controls and closes on Escape, outside click and focus leaving',()=>{
-  const h=harness(),panel=h.nodes.get('view-options'),trigger=h.nodes.get('view-options-trigger'),host=h.nodes.get('host');
-  assert(!panel.open);panel.open=true;panel.listeners.toggle();assert.equal(trigger.attributes['aria-expanded'],'true');
+test('inline Host and Theme controls retain their nodes and focus through renders and theme notifications',()=>{
+  const h=harness(),host=h.nodes.get('host'),theme=h.nodes.get('theme');
   host.focus();h.api.render();h.events['kanban-host-theme']({detail:'light'});
-  assert(panel.open);assert.equal(h.context.document.activeElement,host);assert.equal(h.nodes.get('host'),host);
-  h.events.click({target:host});assert(panel.open);
-  panel.listeners.focusout({relatedTarget:h.nodes.get('theme')});assert(panel.open);
-  panel.listeners.focusout({relatedTarget:h.nodes.get('search')});assert(!panel.open);
-  panel.open=true;h.events.keydown({key:'Escape',preventDefault(){}});assert(!panel.open);assert.equal(h.context.document.activeElement,trigger);
-  panel.open=true;h.events.click({target:h.nodes.get('search')});assert(!panel.open);
+  assert.equal(h.context.document.activeElement,host);assert.equal(h.nodes.get('host'),host);
+  theme.focus();theme.value='dark';theme.onchange();h.api.applyNativeBoard(fixture());
+  assert.equal(h.context.document.activeElement,theme);assert.equal(h.nodes.get('theme'),theme);assert.equal(theme.value,'dark');
 });
 
-test('host chip clears only the host and manual guidance stays in Options',()=>{
-  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),sort=h.nodes.get('order'),chip=h.nodes.get('host-chip');
+test('Host and Theme are inline, grouping settings stay available, and the host chip clears only its filter',()=>{
+  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),chip=h.nodes.get('host-chip');
+  for(const removed of ['order','refresh','manual-order-hint'])assert(!h.nodes.has(removed));
+  assert(h.nodes.has('auto-organize'));assert(h.nodes.has('view-options-trigger'));
+  const symbols=new Set([...html.matchAll(/<symbol id="([^"]+)"/g)].map(match=>match[1]));
+  for(const match of html.matchAll(/<use href="#([^"]+)"/g))assert(symbols.has(match[1]),`Missing toolbar icon: ${match[1]}`);
+  assert(html.includes('class="toolbar-select"'));assert(html.includes('class="toolbar-select theme-control"'));
   assert(chip.hidden);search.value='fixture';h.api.setFilter('unread');host.value='durable';host.onchange();
   assert(!chip.hidden);assert.equal(h.nodes.get('host-chip-label').textContent,'Cloud');
   chip.onclick();assert.equal(host.value,'all');assert.equal(search.value,'fixture');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'true');assert(chip.hidden);
-  sort.value='manual';sort.onchange();assert(!h.nodes.get('manual-order-hint').hidden);
-  assert.equal(h.storage.get('codex-kanban.sort.v1'),'manual');
-  sort.value='title';sort.onchange();assert(h.nodes.get('manual-order-hint').hidden);
-  sort.value='recent';sort.onchange();assert(h.nodes.get('manual-order-hint').hidden);
 });
 
-test('Options pauses background reads, including responses started before opening',async()=>{
-  const h=harness(),panel=h.nodes.get('view-options'),board=h.nodes.get('board');let reads=0,resolveResponse;
-  h.context.location.protocol='http:';h.context.fetchImpl=()=>{reads++;return new Promise(resolve=>resolveResponse=resolve);};
-  panel.open=true;await h.api.refreshNativeBoard();assert.equal(reads,0);
-  panel.open=false;const pending=h.api.refreshNativeBoard(),original=board.children[0];panel.open=true;
-  const next=fixture();next.tasks[0].title='Updated fixture';
-  resolveResponse({ok:true,json:async()=>({board:next,csrf:'fixture'})});await pending;
-  assert.equal(board.children[0],original);assert(panel.open);
-  panel.open=false;h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'fixture'})});await h.api.refreshNativeBoard();
-  assert.notEqual(board.children[0],original);
+test('automatic reads continue while an inline selector has focus without resetting its selection',async()=>{
+  for(const field of ['host','theme']){
+    const h=harness(),control=h.nodes.get(field);h.context.location.protocol='http:';
+    control.value=field==='host'?'durable':'dark';control.onchange();control.focus();
+    const next=fixture();next.tasks[1].title='Updated cloud task';
+    h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'fixture'})});
+    await h.api.refreshNativeBoard();
+    assert(h.nodes.get('board').querySelectorAll('.card-title').some(n=>n.textContent==='Updated cloud task'));assert.equal(h.context.document.activeElement,control);
+    assert.equal(control.value,field==='host'?'durable':'dark');
+  }
 });
 
-test('Refresh closes Options, shows progress and keeps filters and preferences',async()=>{
-  const h=harness(),panel=h.nodes.get('view-options'),refresh=h.nodes.get('refresh');let resolveResponse;
+test('automatic refresh recovers after a read failure without clearing filters, layout or Undo',async()=>{
+  const h=harness();let resolveResponse;
   h.context.location.protocol='http:';h.context.fetchImpl=()=>new Promise(resolve=>resolveResponse=resolve);
-  h.nodes.get('search').value='fixture';h.api.setFilter('unread');h.api.setView('list');panel.open=true;
-  const pending=refresh.onclick();assert(!panel.open);assert(refresh.disabled);
-  assert.equal(h.nodes.get('options-label').textContent,'Refreshing…');assert.equal(h.nodes.get('view-options-trigger').attributes['aria-busy'],'true');
-  assert.equal(h.nodes.get('refresh-label').textContent,'Refreshing…');assert.equal(h.context.document.activeElement,h.nodes.get('view-options-trigger'));
+  h.nodes.get('search').value='fixture';h.api.setFilter('unread');h.api.setView('list');
+  new Script("archiveNotices.set('undo-test',{task:DATA.tasks[0],error:null});renderArchiveNotices()").runInContext(h.context);
+  h.context.fetchImpl=async()=>{throw Error('Temporary disconnection');};
+  await h.api.refreshNativeBoard();assert(!h.nodes.get('native-note').hidden);
+  h.context.fetchImpl=()=>new Promise(resolve=>resolveResponse=resolve);
+  const pending=h.api.refreshNativeBoard();
   resolveResponse({ok:true,json:async()=>({board:fixture(),csrf:'fixture'})});await pending;
-  assert.equal(refresh.disabled,false);assert.equal(h.nodes.get('refresh-label').textContent,'Refresh tasks');
-  assert.equal(h.nodes.get('options-label').textContent,'Options');assert.equal(h.nodes.get('view-options-trigger').attributes['aria-busy'],undefined);
+  assert(h.nodes.get('native-note').hidden);assert.equal(h.nodes.get('archive-notices').children.length,1);
   assert.equal(h.nodes.get('search').value,'fixture');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'true');assert(h.nodes.get('board').classList.contains('list'));
 });
 
@@ -141,7 +134,28 @@ test('appearance remains usable when browser storage is unavailable',()=>{
   assert.match(h.nodes.get('task-toast').textContent,/could not be saved/);
 });
 
-test('manual arrivals lead Board and List through filtering, project view and snapshot refreshes',()=>{
+test('text size scales without rebuilding cards and persists, synchronizes and resets across tabs',()=>{
+  const key='codex-kanban.text-size.v1',h=harness(fixture(),{textSize:'120'});
+  const select=h.nodes.get('font-size'),root=h.context.document.documentElement,card=h.nodes.get('board').children[0];
+  assert.equal(select.value,'120');assert.equal(root.style['--font-scale'],'1.2');
+  select.focus();select.value='130';select.onchange();
+  assert.equal(h.storage.get(key),'130');assert.equal(root.style['--font-scale'],'1.3');
+  assert.equal(h.nodes.get('board').children[0],card);assert.equal(h.context.document.activeElement,select);
+  const reload=harness(fixture(),{textSize:h.storage.get(key)});assert.equal(reload.nodes.get('font-size').value,'130');
+  h.storage.set(key,'90');h.events.storage({key});assert.equal(select.value,'90');assert.equal(root.style['--font-scale'],'0.9');
+  h.storage.set(key,'invalid');h.events.storage({key});assert.equal(select.value,'100');assert.equal(root.style['--font-scale'],'1');
+  select.value='110';select.onchange();select.value='100';select.onchange();assert.equal(h.storage.get(key),'100');
+  h.storage.delete(key);h.events.storage({key:null});assert.equal(select.value,'100');
+});
+
+test('text size still changes when browser storage is unavailable',()=>{
+  const h=harness(fixture(),{storageFailure:true}),select=h.nodes.get('font-size');
+  assert.equal(select.value,'100');select.value='110';select.onchange();
+  assert.equal(h.context.document.documentElement.style['--font-scale'],'1.1');
+  assert.match(h.nodes.get('task-toast').textContent,/Text size changed.*could not be saved/);
+});
+
+test('default stable order leads arrivals and survives Board and List status refreshes and filters',()=>{
   for(const view of ['board','list'])for(const projectView of [false,true]){
     const board=fixture();
     board.tasks[0].updatedAt=30;
@@ -152,7 +166,7 @@ test('manual arrivals lead Board and List through filtering, project view and sn
     h.storage.set('codex-kanban.task-order.v1:native:review',JSON.stringify(['local:older','local:'+localId]));
     h.storage.set('codex-kanban.project-view.v2:native:review',String(projectView));
     h.events.storage({key:'codex-kanban.project-view.v2:native:review'});
-    h.nodes.get('order').value='manual';h.nodes.get('order').onchange();h.api.setView(view);
+    h.api.setView(view);
     const reviewCards=()=>root.querySelectorAll('.card').filter(n=>n.dataset.groupId==='review').map(n=>n.dataset.taskKey);
     assert.deepEqual(reviewCards(),['local:older','local:'+localId]);
     h.nodes.get('search').value='Incoming';h.nodes.get('search').listeners.input();
@@ -165,10 +179,14 @@ test('manual arrivals lead Board and List through filtering, project view and sn
     h.nodes.get('search').value='';h.nodes.get('search').listeners.input();
     const expected=['local:new','local:moved','local:older','local:'+localId];
     assert.deepEqual(reviewCards(),expected);
-    h.api.applyNativeBoard(structuredClone(incoming));assert.deepEqual(reviewCards(),expected);
-    assert.equal(h.nodes.get('order').value,'manual');
-    h.nodes.get('order').value='recent';h.nodes.get('order').onchange();
-    assert.deepEqual(reviewCards(),['local:'+localId,'local:new','local:moved','local:older']);
+    const next=structuredClone(incoming);
+    next.tasks.find(t=>t.id==='older').updatedAt=20000;
+    next.tasks[0].isUnread=false;
+    next.tasks[0].title='Updated existing task';
+    h.api.applyNativeBoard(next);assert.deepEqual(reviewCards(),expected);
+    assert(root.querySelectorAll('.card').some(n=>n.querySelector('.card-title')?.textContent==='Updated existing task'));
+    assert.equal(h.storage.get('codex-kanban.sort.v1'),'recent','retired sort preferences cannot change stable ordering');
+    assert(!h.writes.includes('codex-kanban.sort.v1'));
   }
 });
 
@@ -185,8 +203,8 @@ test('the simplified UI boots, polls, filters and changes layout without touchin
   assert.equal(h.storage.get('codex-kanban.workflow.v1:local%3Alegacy'),'done');
   assert.equal(h.storage.get('codex-kanban.group-order.v1:workflow'),'["done","todo"]');
   assert(!h.writes.some(key=>key.includes('workflow')));
-  assert.match(h.nodes.get('refresh').title,/Groups read:/);
-  assert.match(h.nodes.get('refresh').title,/Runtime snapshot:/);
+  assert.match(h.nodes.get('visible-count').title,/Groups read:/);
+  assert.match(h.nodes.get('visible-count').title,/Runtime snapshot:/);
 });
 
 test('details keep direct navigation, technical data and clipboard fallback for every task without a valid link',async()=>{
@@ -253,6 +271,85 @@ test('details visibly explain absence from refreshed board data and recover when
 const nodeText=node=>[node.textContent,...node.children.map(nodeText)].join(' ');
 const menuItem=(h,label)=>['task-menu','task-submenu'].flatMap(id=>h.nodes.get(id).hidden?[]:h.nodes.get(id).querySelectorAll('.task-menu-item')).find(n=>!n.hidden&&n.querySelector('.menu-label').textContent===label);
 const click=node=>node.onclick({stopPropagation(){}});
+test('right-click and the keyboard context-menu key reuse task actions and clamp to the pointer',()=>{
+  const h=harness(),card=h.nodes.get('board').querySelectorAll('.card')[0],panel=h.nodes.get('task-menu');
+  Object.assign(h.context.window,{innerWidth:390,innerHeight:600});panel.getBoundingClientRect=()=>({width:240,height:250});
+  let prevented=0,stopped=0;
+  card.listeners.contextmenu({clientX:385,clientY:595,preventDefault(){prevented++;},stopPropagation(){stopped++;}});
+  assert.equal(prevented,1);assert.equal(stopped,1);assert(!panel.hidden);assert(menuItem(h,'Rename'));
+  assert.equal(panel.style.left,'138px');assert.equal(panel.style.top,'338px');
+  h.events.keydown({key:'Escape',preventDefault(){}});assert(panel.hidden);
+  card.listeners.keydown({key:'F10',shiftKey:true,preventDefault(){},stopPropagation(){}});assert(!panel.hidden);
+});
+test('rename saves a trimmed title once, verifies it and retains draft text after a failed save',async()=>{
+  const h=harness(),initial=fixture();new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(initial);
+  click(h.nodes.get('board').querySelectorAll('.card-details')[0]);click(menuItem(h,'Rename'));
+  const dialog=h.nodes.get('rename-task'),input=h.nodes.get('rename-title'),form=h.nodes.get('rename-form');
+  assert(dialog.open);assert.equal(input.value,'Local fixture');assert.equal(h.context.document.activeElement,input);
+  h.context.location.protocol='http:';let writes=0,reads=0,release;
+  h.context.fetchImpl=(path,opts)=>{
+    if(path==='/api/board'){reads++;return Promise.resolve({ok:true,json:async()=>({board:initial,csrf:'csrf'})});}
+    writes++;assert.equal(path,'/api/rename');const body=JSON.parse(opts.body);assert.equal(body.title,'Renamed task');assert.equal(body.expectedTitle,'Local fixture');
+    return new Promise(resolve=>release=resolve);
+  };
+  await h.api.refreshNativeBoard();assert.equal(reads,0);input.value='  Renamed task  ';
+  const pending=form.onsubmit({preventDefault(){}});assert(input.disabled);assert(h.nodes.get('rename-save').disabled);assert(h.nodes.get('rename-cancel').disabled);
+  await form.onsubmit({preventDefault(){}});assert.equal(writes,1);
+  release({ok:false,json:async()=>({error:'Renamed elsewhere'})});await pending;
+  assert(dialog.open);assert(!input.disabled);assert.equal(input.value,'  Renamed task  ');assert.equal(h.nodes.get('rename-error').textContent,'Renamed elsewhere');
+  const next=fixture();next.tasks[0].title='Renamed task';
+  h.context.fetchImpl=async()=>({ok:true,json:async()=>({threadId:localId,title:'Renamed task',changed:true,board:next,csrf:'csrf'})});
+  await form.onsubmit({preventDefault(){}});assert(!dialog.open);assert.match(nodeText(h.nodes.get('board')),/Renamed task/);
+  assert.equal(h.nodes.get('task-toast').textContent,'Task renamed');
+});
+test('cancel, blank names, unchanged names and cloud tasks do not dispatch a rename',async()=>{
+  const h=harness();new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(fixture());let calls=0;
+  h.context.fetchImpl=async()=>{calls++;throw Error('Unexpected write');};
+  const open=()=>{click(h.nodes.get('board').querySelectorAll('.card-details')[0]);click(menuItem(h,'Rename'));};
+  open();h.nodes.get('rename-title').value='   ';await h.nodes.get('rename-form').onsubmit({preventDefault(){}});
+  assert(!h.nodes.get('rename-error').hidden);assert(h.nodes.get('rename-task').open);
+  h.nodes.get('rename-cancel').onclick();assert(!h.nodes.get('rename-task').open);
+  open();await h.nodes.get('rename-form').onsubmit({preventDefault(){}});assert(!h.nodes.get('rename-task').open);assert.equal(calls,0);
+  click(h.nodes.get('board').querySelectorAll('.card-details')[1]);assert(menuItem(h,'Rename').disabled);assert.match(menuItem(h,'Rename').title,/local tasks only/);
+});
+test('three-second polling avoids redundant renders, serializes slow reads and refreshes on focus',async()=>{
+  const h=harness(),initial=fixture();h.api.applyNativeBoard(initial);h.context.location.protocol='http:';
+  const original=h.nodes.get('board').children[0];let calls=0,release;
+  h.context.fetchImpl=()=>{calls++;return new Promise(resolve=>release=resolve);};
+  assert.equal(h.intervals[0].delay,3000);
+  const pending=h.api.refreshNativeBoard();h.intervals[0]();h.events.focus();assert.equal(calls,1);
+  release({ok:true,json:async()=>({board:{...initial,capturedAt:new Date(Date.now()+1000).toISOString()},csrf:'csrf'})});await pending;
+  assert.equal(h.nodes.get('board').children[0],original);
+  const next=fixture();next.tasks[0].column='running';next.tasks[0].rawStatus={type:'active',activeFlags:[]};next.tasks[0].runtimeStatusSource='desktopRuntime';next.tasks[0].runtimeCapturedAt=new Date().toISOString();
+  h.context.fetchImpl=async()=>{calls++;return {ok:true,json:async()=>({board:next,csrf:'csrf'})};};
+  h.events.visibilitychange();for(let i=0;i<6;i++)await Promise.resolve();
+  assert.equal(calls,2);assert.notEqual(h.nodes.get('board').children[0],original);
+  assert(h.nodes.get('board').querySelectorAll('.progress-ring').length);
+});
+test('polling resumes after Escape and rename cancel while card focus survives status redraws',async()=>{
+  for(const exit of ['escape','rename-cancel']){
+    const h=harness();new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(fixture());h.context.location.protocol='http:';
+    const root=h.nodes.get('board'),trigger=root.querySelectorAll('.card-details')[0];click(trigger);
+    if(exit==='escape')h.events.keydown({key:'Escape',target:h.nodes.get('task-menu'),preventDefault(){}});
+    else{click(menuItem(h,'Rename'));h.nodes.get('rename-cancel').onclick();}
+    assert.equal(h.context.document.activeElement,trigger);assert(trigger.closest('.card'));
+    const next=fixture();next.tasks[0].title='Updated after dialog';let reads=0;
+    h.context.fetchImpl=async()=>{reads++;return {ok:true,json:async()=>({board:next,csrf:'csrf'})};};
+    h.intervals[0]();for(let i=0;i<10;i++)await Promise.resolve();assert.equal(reads,1);
+    assert(root.querySelectorAll('.card-title').some(node=>node.textContent==='Updated after dialog'));
+    assert.equal(h.context.document.activeElement,root.querySelectorAll('.card-details')[0]);
+    h.intervals[0]();for(let i=0;i<10;i++)await Promise.resolve();assert.equal(reads,2);
+  }
+});
+test('changed polling preserves the intended card action for chat, project, pin and archive focus',async()=>{
+  for(const selector of ['.card-open','.project','.card-pin','.card-archive']){
+    const board=projectFixture(),h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);h.context.location.protocol='http:';
+    const root=h.nodes.get('board'),card=root.querySelectorAll('.card')[0],control=card.querySelectorAll(selector)[0];assert(control,selector);control.focus();
+    const next=projectFixture();next.tasks[0].title='Changed title';
+    h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'csrf'})});await h.api.refreshNativeBoard();
+    assert.equal(h.context.document.activeElement,root.querySelectorAll('.card')[0].querySelectorAll(selector)[0]);
+  }
+});
 function projectFixture(){
   const board=fixture();board.sync.projectLocal=true;
   board.projects=[{projectId:'native-a',hostId:'local',label:'Project A'},{projectId:'native-b',hostId:'local',label:'Project B'},{projectId:'cloud',hostId:'durable',label:'Cloud project'}];
@@ -263,7 +360,7 @@ test('card menus navigate with the keyboard, dismiss safely and defer polling un
   const h=harness(projectFixture());new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(projectFixture());
   const panel=h.nodes.get('task-menu'),trigger=h.nodes.get('board').querySelectorAll('.card-details')[0];
   click(trigger);assert.equal(trigger.attributes['aria-expanded'],'true');
-  assert.deepEqual(panel.querySelectorAll('.task-menu-item').map(n=>n.querySelector('.menu-label').textContent),['Pin','Project','Section','View details','Archive']);
+  assert.deepEqual(panel.querySelectorAll('.task-menu-item').map(n=>n.querySelector('.menu-label').textContent),['Pin','Project','Section','Rename','View details','Archive']);
   const key=value=>h.events.keydown({key:value,target:h.context.document.activeElement,preventDefault(){},stopPropagation(){}});
   assert.equal(h.context.document.activeElement,menuItem(h,'Pin'));
   key('ArrowDown');assert.equal(h.context.document.activeElement,menuItem(h,'Project'));
@@ -380,7 +477,7 @@ test('clearing filters restores all tasks without changing sort, layout or saved
   empty.querySelector('button').onclick();
   assert.equal(h.nodes.get('search').value,'');assert.equal(h.nodes.get('host').value,'all');
   assert.equal(h.nodes.get('visible-count').textContent,'2 tasks');assert(h.nodes.get('clear-filters').hidden);
-  assert(h.nodes.get('board').classList.contains('list'));assert.equal(h.nodes.get('order').value,'recent');
+  assert(h.nodes.get('board').classList.contains('list'));
   assert.deepEqual(h.storage,before);assert.equal(h.context.document.activeElement,h.nodes.get('search'));
   h.nodes.get('search').value='fixture';h.nodes.get('search').listeners.input();h.nodes.get('clear-filters').onclick();
   assert(h.nodes.get('clear-filters').hidden);
@@ -405,13 +502,15 @@ test('a pending polling response preserves new card interactions and keeps open 
     h.context.location.protocol='http:';
     h.context.fetchImpl=()=>new Promise(resolve=>resolveResponse=resolve);
     const reading=h.api.refreshNativeBoard(),original=root.children[0];
-    if(interaction==='focused-card')h.context.document.activeElement={closest:selector=>selector==='.card'?original:null};
+    if(interaction==='focused-card')root.querySelectorAll('.card-details')[0].focus();
     else if(interaction==='menu')root.querySelectorAll('.card-details')[0].onclick({stopPropagation(){}});
     else h.api.showDetail(fixture().tasks[0]);
     const next=fixture();next.tasks[0].title='Updated local fixture';
     resolveResponse({ok:true,json:async()=>({board:next,csrf:'fixture-token'})});
     await reading;
-    if(interaction==='detail'){
+    if(interaction==='detail'||interaction==='focused-card'){
+      assert.notEqual(root.children[0],original);
+      if(interaction==='focused-card'){assert.equal(h.context.document.activeElement,root.querySelectorAll('.card-details')[0]);continue;}
       assert.notEqual(root.children[0],original);assert(h.nodes.get('detail').open);
       assert.equal(h.nodes.get('detail-title').textContent,'Updated local fixture');
     }else{assert.equal(root.children[0],original);if(interaction==='menu')assert(!h.nodes.get('task-menu').hidden);}
@@ -614,11 +713,11 @@ test('upstream project view works with simplified controls, PR cards and filtere
 });
 
 test('Clear filters resets search, host and unread without changing layout and sort',()=>{
-  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),sort=h.nodes.get('order');
-  h.api.setView('list');sort.value='manual';sort.onchange();h.api.setFilter('unread');host.value='durable';search.value='missing';search.listeners.input();
+  const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search');
+  h.api.setView('list');h.api.setFilter('unread');host.value='durable';search.value='missing';search.listeners.input();
   assert(!h.nodes.get('clear-filters').hidden);h.nodes.get('board').children[0].querySelector('button').onclick();
   assert.equal(host.value,'all');assert.equal(search.value,'');assert.equal(h.nodes.get('unread-only').attributes['aria-pressed'],'false');
-  assert.equal(sort.value,'manual');assert(h.nodes.get('board').classList.contains('list'));assert(h.nodes.get('clear-filters').hidden);
+  assert(h.nodes.get('board').classList.contains('list'));assert(h.nodes.get('clear-filters').hidden);
   search.value='fixture';search.listeners.input();h.nodes.get('clear-filters').onclick();assert.equal(search.value,'');
 });
 

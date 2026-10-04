@@ -75,7 +75,6 @@ test('MCP UI can refresh on sandbox protocols and recover Undo without reloading
     applyNativeBoard:()=>applied++,syncArchiveNotices:entries=>recovered+=entries.length,render(){}});
   const refresh=new Script(code+'\nrefreshNativeBoard').runInContext(context);await refresh();
   assert.equal(applied,1);assert.equal(recovered,1);assert.equal(context.nativeToken,'token');
-  assert(html.includes("if(!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))"));
 });
 test('MCP chat and PR navigation uses the host and reports rejected links in the current toast',async()=>{
   const code=await readFile(new URL('./mcp-ui.mjs',import.meta.url),'utf8');

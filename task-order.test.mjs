@@ -13,13 +13,13 @@ const tasks=[
   {id:'p',hostId:'local',updatedAt:5,group:'pinned',workflow:'done',column:'unknown'}
 ];
 function harness(storage=new Map()){
-  const data={tasks:structuredClone(tasks)},nodes={order:{value:'manual'}};
+  const data={tasks:structuredClone(tasks)};
   let blocked=false,renders=0,message='';
-  const context=createContext({DATA:data,$:id=>nodes[id],groupingMode:'native',taskKey:key,currentGroups:()=>[],nativeStage:t=>t.group,
+  const context=createContext({DATA:data,groupingMode:'native',taskKey:key,currentGroups:()=>[],nativeStage:t=>t.group,
     localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>{if(blocked)throw Error('quota exceeded');storage.set(k,v);}},
     announce:text=>message=text,render:()=>renders++});
-  const api=new Script(helpers+'\n({orderedTasks,moveTaskOrder,taskOrderKey,restoreSortPreference,changeSort,setProjectView:(value,groupId="review")=>projectViews.set(projectViewKey(groupId),value)})').runInContext(context);
-  return {api,data,nodes,storage,block:()=>blocked=true,renders:()=>renders,message:()=>message};
+  const api=new Script(helpers+'\n({orderedTasks,moveTaskOrder,taskOrderKey,setProjectView:(value,groupId="review")=>projectViews.set(projectViewKey(groupId),value)})').runInContext(context);
+  return {api,data,storage,block:()=>blocked=true,renders:()=>renders,message:()=>message};
 }
 const ids=rows=>Array.from(rows,key);
 const review=h=>h.data.tasks.filter(t=>t.group==='review');
@@ -102,13 +102,6 @@ test('failed writes do not move tasks or claim success',()=>{
   assert.equal(h.api.moveTaskOrder('local:b','local:a'),false);
   assert.equal(h.renders(),0);assert.match(h.message(),/not saved/);
   assert.deepEqual(ids(h.api.orderedTasks(review(h),'review')),['local:a','local:b','cloud:a']);
-});
-test('sort preference persists and invalid values fall back to recently updated',()=>{
-  const h=harness();h.api.changeSort();
-  const reloaded=harness(h.storage);reloaded.nodes.order.value='recent';reloaded.api.restoreSortPreference();
-  assert.equal(reloaded.nodes.order.value,'manual');
-  h.storage.set('codex-kanban.sort.v1','invalid');reloaded.api.restoreSortPreference();
-  assert.equal(reloaded.nodes.order.value,'recent');
 });
 test('a stale tab cannot remove ordering entries learned from a newer snapshot',()=>{
   const fresh=harness(),stale=harness(fresh.storage);

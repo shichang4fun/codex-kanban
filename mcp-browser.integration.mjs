@@ -16,7 +16,7 @@ const task={id,hostId:'local',title:'Sidebar integration fixture',summary:'Synth
 const sections=[{sectionId:'chats',name:'Tasks'},...['For Later','In Progress','For Review','Pinned'].map((name,index)=>({sectionId:'group-'+index,name}))];
 const defaults={};
 const settingsStore={read:async()=>structuredClone(defaults),update:async change=>change(defaults)};
-let archived=false,reads=0,flowEnabled=true;
+let archived=false,reads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
 const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
 task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
@@ -43,6 +43,11 @@ const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'s
     return {threadId:id,sectionId:params.sectionId,changed:true};},
   pinTask:async params=>{task.pinned=params.pinned;task.nativeTaskPinned=params.pinned;task.localSectionId=params.pinned?'group-3':null;task.nativeSectionId=params.pinned?'group-3':'chats';
     task.placementSource=params.pinned?'localThreadSection':'localDefault';return {threadId:id,pinned:params.pinned};},
+  renameTask:async params=>{
+    if(renameFailures>0){renameFailures--;throw Object.assign(Error('Synthetic rename conflict. Retry with your draft preserved.'),{status:409});}
+    if(params.threadId!==id||params.expectedTitle!==task.title)throw Error('Unexpected fixture rename request');
+    task.title=params.title;return {threadId:id,title:task.title,changed:true};
+  },
   setProject:async params=>{if(params.threadId!==id||params.expectedProjectId!==task.localProjectId)throw Error('Unexpected fixture project request');
     const project=projects.find(p=>p.projectId===params.projectId);
     if(params.projectId!==null&&!project)throw Error('Unknown fixture project');
@@ -65,8 +70,10 @@ const hostBackground=process.env.KANBAN_TEST_HOST_THEME==='light'?'#f8f8f8':'#18
 const port=Number(process.env.KANBAN_TEST_PORT??0);
 const server=createServer(async(req,res)=>{
   try{
-    if(req.url==='/'&&req.method==='GET'){
-      res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<html><meta charset="utf-8"><style>body{margin:0;background:#16161a;color:#ddd;font:13px system-ui}header{padding:8px 16px}button{margin-right:12px}iframe{width:100%;height:calc(100vh - 42px);border:0}</style><header><button>Codex Kanban</button><span id="status">Synthetic MCP host</span></header><iframe title="Codex Kanban MCP App" hidden></iframe><script type="module">${parentScript.outputFiles[0].text.replaceAll('</script','<\\/script')}</script></html>`);return;
+    if(new URL(req.url,'http://localhost').pathname==='/'&&req.method==='GET'){
+      const width=Number(new URL(req.url,'http://localhost').searchParams.get('width'));
+      const frameWidth=width>=280&&width<=1600?Math.round(width)+'px':'100%';
+      res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<html><meta charset="utf-8"><style>body{margin:0;background:#16161a;color:#ddd;font:13px system-ui}header{padding:8px 16px}button{margin-right:12px}iframe{width:${frameWidth};height:calc(100vh - 42px);border:0}</style><header><button>Codex Kanban</button><span id="status">Synthetic MCP host</span></header><iframe title="Codex Kanban MCP App" hidden></iframe><script type="module">${parentScript.outputFiles[0].text.replaceAll('</script','<\\/script')}</script></html>`);return;
     }
     if(req.url==='/app.html'){
       res.setHeader('Content-Type','text/html');
@@ -78,7 +85,12 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,sectionId:task.localSectionId}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId}));return;}
+    if(req.url==='/fixture/title'&&req.method==='POST'){
+      let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
+      const update=JSON.parse(body);if(typeof update.title!=='string'||!update.title.trim())throw Error('Invalid fixture title');
+      task.title=update.title;res.writeHead(204).end();return;
+    }
     res.writeHead(404).end();
   }catch{res.writeHead(500).end('Fixture request failed');}
 });

@@ -15,6 +15,17 @@ const pr={number:7,url:'https://github.com/example/board/pull/7',state:'OPEN',is
   reviewDecision:'APPROVED',statusCheckRollup:[{status:'COMPLETED',conclusion:'SUCCESS'}]};
 const board={tasks:[{id:'one',hostId:'local',cwd:'/workspace'},{id:'two',hostId:'local',cwd:'/workspace'},
   {id:'remote',hostId:'remote',cwd:'/workspace'}]};
+test('closing a cold reader aborts active Git commands and never starts queued work',async()=>{
+  const started=[],signals=[];
+  const reader=createGitStatusReader({run:async(name,args,{signal})=>{
+    started.push({name,args});signals.push(signal);
+    return new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Error('Aborted')),{once:true}));
+  }});
+  const cold={tasks:Array.from({length:8},(_,i)=>({id:String(i),hostId:'local',cwd:'/workspace/'+i}))};
+  await reader.enrich(cold,{waitForFresh:false});assert.equal(started.length,4);
+  reader.close();await reader.settle();assert.equal(started.length,4);assert(signals.every(signal=>signal.aborted));
+  await assert.rejects(reader.enrich(cold),/closed/);
+});
 function fixture(){
   const calls=[],state={branch:'codex/feature',sha,time:0,rows:[pr],fail:false};
   const reader=createGitStatusReader({clock:()=>state.time,run:async(name,args)=>{
@@ -115,6 +126,25 @@ test('CI failures dominate pending; missing or incomplete checks never imply suc
   assert.equal(checkSummary([{status:'QUEUED'}]),'pending');
   assert.equal(checkSummary([{status:'COMPLETED',conclusion:null}]),'unknown');
   assert.equal(checkSummary([{state:'SUCCESS'},{status:'COMPLETED',conclusion:'SKIPPED'}]),'passed');
+});
+test('background Git enrichment never holds task status behind cold or slow workspace reads',{timeout:1000},async()=>{
+  let release;const waiting=new Promise(resolve=>release=resolve);let calls=0,now=0,branch='feature';
+  const reader=createGitStatusReader({clock:()=>now,run:async(name,args)=>{
+    calls++;await waiting;
+    if(name==='gh')return '[]';
+    if(args.includes('rev-parse'))return sha;
+    if(args.includes('symbolic-ref'))return branch;
+    return 'https://github.com/example/board';
+  }});
+  try{
+    const first=await reader.enrich(board,{waitForFresh:false});assert.equal(first.tasks[0].git.status,'loading');assert.equal(first.tasks[2].git,null);
+    await reader.enrich(board,{waitForFresh:false});assert.equal(calls,3);
+    release();await reader.settle();
+    const fresh=await reader.enrich(board,{waitForFresh:false});assert.equal(fresh.tasks[0].git.branch,'feature');
+    branch='other';now=5001;
+    const cached=await reader.enrich(board,{waitForFresh:false});assert(cached.tasks[0].git.refreshing);assert.equal(cached.tasks[0].git.branch,'feature');
+    await reader.settle();assert.equal((await reader.enrich(board,{waitForFresh:false})).tasks[0].git.branch,'other');
+  }finally{release();await reader.settle();}
 });
 test('real Git reads track branch changes and detached HEAD without changing repository content',async()=>{
   const cwd=await mkdtemp(join(tmpdir(),'kanban-git-'));
