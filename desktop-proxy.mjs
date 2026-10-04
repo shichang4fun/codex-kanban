@@ -59,7 +59,7 @@ function jsonLines(stream,accept,raw){
   stream.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{accept(JSON.parse(line));}catch{raw(line+'\n');}}});
   stream.once('end',()=>{if(buffer)raw(buffer);});
 }
-async function main(){
+export async function startDesktopProxy(){
   const executable=process.env.KANBAN_REAL_CODEX;
   if(!executable||!isAbsolute(executable)||realpathSync(executable)===realpathSync(fileURLToPath(import.meta.url)))throw Error('Native CLI required');
   const args=process.argv.slice(2),index=args.indexOf('app-server');
@@ -71,15 +71,16 @@ async function main(){
   const relay=createDesktopRelay({toServer:message=>child.stdin.write(JSON.stringify(message)+'\n'),toDesktop:message=>process.stdout.write(JSON.stringify(message)+'\n')});
   jsonLines(process.stdin,relay.fromDesktop,value=>child.stdin.write(value));
   jsonLines(child.stdout,relay.fromServer,value=>process.stdout.write(value));
-  let stopBridge;
+  let stopBridge,ended=false;
+  process.stdin.once('end',()=>child.stdin.end());
+  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));
+  child.once('error',()=>{ended=true;relay.close();stopBridge?.();process.exitCode=1;});
+  child.once('exit',(code,signal)=>{ended=true;relay.close();stopBridge?.();process.exitCode=code??(signal?1:0);});
+  child.stdin.on('error',()=>relay.close());process.stdout.on('error',()=>{relay.close();child.kill();});
   try{stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,
     ready:()=>relay.ready&&relay.contextThreadId!==null,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
     request:(method,params)=>relay.request(method,params)});}
   catch{process.stderr.write('KANBAN_BRIDGE_NOT_STARTED\n');}
-  process.stdin.once('end',()=>child.stdin.end());
-  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));
-  child.once('error',()=>{relay.close();stopBridge?.();process.exitCode=1;});
-  child.once('exit',(code,signal)=>{relay.close();stopBridge?.();process.exitCode=code??(signal?1:0);});
-  child.stdin.on('error',()=>relay.close());process.stdout.on('error',()=>{relay.close();child.kill();});
+  if(ended)await stopBridge?.();
 }
-if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))main().catch(()=>{process.stderr.write('KANBAN_PROXY_START_FAILED\n');process.exitCode=1;});
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))startDesktopProxy().catch(()=>{process.stderr.write('KANBAN_PROXY_START_FAILED\n');process.exitCode=1;});

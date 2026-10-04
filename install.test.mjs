@@ -23,7 +23,7 @@ async function fixture(t){
     if(args[1]==='marketplace'&&args[2]==='upgrade')return '{}';
     return JSON.stringify({pluginId:'codex-kanban@codex-kanban',version:'fixture',installedPath:source});
   };
-  return {app,home,cli,nodePath,calls,run,set alreadyAdded(value){alreadyAdded=value;}};
+  return {app,home,cli,nodePath,calls,run,originalIcon:false,set alreadyAdded(value){alreadyAdded=value;}};
 }
 test('one installer registers the official package, configures the bridge without a task ID and reveals the launcher',async t=>{
   const f=await fixture(t),result=await installKanban({...f,launch:true});
