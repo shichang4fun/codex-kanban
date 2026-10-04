@@ -24,14 +24,14 @@ const result=payload=>({content:[{type:'text',text:payload.error??(payload.board
 export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./dist/kanban-ui.html',import.meta.url),'utf8')}={}){
   source??=service?null:createBoardSource({snapshotPath:join(defaultDataDir(),'snapshot.json'),allowMissingSnapshot:true});
   service??=createKanbanService({getBoard:source.getBoard});
-  const server=new McpServer({name:'codex-kanban',version:'0.4.43',icons:boardIcons},
+  const server=new McpServer({name:'codex-kanban',version:'0.4.44',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
   const read=async()=>{
     try{return result(await service.read());}
     catch{return result({error:'Local groups unavailable. Check the local Codex connection and refresh.',status:503});}
   };
   registerAppTool(server,'open_board',{
-    title:'Codex 看板',description:'Open the local Codex task board from the sidebar.',inputSchema:z.object({}).strict(),
+    title:'Codex Kanban',description:'Open the local Codex task board from the sidebar.',inputSchema:z.object({}).strict(),
     annotations:{readOnlyHint:true,openWorldHint:false},
     _meta:{ui:{resourceUri:boardResourceUri,visibility:['app']},'openai/ui':{entrypoints:[{type:'global'}]}}
   },read);

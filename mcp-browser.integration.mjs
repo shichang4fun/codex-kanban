@@ -65,7 +65,7 @@ const port=Number(process.env.KANBAN_TEST_PORT??0);
 const server=createServer(async(req,res)=>{
   try{
     if(req.url==='/'&&req.method==='GET'){
-      res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<html><meta charset="utf-8"><style>body{margin:0;background:#16161a;color:#ddd;font:13px system-ui}header{padding:8px 16px}button{margin-right:12px}iframe{width:100%;height:calc(100vh - 42px);border:0}</style><header><button>Codex 看板</button><span id="status">Synthetic MCP host</span></header><iframe title="Codex Kanban MCP App" hidden></iframe><script type="module">${parentScript.outputFiles[0].text.replaceAll('</script','<\\/script')}</script></html>`);return;
+      res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<html><meta charset="utf-8"><style>body{margin:0;background:#16161a;color:#ddd;font:13px system-ui}header{padding:8px 16px}button{margin-right:12px}iframe{width:100%;height:calc(100vh - 42px);border:0}</style><header><button>Codex Kanban</button><span id="status">Synthetic MCP host</span></header><iframe title="Codex Kanban MCP App" hidden></iframe><script type="module">${parentScript.outputFiles[0].text.replaceAll('</script','<\\/script')}</script></html>`);return;
     }
     if(req.url==='/app.html'){
       res.setHeader('Content-Type','text/html');

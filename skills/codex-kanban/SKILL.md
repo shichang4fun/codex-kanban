@@ -3,7 +3,7 @@ name: codex-kanban
 description: Create or refresh a local Codex Kanban board with native groups and read-only Desktop runtime status.
 ---
 
-Open the sidebar entry "Codex 看板" to use the installed MCP App. Its twelve tools are app-only; never instruct a model to invoke mutations. User snapshots and group-creation-settings.json live in $CODEX_HOME/kanban/ (default ~/.codex/kanban/), or KANBAN_DATA_DIR. Do not write data to the plugin cache. Refresh preserves service-owned Undo notices; tokens expire when the service closes.
+Open the sidebar entry "Codex Kanban" to use the installed MCP App. Its twelve tools are app-only; never instruct a model to invoke mutations. User snapshots and group-creation-settings.json live in $CODEX_HOME/kanban/ (default ~/.codex/kanban/), or KANBAN_DATA_DIR. Do not write data to the plugin cache. Refresh preserves service-owned Undo notices; tokens expire when the service closes.
 
 Use this plugin's board to show local Codex tasks grouped by the official local thread.section field. Retain timestamped Desktop runtime observations in collapsed Technical information; the normal UI has no runtime filters or grouping mode selector.
 
