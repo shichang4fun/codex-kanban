@@ -654,8 +654,8 @@ function projectDisabledReason(task){
 }
 function updateProjectPicker(task){
   const select=$('detail-project'),projects=(DATA.projects??[]).filter(p=>p.hostId==='local');
-  const current=task.localProjectId??(task.projectId?projects.find(p=>p.desktopProjectId===task.projectId)?.projectId:null)??'';
-  const removal=task.projectName?'Remove from '+task.projectName:'No project';
+  const current=task.projectSource==='worktree'?'':task.localProjectId??(task.projectId?projects.find(p=>p.desktopProjectId===task.projectId)?.projectId:null)??'';
+  const removal=task.projectSource==='worktree'?'Inherited from '+task.projectName:task.projectName?'Remove from '+task.projectName:'No project';
   const choices=[{value:'',name:removal},...projects.map(p=>({value:p.projectId,name:p.label}))];
   if(!choices.some(p=>p.value===current))choices.unshift({value:current,name:task.projectName||'Select project…',disabled:true});
   const signature=JSON.stringify(choices);
@@ -701,9 +701,9 @@ function renderTaskMenu(){
   const choices=(container,choicePage)=>{
     if(choicePage==='project'){
       const projects=(DATA.projects??[]).filter(p=>p.hostId==='local');
-      const current=task.localProjectId??(task.projectId?projects.find(p=>p.desktopProjectId===task.projectId)?.projectId:null);
+      const current=task.projectSource==='worktree'?null:task.localProjectId??(task.projectId?projects.find(p=>p.desktopProjectId===task.projectId)?.projectId:null);
       for(const project of projects)item(container,project.label,'folder',()=>run(()=>setTaskProject(task,project.projectId)),{checked:project.projectId===current});
-      if(task.localProjectId||task.projectId){
+      if(task.projectSource!=='worktree'&&(task.localProjectId||task.projectId)){
         container.append(el('div','task-menu-separator'));
         item(container,'Remove from '+(task.projectName||projects.find(p=>p.projectId===current)?.label||'project'),'folder-remove',()=>run(()=>setTaskProject(task,null)));
       }else if(!projects.length)container.append(el('div','task-menu-heading','No projects available'));

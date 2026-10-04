@@ -93,6 +93,7 @@ test('ephemeral and subagent records are excluded from native task columns',asyn
 });
 test('formal project labels use exact host and project ID, never workspace basenames',async()=>{
   const f=fixture();f.row.cwd='/workspace/generated-prompt-slug';
+  delete f.row.projectId; // Legacy readers lack the assignment field.
   f.desktop.threads[0].projectId='tools';
   f.desktop.projects=[{projectId:'tools',hostId:'remote-control:test',label:'Wrong host'},
     {projectId:'tools',hostId:'local',label:'Tools'}];

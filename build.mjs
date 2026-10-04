@@ -62,6 +62,7 @@ export function normalize(snapshot) {
     nativeTaskPinned:typeof task.nativeTaskPinned==='boolean'?task.nativeTaskPinned:Boolean(task.pinnedIndex),
     localSectionId:task.localSectionId??null,
     localProjectId:task.localProjectId??null,
+    projectSource:task.projectSource??null,
     rawStatus: task.status, column: classify(task.status),
     runtimeStatusSource: task.runtimeStatusSource ?? 'desktopSnapshot', runtimeStatusStale: task.runtimeStatusStale === true,
     lastObservedStatus: task.lastObservedStatus, lastObservedAt: task.lastObservedAt,

@@ -1,4 +1,25 @@
-import {test,expect} from '@playwright/test';
+import {test as base,expect} from '@playwright/test';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+
+const test=base.extend({browser:[async({playwright,launchOptions},use)=>{
+  let root,browser;
+  try{
+    let executablePath;
+    if(process.platform==='darwin'){
+      // Cocoa takes a two-argument process preference. Inject it in a wrapper
+      // because Playwright rejects the bare value as a page URL. No defaults
+      // or user preferences are written; other browsers keep their own mode.
+      root=await mkdtemp(join(tmpdir(),'kb-scrollbar-'));
+      executablePath=join(root,'chromium');
+      const binary="'"+playwright.chromium.executablePath().replaceAll("'","'\\''")+"'";
+      await writeFile(executablePath,'#!/bin/sh\nexec '+binary+' "$@" -AppleShowScrollBars Always\n',{mode:0o700});
+    }
+    browser=await playwright.chromium.launch({...launchOptions,...(executablePath?{executablePath}:{})});
+    await use(browser);
+  }finally{try{await browser?.close();}finally{if(root)await rm(root,{recursive:true,force:true});}}
+},{scope:'worker'}]});
 
 test.use({launchOptions:{ignoreDefaultArgs:['--hide-scrollbars']}});
 

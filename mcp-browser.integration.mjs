@@ -19,7 +19,8 @@ const settingsStore={read:async()=>structuredClone(defaults),update:async change
 let archived=false,reads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
 const moves=[];
 let groupActions=true,moveFailure=false,desktopConnected=true;
-let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false;
+let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false,worktreeProject=false;
+const projectWrites=[];
 const archives=[];
 const renames=[];
 const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
@@ -125,7 +126,10 @@ const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'s
   setProject:async params=>{if(params.threadId!==id||params.expectedProjectId!==task.localProjectId)throw Error('Unexpected fixture project request');
     const project=projects.find(p=>p.projectId===params.projectId);
     if(params.projectId!==null&&!project)throw Error('Unknown fixture project');
-    task.localProjectId=params.projectId;task.projectId=project?.desktopProjectId??null;task.projectName=project?.label??null;
+    projectWrites.push(params);
+    const displayed=project??(worktreeProject?projects[0]:null);
+    task.localProjectId=params.projectId;task.projectId=displayed?.desktopProjectId??null;task.projectName=displayed?.label??null;
+    task.projectSource=project?'native':worktreeProject?'worktree':null;
     return {threadId:id,projectId:params.projectId,changed:true};}
 });
 const app=createKanbanMcp({service});const client=new Client({name:'browser-fixture-host',version:'1'},{});
@@ -163,7 +167,7 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,moves,archives,renames,navigationUrls}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,localProjectId:task.localProjectId,projectSource:task.projectSource,projectWrites,moves,archives,renames,navigationUrls}));return;}
     if(req.url==='/fixture/reset'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
       const options=body?JSON.parse(body):{};
@@ -175,9 +179,12 @@ const server=createServer(async(req,res)=>{
       task.title='Sidebar integration fixture';
       groupActions=options.groupActions!==false;moveFailure=options.moveFailure===true;
       desktopConnected=options.desktopConnected!==false;
-      Object.assign(task,{localSectionId:null,nativeSectionId:'chats',placementSource:'localDefault',pinned:false,nativeTaskPinned:false});
+      worktreeProject=options.worktreeProject===true;
+      Object.assign(task,{localSectionId:null,nativeSectionId:'chats',placementSource:'localDefault',pinned:false,nativeTaskPinned:false,
+        localProjectId:'project-a',projectId:'desktop-a',projectName:'Fixture A',projectSource:'native'});
       if(options.inheritedProject)Object.assign(task,{nativeSectionId:'group-3',placementSource:'desktopProject',pinned:true});
-      moves.length=0;archives.length=0;renames.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
+      if(options.worktreeProject)Object.assign(task,{localProjectId:null,projectSource:'worktree'});
+      projectWrites.length=0;moves.length=0;archives.length=0;renames.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
     }
     if(req.url==='/fixture/navigation'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
