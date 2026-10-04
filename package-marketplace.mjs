@@ -29,9 +29,11 @@ Requires macOS and the current ChatGPT desktop app with Codex installed at /Appl
 
 1. [Download the marketplace ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip) and extract it.
 2. Double-click **Install Codex Kanban.command**. It installs or upgrades the plugin, Desktop bridge and original-icon integration together, preserving existing Sidebar Flow.
-3. If Codex is running, quit it normally (⌘Q) and reopen its original icon. Open a local chat, then open Codex 看板 in the sidebar. Continue using the original Dock/Finder/Spotlight entry on later starts; no separate launcher is required.
+3. If Codex is running, quit it normally (⌘Q) and reopen its original icon. Open a local chat, then open Codex Kanban in the sidebar. Continue using the original Dock/Finder/Spotlight entry on later starts; no separate launcher is required.
 
 If macOS blocks the downloaded script, right-click it and select Open, then follow the system prompt. Disable an existing codex-kanban@codex-kanban-local development copy before installing to avoid duplicate entries. No task ID, path configuration or config-file editing is needed. The installer never stops a running client.
+
+This package installs Codex Kanban only. It reuses Sidebar Flow if already installed; it does not install Sidebar Flow. Codex Kanban works independently without Sidebar Flow's automatic task classification.
 
 A single user LaunchAgent restores the original-icon CLI route at login. An existing Sidebar Flow agent is reused with its manifest/plist preserved and its helper backed up. The app bundle, signature and Dock icon are unchanged. The startup chain is Kanban → healthy installed Sidebar Flow → official CLI; pre-start runtime failures bypass unavailable components without replaying started requests. The first normal restart and GUI login ordering still require live acceptance on your desktop.
 
@@ -52,7 +54,7 @@ CODEX_CLI='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/C
 "$CODEX_CLI" plugin add codex-kanban@codex-kanban
 \`\`\`
 
-Reload MCP configuration or restart the desktop app, then open Codex 看板 in the sidebar. If you already installed codex-kanban@codex-kanban-local, disable that copy before enabling this one to avoid duplicate entries.
+Reload MCP configuration or restart the desktop app, then open Codex Kanban in the sidebar. If you already installed codex-kanban@codex-kanban-local, disable that copy before enabling this one to avoid duplicate entries.
 
 ## Update
 

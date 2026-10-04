@@ -1,4 +1,4 @@
-# Codex 看板 0.4.43
+# Codex Kanban 0.4.44
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
@@ -8,9 +8,11 @@
 
 1. [下载安装包 ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip)，解压。
 2. 双击 **Install Codex Kanban.command**，自动安装插件、配置 Desktop 桥接并接入原来的 Codex 图标；重复运行会升级插件及桥接，并保留已有 Sidebar Flow。
-3. 如果 Codex 正在运行，正常退出（⌘Q）后，点击原来的 Codex 图标打开。打开任意本机聊天，再从侧栏打开「Codex 看板」。以后照常从 Dock、Finder 或 Spotlight 启动，无需专用启动器。
+3. 如果 Codex 正在运行，正常退出（⌘Q）后，点击原来的 Codex 图标打开。打开任意本机聊天，再从侧栏打开「Codex Kanban」。以后照常从 Dock、Finder 或 Spotlight 启动，无需专用启动器。
 
 首次打开下载的脚本若被 macOS 拦截，右键选择「打开」并按系统提示确认。已有 `codex-kanban@codex-kanban-local` 开发副本时，先在 Codex 中禁用它，避免重复入口。
+
+安装包仅安装 Codex Kanban，不安装 Sidebar Flow。已有 Sidebar Flow 时自动复用；未安装时 Codex Kanban 可独立运行，但不提供 Sidebar Flow 的自动分类。
 
 仅需基础看板时，也可以使用官方 CLI：
 
@@ -184,7 +186,7 @@ codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
 codex plugin add codex-kanban@codex-kanban
 ```
 
-全局 `codex` 不可用时，可将命令中的 `codex` 替换为 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。重新加载 MCP 配置或正常重启客户端后，查看侧栏「Codex 看板」。已有本机版本 `codex-kanban@codex-kanban-local` 时，先禁用该副本，避免重复入口。GitHub 安装不会配置 Desktop 桥接；实时状态、Pin 与分组写入仍需按上面的桥接步骤设置。
+全局 `codex` 不可用时，可将命令中的 `codex` 替换为 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`。重新加载 MCP 配置或正常重启客户端后，查看侧栏「Codex Kanban」。已有本机版本 `codex-kanban@codex-kanban-local` 时，先禁用该副本，避免重复入口。GitHub 安装不会配置 Desktop 桥接；实时状态、Pin 与分组写入仍需按上面的桥接步骤设置。
 
 更新时执行以下命令，再重新加载 MCP 配置或正常重启客户端：
 
@@ -211,7 +213,7 @@ codex plugin marketplace add "$HOME/.codex/kanban-plugin-marketplace"
 codex plugin add codex-kanban@codex-kanban-local
 ```
 
-`prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备成功后保留上一份安装包；发布失败时恢复旧包，marketplace 文件通过最后一次原子替换发布。它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex 看板」。CLI 安装成功不能替代入口点击验收。
+`prepare:plugin` 在私有目录生成 `.agents/plugins/marketplace.json` 和自包含插件，通过插件内的可执行脚本固定当前 Node 路径，符合官方插件命令与目录限制。插件缓存不需要 `node_modules`，保留各业务模块独立的主程序边界。重复准备成功后保留上一份安装包；发布失败时恢复旧包，marketplace 文件通过最后一次原子替换发布。它不修改客户端程序、签名或启动器。插件启用后重新加载 MCP 配置，必要时正常重启客户端，再检查侧栏「Codex Kanban」。CLI 安装成功不能替代入口点击验收。
 
 插件的用户数据默认在 `$CODEX_HOME/kanban/snapshot.json`（未设置 CODEX_HOME 时为 `~/.codex/kanban/snapshot.json`），可用 `KANBAN_DATA_DIR` 指定目录。缺少快照仍可读取本机任务与分组；项目目录从原生 API 读取；其他主机和备用运行快照由宿主 `list_threads` / `list_projects` 更新。服务不写插件缓存。MCP 和原 localhost 网页的本地偏好属于不同存储来源，不自动迁移；iframe 存储不可用时沿用现有错误提示。
 

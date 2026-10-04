@@ -48,7 +48,7 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
     const result=await installKanban({launch:values.launch});
     console.log(`Codex Kanban ${result.version}: plugin and Desktop bridge installed.`);
     if(result.phase==='restart-required')console.log('Quit Codex normally, then reopen it using its original icon. Kanban and any installed Sidebar Flow will be enabled automatically.');
-    else if(result.phase==='launching')console.log('Codex is starting. Open a local chat, then open Codex 看板 in the sidebar.');
+    else if(result.phase==='launching')console.log('Codex is starting. Open a local chat, then open Codex Kanban in the sidebar.');
     else console.log('Open Codex using its original icon. No dedicated launcher is required.');
     console.log('No task ID or manual bridge configuration is required.');
   }catch(error){
