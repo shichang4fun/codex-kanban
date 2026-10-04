@@ -1,0 +1,10 @@
+import './flow/tests/app-server-observer.test.mjs';
+import './flow/tests/desktop-mcp-adapter.test.mjs';
+import './flow/tests/desktop-observer-manager.test.mjs';
+import './flow/tests/desktop-proxy-config.test.mjs';
+import './flow/tests/desktop-reconciliation-timer.test.mjs';
+import './flow/tests/desktop-reconciliation.test.mjs';
+import './flow/tests/desktop-force-status.test.mjs';
+import './flow/tests/desktop-for-later.test.mjs';
+import './flow/tests/desktop-event-coalescing.test.mjs';
+import './flow/tests/shared-gate.test.mjs';

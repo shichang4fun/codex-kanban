@@ -16,7 +16,7 @@ const task={id,hostId:'local',title:'Sidebar integration fixture',summary:'Synth
 const sections=[{sectionId:'chats',name:'Tasks'},...['For Later','In Progress','For Review','Pinned'].map((name,index)=>({sectionId:'group-'+index,name}))];
 const defaults={};
 const settingsStore={read:async()=>structuredClone(defaults),update:async change=>change(defaults)};
-let archived=false,reads=0;
+let archived=false,reads=0,flowEnabled=true;
 const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
 task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
@@ -26,7 +26,8 @@ const getBoard=async()=>{reads++;return {tasks:[...(archived?[]:[{...task}]),...
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};
 const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'synthetic',
   bridgeRequest:async(_socket,method,params)=>{
-    if(method==='status')return {connected:true,groupActions:true,taskCreation:true,creationOperations:[]};
+    if(method==='status')return {connected:true,groupActions:true,taskCreation:true,creationOperations:[],autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};
+    if(method==='flowSettings'){flowEnabled=params.enabled;return {autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};}
     if(method==='creationCatalog')return {projects:projects.map(p=>({projectId:p.desktopProjectId,label:p.label,isGitRepository:true,nativeProjectId:p.projectId})),
       sections:[...sections.filter(s=>s.sectionId!=='chats'),{sectionId:null,name:'Ungrouped'}]};
     if(method==='archive'){

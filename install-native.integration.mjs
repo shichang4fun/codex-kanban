@@ -47,6 +47,9 @@ try{
   config=await installDesktopBridge({...config,chainedCli:join(config.app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex')});
   assert(!('contextThreadId' in config));
   assert.equal(config.codexHome,home);
+  assert.equal(config.autoFlow,true);
+  const flowSettings=JSON.parse(await readFile(join(config.root,'flow.json'),'utf8'));
+  assert.equal(flowSettings.enabled,true);assert.equal(flowSettings.policy.mode,'all-local');
   const manifest=JSON.parse(await readFile(join(installed.pluginPath,'plugin.json'),'utf8'));
   assert.equal(installed.version,manifest.version);
   const reinstalled=await installKanban(options);assert.equal(reinstalled.version,installed.version);
@@ -71,13 +74,17 @@ try{
   const context=await request('thread/start',{cwd:root,ephemeral:true,approvalPolicy:'never',sandbox:'read-only'});
   assert(context.thread?.id);
   assert.equal((await desktopBridgeRequest(config.socketPath,'status')).connected,true);
+  assert.deepEqual((await desktopBridgeRequest(config.socketPath,'status')).autoFlow,{available:true,enabled:true,mode:'all-local'});
+  assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:false})).autoFlow.enabled,false);
+  assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
+  assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:true})).autoFlow.enabled,true);
   const status=await request('mcpServerStatus/list',{limit:100,threadId:context.thread.id});
   const entry=status.data?.find(server=>server.name.includes('codex-kanban'));
   assert(entry,'Installed plugin was not discovered. '+diagnostic.slice(-2000));
-  assert.equal(Object.keys(entry.tools).length,12);
+  assert.equal(Object.keys(entry.tools).length,13);
   assert.equal(entry.serverInfo.version,manifest.version);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility[0]==='app'));
-  console.log(`PASS: native installer ${installed.version}, repeat install, original-icon shim, single simulated login agent, private bridge, dynamic context and 12 app-only tools; zero model turns, no GUI launchd changes.`);
+  console.log(`PASS: native installer ${installed.version}, repeat install, original-icon shim, single simulated login agent, private bridge, dynamic context and 13 app-only tools; zero model turns, no GUI launchd changes.`);
 }finally{
   for(const operation of pending.values())clearTimeout(operation.timer);
   if(child&&child.exitCode===null){const ended=once(child,'exit');child.stdin.end();child.kill();await ended;}

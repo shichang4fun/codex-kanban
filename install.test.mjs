@@ -23,7 +23,7 @@ async function fixture(t){
     if(args[1]==='marketplace'&&args[2]==='upgrade')return '{}';
     return JSON.stringify({pluginId:'codex-kanban@codex-kanban',version:'fixture',installedPath:source});
   };
-  return {app,home,cli,nodePath,calls,run,originalIcon:false,set alreadyAdded(value){alreadyAdded=value;}};
+  return {app,home,homeDir:root,cli,nodePath,calls,run,originalIcon:false,set alreadyAdded(value){alreadyAdded=value;}};
 }
 test('one installer registers the official package, configures the bridge without a task ID and reveals the launcher',async t=>{
   const f=await fixture(t),result=await installKanban({...f,launch:true});
@@ -46,10 +46,10 @@ test('Finder launch passes a custom CODEX_HOME even without an inherited termina
   assert(calls[1].args.includes('CODEX_CLI_PATH='+join(f.home,'kanban-desktop','codex-proxy')));
   assert.equal((await lstat(result.launcher)).mode&0o777,0o700);
 });
-test('reinstall upgrades the marketplace and preserves a previously selected CLI chain',async t=>{
+test('reinstall refuses to replace an unknown CLI chain while upgrading the marketplace',async t=>{
   const f=await fixture(t),chain=join(f.home,'custom-cli');await mkdir(f.home);await writeFile(chain,'#!/bin/sh\nexit 0\n',{mode:0o700});
   await installDesktopBridge({root:join(f.home,'kanban-desktop'),app:f.app,nodePath:f.nodePath,chainedCli:chain});
-  f.alreadyAdded=true;await installKanban(f);
+  f.alreadyAdded=true;await assert.rejects(installKanban(f),/unknown CLI chain/);
   assert.deepEqual(f.calls[1].args,['plugin','marketplace','upgrade','codex-kanban','--json']);
   assert.equal((await readDesktopBridgeConfig(join(f.home,'kanban-desktop'))).chainedCli,chain);
 });

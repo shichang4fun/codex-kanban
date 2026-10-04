@@ -4,12 +4,13 @@ import {realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {isAbsolute} from 'node:path';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
+import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
 
 // Preserve Desktop's original stdio handshake and RPC IDs. Added calls can only
 // call a small tool whitelist. Explicit create_thread is the sole new-task
 // entry point; arbitrary model execution methods remain unavailable.
 export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
-  const prefix='kanban:'+randomUUID()+':',pending=new Map();
+  const prefix='kanban:'+randomUUID()+':',pending=new Map(),listeners=new Set(),lists=new Map();
   let ready=false,initializeId,sequence=0,contextThreadId=null;const loading=new Set();
   function send(method,params){
     if(!ready)return Promise.reject(Error('Desktop handshake not ready'));
@@ -37,6 +38,9 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
         pending.delete(message.id);clearTimeout(operation.timer);message.error?operation.reject(Error('Desktop RPC failed')):operation.resolve(message.result);return;
       }
       toDesktop(message);
+      if(ready&&message.id==null&&message.method)for(const listener of listeners){
+        try{Promise.resolve(listener(message)).catch(()=>{});}catch{}
+      }
     },
     call(tool,args,contextThreadId){
       if(!['list_threads','read_thread','list_projects','create_thread','set_thread_archived','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
@@ -51,13 +55,27 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
         return Promise.reject(Error('Runtime method not allowed'));
       return send(method,{threadId:params.threadId,includeTurns:false});
     },
-    close(){ready=false;contextThreadId=null;loading.clear();for(const operation of pending.values()){clearTimeout(operation.timer);operation.reject(Error('Desktop connection closed'));}pending.clear();}
+    flowRequest(method,params={}){
+      if(method==='mcpServer/tool/call'){
+        if(params.server!=='codex_app'||!['list_threads','read_thread','move_thread_to_sidebar_section'].includes(params.tool)
+          ||typeof params.threadId!=='string')return Promise.reject(Error('Auto organize tool not allowed'));
+      }else if(!['thread/read','thread/list','thread/loaded/list','threadSection/list'].includes(method)
+        ||method==='thread/read'&&(params.includeTurns!==false||typeof params.threadId!=='string'))
+        return Promise.reject(Error('Auto organize method not allowed'));
+      const key=method==='mcpServer/tool/call'&&params.tool==='list_threads'?JSON.stringify(params):null;
+      if(key&&lists.has(key))return lists.get(key);
+      const result=send(method,params);
+      if(key){lists.set(key,result);result.finally(()=>{if(lists.get(key)===result)lists.delete(key);}).catch(()=>{});}
+      return result;
+    },
+    subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
+    close(){ready=false;contextThreadId=null;loading.clear();listeners.clear();lists.clear();for(const operation of pending.values()){clearTimeout(operation.timer);operation.reject(Error('Desktop connection closed'));}pending.clear();}
   };
 }
-function jsonLines(stream,accept,raw){
+function jsonLines(stream,accept,raw,onEnd=()=>{}){
   stream.setEncoding('utf8');let buffer='';
   stream.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{accept(JSON.parse(line));}catch{raw(line+'\n');}}});
-  stream.once('end',()=>{if(buffer)raw(buffer);});
+  stream.once('end',()=>{if(buffer)raw(buffer);onEnd();});
 }
 export async function startDesktopProxy(){
   const executable=process.env.KANBAN_REAL_CODEX;
@@ -69,18 +87,20 @@ export async function startDesktopProxy(){
   for(const key of Object.keys(env))if(key.startsWith('KANBAN_')||key.startsWith('SIDEBAR_FLOW_'))delete env[key];
   const child=spawn(executable,args,{stdio:['pipe','pipe','inherit'],env});
   const relay=createDesktopRelay({toServer:message=>child.stdin.write(JSON.stringify(message)+'\n'),toDesktop:message=>process.stdout.write(JSON.stringify(message)+'\n')});
-  jsonLines(process.stdin,relay.fromDesktop,value=>child.stdin.write(value));
-  jsonLines(child.stdout,relay.fromServer,value=>process.stdout.write(value));
-  let stopBridge,ended=false;
-  process.stdin.once('end',()=>child.stdin.end());
+  let stopBridge,autoFlow,ended=false;
+  const stop=()=>{autoFlow?.stop();stopBridge?.();};
   for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));
-  child.once('error',()=>{ended=true;relay.close();stopBridge?.();process.exitCode=1;});
-  child.once('exit',(code,signal)=>{ended=true;relay.close();stopBridge?.();process.exitCode=code??(signal?1:0);});
+  child.once('error',()=>{ended=true;relay.close();stop();process.exitCode=1;});
+  child.once('exit',(code,signal)=>{ended=true;relay.close();stop();process.exitCode=code??(signal?1:0);});
   child.stdin.on('error',()=>relay.close());process.stdout.on('error',()=>{relay.close();child.kill();});
-  try{stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,
+  const runExclusive=createTransactionGate();
+  if(process.env.KANBAN_FLOW_ROOT)autoFlow=await startAutoFlow({root:process.env.KANBAN_FLOW_ROOT,relay,runExclusive});
+  jsonLines(process.stdin,relay.fromDesktop,value=>child.stdin.write(value),()=>{autoFlow?.stop();child.stdin.end();});
+  jsonLines(child.stdout,relay.fromServer,value=>process.stdout.write(value));
+  try{stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,autoFlow,runExclusive,
     ready:()=>relay.ready&&relay.contextThreadId!==null,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
     request:(method,params)=>relay.request(method,params)});}
   catch{process.stderr.write('KANBAN_BRIDGE_NOT_STARTED\n');}
-  if(ended)await stopBridge?.();
+  if(ended){autoFlow?.stop();await stopBridge?.();}
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))startDesktopProxy().catch(()=>{process.stderr.write('KANBAN_PROXY_START_FAILED\n');process.exitCode=1;});

@@ -28,7 +28,7 @@ const server=createServer(async(req,res)=>{
       try{json(res,200,await service.creationStatus({requestId:new URL(req.url,'http://localhost').searchParams.get('requestId')}));}
       catch(error){json(res,error.status??503,{error:error.status?error.message:'Creation status is unavailable.'});}return;
     }
-    if(['/api/project','/api/move','/api/archive','/api/unarchive','/api/pin','/api/create','/api/creation-group','/api/group-settings'].includes(req.url)&&req.method==='POST'){
+    if(['/api/project','/api/move','/api/archive','/api/unarchive','/api/pin','/api/create','/api/creation-group','/api/group-settings','/api/flow-settings'].includes(req.url)&&req.method==='POST'){
       const cancellation=new AbortController();
       req.once('aborted',()=>cancellation.abort());
       res.once('close',()=>{if(!res.writableEnded)cancellation.abort();});

@@ -281,6 +281,7 @@ dialog::backdrop{background:var(--backdrop)}
 .options-field select{width:100%;max-width:none;min-height:32px;padding:5px 7px;background:var(--raised);border:1px solid var(--line);border-radius:5px;color:var(--ink);font-size:12px}
 .options-field option{background:var(--raised);color:var(--ink)}.options-hint[hidden]{display:none}.options-hint{margin:-2px 0 12px 54px;color:var(--dim);font-size:11px;line-height:1.5}
 .options-divider{height:1px;background:var(--line);margin:4px 0 8px}
+.options-toggle{display:flex;align-items:center;gap:8px;margin:12px 0 5px;color:var(--ink);font-size:12px}.options-toggle input{margin:0;accent-color:var(--accent)}.options-toggle:has(input:disabled){color:var(--dim)}.options-flow-hint{margin:0 0 12px 21px;color:var(--dim);font-size:11px;line-height:1.5}.options-flow-hint[data-error=true]{color:var(--state-error)}
 #refresh{display:flex;align-items:center;gap:7px;width:100%;min-height:32px;height:auto;padding:6px 7px;border:0;border-radius:5px;text-align:left;color:var(--muted);font-size:12px}
 #refresh .icon{width:15px;height:15px}#refresh:hover{color:var(--ink)}
 @media(max-width:1100px){.page-head{grid-template-columns:minmax(0,1fr) auto;gap:12px 20px}.header-search{grid-column:1/-1;grid-row:2}.header-title{width:auto}.filters{grid-row:3}.view-controls{grid-column:2;grid-row:1}}
@@ -354,6 +355,8 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
             <div class="options-field"><label for="order">Sort</label><select id="order" aria-label="Sort"><option value="recent">Recently updated</option><option value="title">Task title</option><option value="manual">Manual order</option></select></div>
             <p class="options-hint" id="manual-order-hint" hidden>Choose Manual order to drag tasks into your preferred order.</p>
             <div class="options-field"><label for="theme">Theme</label><select id="theme" aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+            <label class="options-toggle"><input id="auto-organize" type="checkbox" disabled aria-describedby="auto-organize-hint">Auto organize</label>
+            <p class="options-flow-hint" id="auto-organize-hint" role="status">Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.</p>
             <div class="options-divider"></div>
             <button class="options-refresh" id="refresh" type="button" aria-label="Refresh tasks" title="Refresh tasks"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span id="refresh-label">Refresh tasks</span></button>
           </div>
@@ -522,6 +525,7 @@ let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nati
 let archivingKey=null;
 let pinningKey=null,restoringToken=null;
 let creationBusy=false,creationSession=null,creationOptions=null,nextCreationTarget=null;
+let flowSettingsBusy=false,flowSettingsError='';
 const archiveNotices=new Map();
 const dismissedArchiveTokens=new Set();
 function syncArchiveNotices(entries){
@@ -534,7 +538,7 @@ function syncArchiveNotices(entries){
   }
   renderArchiveNotices();
 }
-function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken||creationBusy;}
+function taskActionPending(){return nativePending||archivingKey||pinningKey||restoringToken||creationBusy||flowSettingsBusy;}
 function canArchive(task){return nativeConnected&&DATA.sync?.archiveLocal===true&&!!nativeToken&&!!taskUrl(task);}
 function taskPinned(task){return task.nativeTaskPinned??task.pinned;}
 function canPin(task){return nativeConnected&&DATA.sync?.pinLocal===true&&!!nativeToken&&!!taskUrl(task)
@@ -770,7 +774,7 @@ function syncHostOptions(){
 function applyNativeBoard(board){
   if(!Array.isArray(board?.tasks)||!Array.isArray(board.sections)||board.sync?.connected!==true)throw Error('Incomplete desktop response.');
   DATA=board;nativeConnected=true;nativeWritable=board.sync.scope==='localSections'?board.sync.moveWritable===true:board.sync.writable===true;
-  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop · Sidebar Flow continues automatic grouping':'Group changes require Codex launched with the updated Kanban launcher · Open a local task after launch'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
+  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop':'Group changes require Codex launched with the updated Kanban launcher · Open a local task after launch'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
   expireRuntimeSnapshot();
   refreshSummary();render({animate:true});
   renderCreationNotices();
@@ -1201,7 +1205,29 @@ function updateHeaderControls(){
   $('unread-only').title=unread+' unread '+(unread===1?'task':'tasks')+' · '+(onlyUnread?'Click to show all tasks':'Click to show only unread tasks')+'\n'+(DATA.sync?.localUnreadConnected?'Local unread markers refresh every 5 seconds; other hosts use a desktop snapshot.':'Unread replies from the desktop snapshot.');
   $('active-filters').hidden=!$('search').value.trim()&&host==='all';
   $('view-options-trigger').title='Host: '+hostLabel+' · Sort: '+(sort==='manual'?'Manual order':sort==='title'?'Task title':'Recently updated');
+  syncFlowSettings();
 }
+function syncFlowSettings(){
+  const setting=DATA?.autoFlow,available=nativeConnected&&!!nativeToken&&setting?.available===true,control=$('auto-organize'),hint=$('auto-organize-hint');
+  control.checked=setting?.enabled===true;
+  control.disabled=!available||!!taskActionPending();
+  control.setAttribute('aria-busy',String(flowSettingsBusy));
+  hint.dataset.error=String(!!flowSettingsError);
+  hint.textContent=flowSettingsError||(flowSettingsBusy?'Saving automatic grouping…':!available?'Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.':setting.enabled?'Running tasks move to In Progress; completed tasks move to For Review.':'Automatic grouping is off. Existing groups and rules are preserved.');
+}
+$('auto-organize').onchange=async()=>{
+  const enabled=$('auto-organize').checked;
+  if(taskActionPending()||!nativeConnected||!nativeToken||DATA?.autoFlow?.available!==true){syncFlowSettings();return;}
+  flowSettingsError='';flowSettingsBusy=true;++nativeEpoch;render();renderArchiveNotices();
+  try{
+    const response=await fetch('/api/flow-settings',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({enabled})}),payload=await response.json();
+    if(!response.ok)throw Error(payload.error||'Automatic grouping could not be verified.');
+    if(payload.autoFlow?.available!==true||payload.autoFlow.enabled!==enabled)throw Error('Automatic grouping could not be verified. Refresh before trying again.');
+    nativeToken=payload.csrf??nativeToken;
+    if(payload.board)applyNativeBoard(payload.board);else DATA={...DATA,autoFlow:payload.autoFlow};
+  }catch(error){flowSettingsError=error.message;}
+  finally{flowSettingsBusy=false;render();renderArchiveNotices();}
+};
 $('view-options').addEventListener('toggle',()=>{$('view-options-trigger').setAttribute('aria-expanded',String($('view-options').open));});
 $('view-options').addEventListener('focusout',e=>{if(e.relatedTarget&&!$('view-options').contains(e.relatedTarget))closeViewOptions();});
 $('host-chip').onclick=()=>{$('host').value='all';render();$('search').focus();};
