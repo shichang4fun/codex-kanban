@@ -113,6 +113,11 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 @media(prefers-reduced-motion:reduce){.archive-notice{animation:none}}
 .native-note{padding:0 28px 13px;font-size:0.625rem;color:var(--muted)}
 .native-note[hidden]{display:none}
+.connection-notice{display:flex;align-items:center;gap:12px;margin:0 24px 14px;padding:11px 13px;border:1px solid var(--line);border-left:3px solid var(--state-later);border-radius:6px;background:var(--raised)}
+.connection-notice[hidden]{display:none}
+.connection-notice .native-note{flex:1;min-width:0;padding:0;font-size:0.75rem;line-height:1.7}
+.connection-notice .toolbar-btn{flex-shrink:0}
+@media(max-width:760px){.connection-notice{margin:0 16px 14px;align-items:flex-start;flex-wrap:wrap}}
 .native-groups .column.drop-target{background:var(--drop-bg);box-shadow:0 0 0 2px var(--drop-ring);border-radius:6px}
 .native-groups .cards{min-height:0}
 .native-groups .card[draggable=true] .card-open{cursor:grab}
@@ -367,7 +372,10 @@ a[aria-disabled="true"]{opacity:.5;cursor:default}
         <button class="clear-filters" id="clear-filters" type="button" hidden>Clear filters</button>
       </div>
     </header>
-    <div class="native-note" id="native-note" role="status" hidden></div>
+    <div class="connection-notice" id="connection-notice" hidden>
+      <div class="native-note" id="native-note" role="status" hidden></div>
+      <button class="toolbar-btn" id="connection-retry" type="button">Check connection</button>
+    </div>
     <div class="creation-notices" id="creation-notices" aria-live="polite"></div>
     <div class="board-wrap"><div class="board native-groups" id="board" aria-label="Tasks grouped by native sidebar group"></div></div>
   </main>
@@ -833,9 +841,13 @@ function nativeStage(task,groups=nativeColumns()){
 }
 function nativeNotice(){
   const messages=[];
-  if(!nativeConnected||!nativeWritable)messages.push(nativeMessage);
+  if(!nativeConnected)messages.push(nativeMessage+(DATA?' Latest tasks could not be read; keeping the last loaded board. Kanban rechecks automatically.':''));
+  else if(!nativeWritable)messages.push(nativeMessage);
   if(DATA?.unavailableHosts?.length)messages.push('Some hosts unavailable; showing their latest snapshot.');
-  $('native-note').hidden=!messages.length;$('native-note').textContent=messages.join(' · ');
+  $('connection-notice').hidden=$('native-note').hidden=!messages.length;
+  const message=messages.join(' · ');if($('native-note').textContent!==message)$('native-note').textContent=message;
+  $('connection-retry').disabled=!!(taskActionPending()||nativeReads||draggedKey||draggedGroup||globalThis.kanbanTransport?.navigationPending);
+  $('connection-retry').textContent=nativeReads?'Checking…':'Check connection';
   const format=value=>Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'medium',hour12:false}).format(new Date(value)):'Unknown';
   $('visible-count').title=[nativeConnected?'Groups auto-refresh every 3 seconds':'Showing saved groups',
     'Groups read: '+format(DATA?.capturedAt),DATA?.tasks.some(runtimeIsLive)?'Runtime read: '+format(DATA?.runtimeLiveCapturedAt):'Runtime snapshot: '+format(DATA?.runtimeCapturedAt),DATA?.coverage].filter(Boolean).join('\n');
@@ -860,7 +872,10 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
   if(!Array.isArray(board?.tasks)||!Array.isArray(board.sections)||board.sync?.connected!==true)throw Error('Incomplete desktop response.');
   const previous=skipUnchanged&&nativeConnected?boardRenderKey(DATA):null;
   DATA=board;nativeConnected=true;nativeWritable=board.sync.scope==='localSections'?board.sync.moveWritable===true:board.sync.writable===true;
-  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop':'Group changes require Codex launched with the updated Kanban launcher · Open a local task after launch'):nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
+  nativeMessage=board.sync.scope==='localSections'?(nativeWritable?'Group changes go through Codex Desktop':
+    (board.sync.desktopArchiveConnected===false?'Desktop disconnected. ':'Desktop group connection unavailable. ')
+    +'Cross-group dragging and Pin/Unpin are unavailable. Restart Codex with the updated Kanban launcher or its configured original icon, then open a local chat. Kanban rechecks automatically.'):
+    nativeWritable?'Native groups connected · Changes verified after each move':'Native groups connected · Read only';
   expireRuntimeSnapshot();
   refreshSummary();
   if(previous!==null&&previous===boardRenderKey(DATA)){
@@ -873,6 +888,7 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
 async function refreshNativeBoard(force=false){
   if((!globalThis.kanbanTransport&&!['http:','https:'].includes(location.protocol))||taskActionPending()||(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu||nativePending||draggedKey||draggedGroup||document.hidden||nativeReads)))return;
   nativeReads++;
+  nativeNotice();
   const epoch=++nativeEpoch;
   try{
     const response=await fetch('/api/board',{cache:'no-store'});
@@ -886,7 +902,7 @@ async function refreshNativeBoard(force=false){
     if(epoch!==nativeEpoch||(!force&&(globalThis.kanbanTransport?.navigationPending||$('creation').open||$('rename-task').open||taskMenu)))return;
     nativeConnected=false;nativeWritable=false;nativeMessage=error.message;render();
   }
-  finally{nativeReads--;}
+  finally{nativeReads--;nativeNotice();}
 }
 async function moveNative(task,sectionId){
   if(!nativeCanEditGroup(task)){announce(nativeMessage);return false;}
@@ -912,13 +928,13 @@ function finishDrag(){
   clearTaskDropMarkers();
 }
 function enableDrop(section,stage){
-  const canDrop=()=>{const task=DATA.tasks.find(t=>taskKey(t)===draggedKey);return task&&nativeCanMove(task);};
+  const canDrop=()=>{const task=DATA.tasks.find(t=>taskKey(t)===draggedKey);return task&&draggedTaskGroup!==section.dataset.groupId&&nativeCanMove(task);};
   section.addEventListener('dragover',e=>{if(!canDrop())return;e.preventDefault();e.dataTransfer.dropEffect='move';section.classList.add('drop-target');});
   section.addEventListener('dragleave',e=>{if(!section.contains(e.relatedTarget))section.classList.remove('drop-target');});
   section.addEventListener('drop',e=>{
     if(!canDrop())return;e.preventDefault();e.stopPropagation();
     const task=DATA.tasks.find(task=>taskKey(task)===draggedKey);finishDrag();
-    if(task){collapsed.delete(groupingMode+':'+stage);moveNative(task,stage);}
+    if(task){collapsed.delete(groupingMode+':'+section.dataset.groupId);moveNative(task,stage);}
   });
 }
 const taskOrderStoragePrefix='codex-kanban.task-order.v1:';
@@ -1286,7 +1302,8 @@ function render({animate=false}={}){
     const head=el('button','col-head');head.type='button';head.title=col.desc;head.setAttribute('aria-label',col.name+' group');head.setAttribute('aria-expanded',String(!collapsed.has(collapseKey)));
     head.dataset.groupKey=col.id;
     enableGroupDrag(section,head,col);
-    section.dataset.nativeSection=col.id;if(nativeWritable&&['For Later','In Progress','For Review','Pinned'].includes(col.name))enableDrop(section,col.id);
+    section.dataset.nativeSection=col.id;
+    if(nativeWritable&&(col.id==='chats'||['For Later','In Progress','For Review','Pinned'].includes(col.name)))enableDrop(section,col.id==='chats'?null:col.id);
     const ring=el('span','state-ring');
     const chevron=el('span','col-chevron');chevron.append(icon('down'));head.append(ring,el('span','col-name',col.name),el('span','col-count',String(items.length)),chevron);
     head.onclick=()=>{if(performance.now()<suppressClickUntil)return;if(collapsed.has(collapseKey))collapsed.delete(collapseKey);else collapsed.add(collapseKey);render();};
@@ -1604,6 +1621,10 @@ window.addEventListener('storage',e=>{
 });
 $('unread-only').onclick=()=>setFilter(filter==='unread'?'all':'unread');
 $('view-board').onclick=()=>setView('board');$('view-list').onclick=()=>setView('list');
+$('connection-retry').onclick=async()=>{
+  if(taskActionPending()||nativeReads||draggedKey||draggedGroup||globalThis.kanbanTransport?.navigationPending)return;
+  await refreshNativeBoard(true);
+};
 $('close').onclick=()=>$('detail').close();
 $('detail').onclick=e=>{if(e.target===$('detail')){const rect=$('detail').getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)$('detail').close();}};
 $('copy').onclick=async()=>{const prompt=`Please open the Codex chat “${selectedTask.title}”, threadId=${selectedTask.id}，hostId=${selectedTask.hostId}.`;try{await navigator.clipboard.writeText(prompt);$('copy').textContent='Copied';}catch{$('open-prompt').value=prompt;$('open-prompt').style.display='block';$('open-prompt').focus();$('open-prompt').select();$('copy').textContent='Copy the instruction below';}};

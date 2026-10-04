@@ -137,7 +137,9 @@ for await (const line of readline.createInterface({input:process.stdin})){
   child.stdout.on('data',data=>{output+=data;let end;while((end=output.indexOf('\n'))>=0){lines.push(JSON.parse(output.slice(0,end)));output=output.slice(end+1);}});
   child.stderr.on('data',data=>diagnostic+=data);
   t.after(async()=>{if(child.exitCode===null){const ended=once(child,'exit');child.stdin.end();child.kill();await ended;}await rm(root,{recursive:true,force:true});});
-  async function until(check){for(let i=0;i<100;i++){if(await check())return;assert.equal(child.exitCode,null,diagnostic);await new Promise(r=>setTimeout(r,20));}assert.fail('Proxy condition timed out: '+diagnostic);}
+  // Full-suite parallelism can delay the child process beyond two seconds.
+  // Keep a bounded startup budget and still fail immediately if it exits.
+  async function until(check){const deadline=Date.now()+10000;while(Date.now()<deadline){if(await check())return;assert.equal(child.exitCode,null,diagnostic);await new Promise(r=>setTimeout(r,20));}assert.fail('Proxy condition timed out: '+diagnostic);}
   await until(async()=>!!(await lstat(socketPath).catch(()=>null)));
   child.stdin.write(JSON.stringify({id:1,method:'initialize',params:{}})+'\n');await until(()=>lines.some(m=>m.id===1));
   assert.equal((await desktopBridgeRequest(socketPath,'status')).connected,false);

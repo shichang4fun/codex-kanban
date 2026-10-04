@@ -1,7 +1,7 @@
 import {App} from '@modelcontextprotocol/ext-apps';
 import {createMcpFetch} from './mcp-ui-transport.mjs';
 
-const app=new App({name:'Codex Kanban',version:'0.4.50'},{},{autoResize:false});
+const app=new App({name:'Codex Kanban',version:'0.4.51'},{},{autoResize:false});
 const ready=app.connect(undefined,{timeout:15000});
 // Attach a rejection handler immediately; the initial board request shows errors.
 void ready.catch(()=>{});
@@ -33,6 +33,8 @@ document.addEventListener('pointerdown',event=>{if(event.button===0){clearPointe
 // outside the link still clears the guard on the next turn.
 document.addEventListener('pointerup',()=>{if(pointerLink)pointerReleaseTimer=setTimeout(clearPointerLink,0);});
 document.addEventListener('pointercancel',clearPointerLink);
+document.addEventListener('dragstart',clearPointerLink);
+document.addEventListener('dragend',clearPointerLink);
 window.addEventListener('blur',clearPointerLink);
 document.addEventListener('click',async event=>{
   clearPointerLink();
