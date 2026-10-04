@@ -27,3 +27,4 @@ coverage/
 dist/
 playwright-report/
 test-results/
+performance-results/

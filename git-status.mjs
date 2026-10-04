@@ -3,7 +3,7 @@ import {promisify} from 'node:util';
 
 const exec=promisify(execFile);
 const fields='number,url,state,isDraft,headRefName,headRefOid,isCrossRepository,reviewDecision,statusCheckRollup,updatedAt';
-const gitMaxAgeMs=5000,prMaxAgeMs=60000;
+const gitMaxAgeMs=30000,prMaxAgeMs=60000;
 
 export function githubRepository(remote){
   if(typeof remote!=='string')return null;
@@ -42,9 +42,9 @@ export function createGitStatusReader({run=async(command,args,{signal}={})=>{
         .then(job.resolve,job.reject).finally(()=>{active--;if(job.name==='gh')githubActive--;pump();});
     }
   }
-  async function readWorkspace(cwd){
+  async function readWorkspace(cwd,force=false){
     const existing=workspaces.get(cwd);
-    if(existing&&(existing.pending||clock()-existing.time<gitMaxAgeMs))return existing.pending??existing.value;
+    if(existing&&(existing.pending||!force&&clock()-existing.time<gitMaxAgeMs))return existing.pending??existing.value;
     const entry={time:clock(),value:existing?.value};workspaces.set(cwd,entry);
     entry.pending=(async()=>{
       const git=args=>command('git',['-C',cwd,...args]);
@@ -60,14 +60,14 @@ export function createGitStatusReader({run=async(command,args,{signal}={})=>{
     })().then(value=>{entry.value=value;entry.time=clock();entry.pending=null;return value;});
     return entry.pending;
   }
-  function readPullRequests(git){
+  function readPullRequests(git,force=false){
     // A checkout's starting commit does not identify a worktree's PR.
     if(!git.branch)return {status:'detached',items:[]};
     if(!git.repository)return {status:'unsupported',items:[]};
     const key=JSON.stringify([git.repository,git.branch,git.sha]);
     let entry=requests.get(key);
     if(!entry){entry={value:{status:'loading',items:[]},time:-Infinity,pending:null};requests.set(key,entry);}
-    if(!closed&&!entry.pending&&clock()-entry.time>=prMaxAgeMs){
+    if(!closed&&!entry.pending&&(force||clock()-entry.time>=prMaxAgeMs)){
       entry.pending=command('gh',['pr','list','--repo','github.com/'+git.repository,'--state','all','--head',git.branch,'--limit','100','--json',fields])
         .then(raw=>{
           const rows=JSON.parse(raw);
@@ -86,11 +86,14 @@ export function createGitStatusReader({run=async(command,args,{signal}={})=>{
     }
     return {...entry.value,refreshing:!!entry.pending};
   }
-  return {async enrich(board,{waitForFresh=true}={}){
+  return {async enrich(board,{waitForFresh=true,force=false}={}){
     if(closed)throw Error('Git status reader closed.');
     const directories=[...new Set(board.tasks.filter(t=>t.hostId==='local'&&!t.sidebarOnly&&typeof t.cwd==='string'&&t.cwd.startsWith('/')).map(t=>t.cwd))];
     const values=await Promise.all(directories.map(async cwd=>{
-      const pending=readWorkspace(cwd);
+      const pending=readWorkspace(cwd,force);
+      // Force PR reads only for the branch actually observed by this Git read.
+      // Keep the intent even when joining an ordinary read already in progress.
+      if(force)void pending.then(git=>{if(!closed&&git.status==='ready')readPullRequests(git,true);});
       if(waitForFresh)return [cwd,await pending];
       const entry=workspaces.get(cwd);
       return [cwd,{...(entry.value??{status:'loading'}),refreshing:!!entry.pending}];

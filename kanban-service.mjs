@@ -14,12 +14,12 @@ import {creationSettings} from './creation-options.mjs';
 
 // Installed plugins keep user data outside the immutable plugin package.
 export function createBoardSource({snapshotPath=new URL('./snapshot.json',import.meta.url),openReader=openLocalReader,
-  readUnread=readLocalUnread,allowMissingSnapshot=false}={}){
-  let reader,reading,closed=false;const gitStatus=createGitStatusReader();
+  readUnread=readLocalUnread,allowMissingSnapshot=false,gitStatus=createGitStatusReader()}={}){
+  let reader,reading,closed=false;
   return {
-    getBoard(){
+    getBoard({forceGit=false}={}){
       if(closed)return Promise.reject(Error('The board connection is closed.'));
-      return reading??=(async()=>{
+      const metadata=reading??=(async()=>{
         reader??=await openReader();
         if(closed){reader.close();throw Error('The board connection is closed.');}
         const [snapshot,unreadState]=await Promise.all([
@@ -28,8 +28,9 @@ export function createBoardSource({snapshotPath=new URL('./snapshot.json',import
             throw error;
           }),readUnread()
         ]);
-        return gitStatus.enrich(await createLocalBoard(reader,snapshot,{unreadState}).getBoard(),{waitForFresh:false});
+        return createLocalBoard(reader,snapshot,{unreadState}).getBoard();
       })().catch(error=>{reader?.close();reader=null;throw error;}).finally(()=>reading=null);
+      return metadata.then(board=>gitStatus.enrich(board,{waitForFresh:false,force:forceGit}));
     },
     async close(){closed=true;gitStatus.close();reader?.close();await reading?.catch(()=>{});reader?.close();reader=null;}
   };
@@ -41,8 +42,8 @@ const failure=(message,status)=>Object.assign(Error(message),{status});
 export function createKanbanService({getBoard,archiveTask=archiveLocalTask,restoreTask=restoreArchivedTask,
   pinTask=null,moveTask=null,setProject=setLocalProject,renameTask=renameLocalTask,settingsStore=defaultCreationSettingsStore(),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
   const csrf=randomUUID(),undoArchives=new Map(),pendingArchives=new Set(),pendingRestores=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
-  const currentBoard=async()=>{
-    const board=await getBoard();
+  const currentBoard=async options=>{
+    const board=await getBoard(options);
     // A long-lived reader can lag behind a verified archive. Keep that task
     // hidden until the reader catches up, then allow later external restores.
     for(const id of pendingArchives)if(!board.tasks.some(t=>t.hostId==='local'&&t.id===id))pendingArchives.delete(id);
@@ -64,9 +65,9 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
     if(!Array.isArray(catalog?.projects)||!Array.isArray(catalog?.sections))throw failure('Creation options are unavailable.',503);
     return catalog;
   };
-  const connectedBoard=async()=>{
+  const connectedBoard=async({forceGit=false}={})=>{
     const [current,status,storedDefaults]=await Promise.all([
-      currentBoard(),desktopStatus(),Promise.resolve().then(()=>settingsStore.read()).then(defaults=>({defaults})).catch(()=>({defaults:{},error:'Creation defaults could not be read. Repair their storage before editing settings.'}))
+      currentBoard({forceGit}),desktopStatus(),Promise.resolve().then(()=>settingsStore.read()).then(defaults=>({defaults})).catch(()=>({defaults:{},error:'Creation defaults could not be read. Repair their storage before editing settings.'}))
     ]);
     let value=current;const desktopArchiveConnected=status.connected===true,
       desktopGroupsConnected=desktopArchiveConnected&&status.groupActions===true;
@@ -93,10 +94,10 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
       if(status.connected!==true||status.taskCreation!==true)throw failure('Creation status requires a connected Desktop bridge.',503);
       return bridgeRequest(desktopBridgeSocket,'creationStatus',{requestId:params.requestId});
     },
-    async read(){
+    async read({forceGit=false}={}){
       if(closed)throw failure('The board connection is closed.',503);
       if(mutating)await mutating.catch(()=>{});
-      return {board:await connectedBoard(),csrf,undoArchives:[...undoArchives].map(([undoToken,entry])=>({undoToken,task:entry.task}))};
+      return {board:await connectedBoard({forceGit}),csrf,undoArchives:[...undoArchives].map(([undoToken,entry])=>({undoToken,task:entry.task}))};
     },
     async action(name,params,{signal:requestSignal}={}){
       if(closed)throw failure('The board connection is closed.',503);
