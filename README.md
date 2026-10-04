@@ -1,53 +1,97 @@
-# Codex Kanban 0.4.55
+# Codex Kanban 0.4.56
 
-Installable GitHub marketplace for the local Codex task board. This branch contains the built plugin; source and tests are on [main](https://github.com/shichang4fun/codex-kanban/tree/main).
+[English](README.md) · [简体中文](README.zh-CN.md)
+
+**All your Codex tasks. One clear board.**
+
+Codex Kanban brings a task board to your Codex sidebar. See what’s running and ready for review, organize tasks, and jump straight back into a chat without leaving Codex.
+
+[See the demo on X](https://x.com/shichangliao/status/2106664558463254596)
+
+## Features
+
+- **Status at a glance:** see running tasks and tasks awaiting input or review.
+- **Automatic grouping:** organize observed local task activity into In Progress and For Review; create missing workflow groups and reuse existing ones.
+- **Drag and drop:** move tasks between native groups and arrange cards in your preferred order.
+- **Board and list views:** browse by project, search tasks, and filter unread chats.
+- **Direct chat links:** click a card to continue the conversation; New task opens Codex’s native creation page.
+
+Also includes pinning, rename, archive with Undo, project assignment, branch and matched PR information, and light/dark themes.
 
 ## Install
 
-Requires macOS and the current ChatGPT desktop app with Codex installed at /Applications/ChatGPT.app. The installer uses the app's bundled CLI and Node; no global CLI, separate Node installation or npm install is needed.
+Currently supports **macOS** with Codex in the ChatGPT desktop app installed at `/Applications/ChatGPT.app`.
 
-1. [Download the marketplace ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip) and extract it.
-2. Double-click **Install Codex Kanban.command**. It installs or upgrades the plugin, Desktop bridge, integrated auto organization and original-icon integration together, preserving classification settings.
-3. If Codex is running, quit it normally (⌘Q) and reopen its original icon. Open a local chat, then open Codex Kanban in the sidebar. Continue using the original Dock/Finder/Spotlight entry on later starts; no separate launcher is required.
+1. [Download the installation ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip) and extract it.
+2. Double-click **Install Codex Kanban.command**.
+3. Quit Codex normally (⌘Q) and reopen it using its original icon. Open any local chat, then select **Codex Kanban** in the sidebar.
 
-If macOS blocks the downloaded script, right-click it and select Open, then follow the system prompt. Disable an existing codex-kanban@codex-kanban-local development copy before installing to avoid duplicate entries. No task ID, path configuration or config-file editing is needed. The installer never stops a running client.
+The installer includes the plugin, Desktop bridge, automatic grouping engine, and original-icon integration. No terminal commands, separate Node installation, manual bridge configuration, or separate Sidebar Flow installation are needed. Continue using Dock, Finder, or Spotlight as usual.
 
-This package includes the current Sidebar Flow Desktop classification engine; no separate Sidebar Flow installation is required. It excludes legacy Hooks, model heartbeats, instruction injection and old installers. Existing effective policies migrate to CODEX_HOME/kanban-desktop/flow.json without changing their scope, exclusions, interval or destination mapping. Previous installation files remain as backups, but the new chain does not run the standalone classifier. The board no longer exposes automatic-grouping settings. Existing classification policy remains effective; its enabled boolean is stored in the private flow.json. After changing that file, quit normally and reopen Codex. On startup or enable, open a local chat: missing In Progress, For Review and For Later groups are created automatically, and unique existing groups are reused. Duplicate names pause classification; resolve duplicate group names before continuing. Unconfirmed creates are journaled and never automatically replayed; check Codex and create a missing group manually if needed. Explicit migrated UUID mappings are preserved and must be repaired if their original groups are missing or renamed.
+If macOS blocks the script, right-click it and choose **Open**. Disable an existing `codex-kanban@codex-kanban-local` development copy before installing the public package to avoid duplicate entries. This is a self-hosted GitHub marketplace, not an official OpenAI directory listing.
 
-A single user LaunchAgent restores the original-icon CLI route at login. An existing Sidebar Flow agent is reused with its manifest/plist preserved and its helper backed up. The app bundle, signature and Dock icon are unchanged. The startup chain is Kanban (including auto organization) → official CLI, with one native child. An unavailable optional classification engine leaves manual features active; core pre-start failures use the official CLI without reactivating the old classifier or replaying started requests. The first normal restart and GUI login ordering still require live acceptance on your desktop.
+## Install with an agent
 
-After loading a local chat, reconnecting proxies elect one private socket owner; only that owner runs automatic organization. A refused, private leftover socket is recovered automatically, while a live owner or unsafe path is preserved. Standby proxies retry automatically. Backend exit cancels pending requests and closes the proxy; user mutations are never replayed during recovery. Quit and reopen once after upgrading to load this behavior in already-running proxies.
-
-To detach Kanban, run **Disable Kanban Original Icon.command** in ~/Library/Application Support/Codex Sidebar Flow Original Icon (or Codex Kanban Original Icon without Sidebar Flow). It restores the prior Sidebar Flow integration or removes Kanban's own agent. **Emergency Disable Original Icon.command** works without Node and disables the whole original-icon integration, preserving all files and data. Quit normally and reopen afterward. Re-running the installer restores the route; after an older Sidebar Flow updater overwrites its own helper, re-run the Kanban installer. Foreign or modified startup settings are preserved and reported.
-
-For the basic plugin without the Desktop bridge, the official CLI also works:
+Ask an agent with terminal access to run this on the supported Mac. Use the public `marketplace` package, not the source development commands; no global Codex CLI or npm is required. Keep the user’s existing `CODEX_HOME` environment.
 
 ```sh
-codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
-codex plugin add codex-kanban@codex-kanban
+(
+  set -eu
+  KANBAN_NODE="/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node"
+  test -x "$KANBAN_NODE"
+  KANBAN_TMP="$(mktemp -d "${TMPDIR:-/tmp}/codex-kanban.XXXXXX")"
+  trap 'rm -rf "$KANBAN_TMP"' EXIT
+  curl --fail --location --retry 3 \
+    https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip \
+    -o "$KANBAN_TMP/kanban.zip"
+  unzip -q "$KANBAN_TMP/kanban.zip" -d "$KANBAN_TMP"
+  "$KANBAN_NODE" "$KANBAN_TMP/codex-kanban-marketplace/plugins/codex-kanban/install.mjs" --launch
+)
 ```
 
-If your global Codex CLI is unavailable, use the desktop app's bundled executable for both commands:
+**Before installing:** check existing plugins. If `codex-kanban@codex-kanban-local` is enabled, disable that development copy in Codex’s plugin settings before enabling the public copy. Re-running the installer upgrades the public plugin and preserves existing classification settings, including an intentionally disabled policy. Do not delete user data or replace an unknown startup integration.
+
+**After installing:** if the installer reports that Codex is already running, report **installed — restart required**. Let the user quit normally and reopen the original icon; do not force-quit their active session. Open a local chat to connect the bridge and initialize missing workflow groups.
+
+Run these read-only checks after restarting and opening a local chat:
 
 ```sh
-CODEX_CLI='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'
-"$CODEX_CLI" plugin marketplace add shichang4fun/codex-kanban --ref marketplace
-"$CODEX_CLI" plugin add codex-kanban@codex-kanban
+"/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" plugin list --json
+"/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" --input-type=module <<'JS'
+import {homedir} from 'node:os';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+const root=join(process.env.CODEX_HOME||join(homedir(),'.codex'),'kanban-desktop');
+const {desktopBridgeRequest}=await import(pathToFileURL(join(root,'runtime','bridge-transport.mjs')));
+const {connected,groupActions,autoFlow}=await desktopBridgeRequest(join(root,'desktop.sock'),'status');
+console.log(JSON.stringify({connected,groupActions,autoFlow},null,2));
+JS
 ```
 
-Reload MCP configuration or restart the desktop app, then open Codex Kanban in the sidebar. If you already installed codex-kanban@codex-kanban-local, disable that copy before enabling this one to avoid duplicate entries.
+Report **ready** only when `codex-kanban@codex-kanban` is installed and enabled, `connected` and `groupActions` are true, and the sidebar board opens. For automatic grouping, also require `autoFlow.available`, `autoFlow.enabled`, and `autoFlow.initialization.state === "ready"`; confirm In Progress, For Review, and For Later are visible. An existing disabled policy stays disabled and must be reported as such.
+
+If the bridge is disconnected, initialization is waiting or failed, or GUI checks cannot be performed, report the specific remaining step instead of claiming full setup. Read initialization errors before retrying; resolve duplicate group names or invalid saved mappings without blindly creating more groups.
 
 ## Update
 
+Download the latest ZIP and run the same installer again, then quit and reopen Codex. Existing classification settings are preserved.
+
+## Scope and privacy
+
+- Live status, pinning, and group moves need a connected Desktop bridge. Open a local chat after restarting to establish the connection.
+- Automatic grouping uses observed local activity, preserves pinned tasks and custom groups under the default policy, and does not start model tasks.
+- Task data stays outside the plugin cache in `$CODEX_HOME/kanban` (default `~/.codex/kanban`). GitHub PR lookups use your existing `gh` authentication and send repository, branch, or commit identifiers, not task titles or summaries.
+- Automatic grouping settings live in `$CODEX_HOME/kanban-desktop/flow.json`. For configuration, CLI-only installation, bridge recovery, and disabling original-icon integration, see the [technical reference](https://github.com/shichang4fun/codex-kanban/blob/main/docs/technical-reference.md).
+
+## Development
+
+Use the source repository’s `main` branch with Node.js 22+:
+
 ```sh
-codex plugin marketplace upgrade codex-kanban
-codex plugin add codex-kanban@codex-kanban
+npm ci
+npx playwright install chromium
+npm run test:regression
+npm run build:plugin
 ```
 
-## Capabilities and data
-
-The plugin reads local Codex task metadata and provides a board, list, search and project controls. Explicit UI actions support renaming, archive/Undo and project assignment. Live status, pinning and group changes require the Desktop bridge, which the double-click installer configures automatically. The bridge activates after the client successfully loads a local chat. CLI-only installation does not configure the bridge. See the [source README](https://github.com/shichang4fun/codex-kanban#readme) for setup and verification limits.
-
-User data is stored outside the installed plugin, at $CODEX_HOME/kanban (default ~/.codex/kanban), or KANBAN_DATA_DIR. This distribution contains no task snapshots, connection settings or credentials. PR metadata lookups use the user's existing gh authentication and send repository/branch/commit identifiers to GitHub. Default New task links open Codex's native page without dispatching a model task. The retained app-only creation adapter can explicitly start a new task through the Desktop bridge; it is not called by these links.
-
-This is a self-hosted GitHub marketplace, not an official directory listing. Successful CLI installation does not establish that all Desktop integrations work in every client version.
+See [testing and native acceptance](https://github.com/shichang4fun/codex-kanban/blob/main/TESTING.md) and the [technical reference](https://github.com/shichang4fun/codex-kanban/blob/main/docs/technical-reference.md) for local preview, development installation, and publishing.
