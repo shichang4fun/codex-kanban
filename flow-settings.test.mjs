@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Script} from 'node:vm';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {createKanbanService} from './kanban-service.mjs';
@@ -89,40 +88,12 @@ test('flow settings iframe transport forwards the token and exact enabled boolea
   assert(response.ok);assert.deepEqual(calls,[{name:'set_flow_settings',arguments:{enabled:false,actionToken:'session'}}]);
 });
 
-function uiFixture(){
-  const board=fixture();board.autoFlow={available:true,enabled:true,mode:'allowlist'};
-  const h=harness(board);new Script("nativeToken='session'").runInContext(h.context);h.api.applyNativeBoard(board);
-  return {...h,board};
-}
-
-test('Auto organize displays initialization progress and actionable errors while retaining its switch',()=>{
-  const h=uiFixture(),hint=h.nodes.get('auto-organize-hint'),control=h.nodes.get('auto-organize');
-  for(const state of ['waiting','initializing','ready','error']){
-    h.board.autoFlow.initialization={state,message:state==='error'?'Rename duplicate For Review groups.':'Open a local chat.'};
-    h.api.applyNativeBoard(h.board);assert.equal(hint.textContent,h.board.autoFlow.initialization.message);
-    assert.equal(hint.dataset.error,String(state==='error'));assert(!control.disabled);assert(control.checked);
+test('board renders existing flow settings without exposing or writing a settings control',()=>{
+  for(const enabled of [true,false]){
+    const board=fixture();board.autoFlow={available:true,enabled,mode:'allowlist'};
+    const h=harness(board);h.api.applyNativeBoard(board);
+    assert(!h.nodes.has('view-options'));assert(!h.nodes.has('auto-organize'));
+    assert.equal(h.api.DATA.autoFlow.enabled,enabled);
+    assert(!h.writes.some(key=>/flow|organize/.test(key)));
   }
-  h.board.autoFlow.enabled=false;h.api.applyNativeBoard(h.board);assert.match(hint.textContent,/off/);assert.equal(hint.dataset.error,'false');
-});
-
-test('Auto organize shows persisted availability without browser storage and disables unsupported runtimes',()=>{
-  const h=uiFixture(),control=h.nodes.get('auto-organize');assert(control.checked);assert(!control.disabled);
-  h.board.autoFlow={available:true,enabled:false,mode:'allowlist'};h.api.applyNativeBoard(h.board);assert(!control.checked);
-  assert.match(h.nodes.get('auto-organize-hint').textContent,/off/);
-  delete h.board.autoFlow;h.api.applyNativeBoard(h.board);assert(control.disabled);assert(!control.checked);
-  assert(!h.writes.some(key=>/flow|organize/.test(key)));
-});
-
-test('Auto organize waits for bridge readback, blocks other actions and displays failures inline',async()=>{
-  const h=uiFixture(),control=h.nodes.get('auto-organize');let finish;const requests=[];
-  h.context.fetchImpl=(url,args)=>{requests.push({url,args});return new Promise(resolve=>finish=resolve);};
-  control.checked=false;const pending=control.onchange();assert(control.disabled);assert(control.checked);
-  assert.match(h.nodes.get('auto-organize-hint').textContent,/Saving/);assert(h.nodes.get('board').querySelectorAll('.card-details').every(button=>button.disabled));
-  assert.equal(requests[0].url,'/api/flow-settings');assert.equal(requests[0].args.headers['X-Kanban-Token'],'session');
-  assert.deepEqual(JSON.parse(requests[0].args.body),{enabled:false});
-  finish({ok:true,json:async()=>({autoFlow:{available:true,enabled:false,mode:'allowlist'}})});await pending;
-  assert(!control.checked);assert(!control.disabled);
-  h.context.fetchImpl=async()=>({ok:false,json:async()=>({error:'Bridge disconnected. Refresh and retry.'})});
-  control.checked=true;await control.onchange();assert(!control.checked);assert.match(h.nodes.get('auto-organize-hint').textContent,/Bridge disconnected/);
-  assert.equal(h.nodes.get('auto-organize-hint').dataset.error,'true');
 });

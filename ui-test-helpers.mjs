@@ -41,6 +41,7 @@ export function harness(board=fixture(),{animations=false,dark=true,theme,textSi
     close(){this.open=false;}
     contains(target){return this===target||this.children.some(n=>n.contains(target));}
     focus(){context.document.activeElement=this;}
+    matches(selector){assert.equal(selector,':focus-visible');return context.document.activeElement===this&&this.focusVisible!==false;}
     select(){}
   }
   const nodes=new Map([...html.matchAll(/id="([^"]+)"/g)].map(([,id])=>[id,new Element()]));

@@ -1,5 +1,13 @@
 # Verification
 
+## Cached and card UI integration 0.4.50 — 2026-10-04
+
+- Integrated source changes with main's navigation protection: normal background Git refresh does not imply Cached; search is centered with equal side tracks; the automatic-grouping settings UI is removed without changing installed policy or backend capabilities; pointer focus no longer keeps card controls visible; generated attachment lists are omitted from previews.
+- Two independent reviews identified fixes for user-written attachment headings being erased and timestamp-only recovery leaving branch/ordinary PR Cached labels behind. Regression cases fail before the fixes and pass afterward. Freshness now updates all three label types in place, preserving links, cards and keyboard focus. Reviewers verified the fixes and found no remaining P1/P2.
+- All 653 automated tests pass on Node 22; 92 focused tests pass on bundled Node 24. Navigation/pointer guards and runtime expiry protections remain covered. Packaging passes with the revised installation instructions.
+- Synthetic in-app-browser acceptance verifies fresh/expired branches, attachment-only previews, preservation of user-written headings, Board/List and dark/light themes. Independent browser acceptance at 130% text size verifies search centers at 720/560px in 1440/1120px views, no root overflow at 360px, and mouse menu versus Escape keyboard focus. Pure pointer movement was not simulated with unsupported APIs. No existing user tasks were modified.
+- Official plugin discovery and repeated native installation pass with 14 app-only tools. Disposable-home real App Server tests pass for Rename, project/group placement, Pin/Unpin, Archive/Undo, offline creation and duplicate-safe flow initialization; Desktop MCP dispatch is simulated and no model turns are started. The existing local plugin/runtime was updated to 0.4.50 with a backup, preserving flow policy and original startup settings; the running client was not restarted.
+
 ## Navigation integration 0.4.49 — 2026-10-04
 
 - Integrated the navigation changes with current main. Two independent reviewers found timestamp presses missing the pointer guard and runtime/PR expiry updates still changing click-target geometry. Both are fixed with regressions, and both reviewers verified the final changes without remaining P1/P2 findings.

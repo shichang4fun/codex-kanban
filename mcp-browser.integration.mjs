@@ -59,8 +59,21 @@ if(process.env.KANBAN_TEST_PR_ATTENTION==='1'){
     id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-'+(index%3),localSectionId:'group-'+(index%3),
     placementSource:'localThreadSection',isUnread:false,...entry})));
 }
+if(process.env.KANBAN_TEST_UI_CLEANUP==='1'){
+  const git=()=>({status:'ready',branch:'codex/cache-cleanup',repository:'fixture/kanban',refreshing:true,
+    pullRequests:{status:'ready',refreshing:true,items:[{number:20,state:'OPEN',checks:'passed',review:'APPROVED',url:'https://github.com/fixture/kanban/pull/20'}]}});
+  Object.assign(task,{title:'Fresh background refresh',summary:'# Files mentioned by the user:\n## photo.png: /tmp/photo.png\nImage attachment: true\n## My request:\nKeep the actual request visible.',git:git()});
+  const cases=[
+    {title:'Expired branch data',git:git(),fixtureBranchStale:true},
+    {title:'Attachment metadata only',summary:'# Files mentioned by the user:\n## photo.png: /tmp/photo.png\nImage attachment: true'},
+    {title:'User-written metadata heading',summary:'# Files mentioned by the user:\nPlease explain this Markdown heading.'},
+    {title:'No assigned project',projectId:null,localProjectId:null,projectName:null}
+  ];
+  passiveTasks.splice(0,passiveTasks.length,...cases.map((entry,index)=>({...task,
+    id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-0',localSectionId:'group-0',placementSource:'localThreadSection',...entry})));
+}
 const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived?[]:[{...task}]),...passiveTasks].map(t=>({...t,
-  ...(t.runtimeStatusSource?{runtimeCapturedAt:capturedAt}:{}),...(t.git?{git:{...t.git,checkedAt:capturedAt,pullRequests:{...t.git.pullRequests,
+  ...(t.runtimeStatusSource?{runtimeCapturedAt:capturedAt}:{}),...(t.git?{git:{...t.git,checkedAt:t.fixtureBranchStale?new Date(Date.now()-120000).toISOString():capturedAt,pullRequests:{...t.git.pullRequests,
     checkedAt:t.fixtureGitStale?new Date(Date.now()-120000).toISOString():capturedAt}}}:{})})),
   projects,sections,capturedAt,runtimeCapturedAt:process.env.KANBAN_TEST_CARD_INFO==='1'?capturedAt:null,
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};

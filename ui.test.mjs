@@ -22,10 +22,9 @@ test('inline Host and Theme controls retain their nodes and focus through render
   assert.equal(h.context.document.activeElement,theme);assert.equal(h.nodes.get('theme'),theme);assert.equal(theme.value,'dark');
 });
 
-test('Host and Theme are inline, grouping settings stay available, and the host chip clears only its filter',()=>{
+test('Host and Theme are inline, settings button is removed, and the host chip clears only its filter',()=>{
   const h=harness(),host=h.nodes.get('host'),search=h.nodes.get('search'),chip=h.nodes.get('host-chip');
-  for(const removed of ['order','refresh','manual-order-hint'])assert(!h.nodes.has(removed));
-  assert(h.nodes.has('auto-organize'));assert(h.nodes.has('view-options-trigger'));
+  for(const removed of ['order','refresh','manual-order-hint','auto-organize','view-options','view-options-trigger'])assert(!h.nodes.has(removed));
   const symbols=new Set([...html.matchAll(/<symbol id="([^"]+)"/g)].map(match=>match[1]));
   for(const match of html.matchAll(/<use href="#([^"]+)"/g))assert(symbols.has(match[1]),`Missing toolbar icon: ${match[1]}`);
   assert(html.includes('class="toolbar-select"'));assert(html.includes('class="toolbar-select theme-control"'));
@@ -396,6 +395,15 @@ test('changed polling preserves the intended card action for chat, project, pin 
     const next=projectFixture();next.tasks[0].title='Changed title';
     h.context.fetchImpl=async()=>({ok:true,json:async()=>({board:next,csrf:'csrf'})});await h.api.refreshNativeBoard();
     assert.equal(h.context.document.activeElement,root.querySelectorAll('.card')[0].querySelectorAll(selector)[0]);
+  }
+});
+test('redraws do not restore pointer focus and turn it into persistent card controls',()=>{
+  for(const selector of ['.card-open','.card-details','.project','.card-pin','.card-archive']){
+    const board=projectFixture(),h=harness(board);new Script("nativeToken='csrf'").runInContext(h.context);h.api.applyNativeBoard(board);
+    const root=h.nodes.get('board'),control=root.querySelectorAll('.card')[0].querySelectorAll(selector)[0];
+    control.focusVisible=false;control.focus();
+    const next=projectFixture();next.tasks[0].title='Refreshed after a mouse click';h.api.applyNativeBoard(next);
+    assert.notEqual(h.context.document.activeElement,root.querySelectorAll('.card')[0].querySelectorAll(selector)[0]);
   }
 });
 function projectFixture(){
