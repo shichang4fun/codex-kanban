@@ -1,7 +1,7 @@
 // Exercise the actual CLI, installed package and proxy in a disposable CODEX_HOME.
 // No Desktop tool calls, model turns or existing user task changes.
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,readFile,realpath} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,readFile,writeFile,realpath} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {spawn,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
@@ -83,6 +83,12 @@ try{
     await delay(100);
   }
   assert.equal((await desktopBridgeRequest(config.socketPath,'status')).connected,true);
+  assert.equal((await desktopBridgeRequest(config.socketPath,'status')).bridgeVersion,manifest.version);
+  const connectionPath=join(config.root,'connection.json'),connectionText=await readFile(connectionPath,'utf8');
+  try{
+    await writeFile(connectionPath,JSON.stringify({...config,pluginVersion:'next-release'}));
+    assert.equal((await desktopBridgeRequest(config.socketPath,'status')).bridgeVersion,manifest.version,'A running bridge must keep its loaded version after installation files change');
+  }finally{await writeFile(connectionPath,connectionText);}
   const flowStatus=(await desktopBridgeRequest(config.socketPath,'status')).autoFlow;
   assert.equal(flowStatus.available,true);assert.equal(flowStatus.enabled,true);assert.equal(flowStatus.mode,'all-local');
   assert.equal((await desktopBridgeRequest(config.socketPath,'flowSettings',{enabled:false})).autoFlow.enabled,false);
@@ -93,6 +99,10 @@ try{
   const enabledFlow=(await desktopBridgeRequest(config.socketPath,'status')).autoFlow;
   assert.equal(enabledFlow.enabled,false);assert.equal(enabledFlow.initialization.state,'error');
   assert.equal(JSON.parse(await readFile(join(config.root,'flow.json'),'utf8')).enabled,false);
+  const checked=JSON.parse(execFileSync(installed.checker,['--json'],
+    {env:{...process.env,CODEX_HOME:join(root,'unrelated-home')},encoding:'utf8',stdio:['ignore','pipe','pipe']}));
+  assert.equal(checked.phase,'ready');assert.equal(checked.version,manifest.version);
+  assert.equal(checked.autoOrganize,'disabled');assert.equal(checked.guiVerified,false);
   const status=await request('mcpServerStatus/list',{limit:100,threadId:context.thread.id});
   const candidates=status.data?.filter(server=>server.name.includes('codex-kanban'))??[];
   const entry=candidates.find(server=>server.serverInfo?.version===manifest.version);

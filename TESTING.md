@@ -34,6 +34,8 @@ npm run test:regression
 
 ## CI 和发布门禁
 
+安装器检查还需覆盖未安装、禁用、重复副本、配置损坏、旧桥接进程、断连、分组初始化等待和失败，以及已关闭自动分类的保留行为。`--check --json` 不写入设置、不派发任务、不启动客户端；返回值区分桥接可用、等待用户步骤与需处理错误，并保留 `guiVerified: false`。原生安装验收检查 JSON 输出和正在运行的桥接版本不随安装文件更新而改变。
+
 Tests 和 Publish marketplace 均执行 Node 全量测试与 `test:browser`；任何失败都会阻止发布构建继续。失败时上传 `test-results/` 中的截图、错误上下文及 trace，保留 7 天。本地用 `npx playwright show-trace <trace.zip>` 查看。
 
 浏览器测试证明 MCP 宿主内的交互及 transport 契约，不代表当前 Desktop 已连接。涉及安装、启动链或原生协议时，另运行 `npm run test:integration` / `npm run test:install-native`，并在真实客户端核对桥接连接及侧栏回读；不要以合成测试通过代替这些验收。

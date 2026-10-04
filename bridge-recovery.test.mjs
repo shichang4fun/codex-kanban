@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm,lstat,writeFile,symlink,readlink,readFile} from 'node:fs/promises';
+import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
@@ -13,25 +14,47 @@ import {installFlowSettings} from './flow-config.mjs';
 const module=fileURLToPath(new URL('./bridge-transport.mjs',import.meta.url));
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function fixture(t){
-  const root=await mkdtemp('/tmp/kb-recovery-');t.after(()=>rm(root,{recursive:true,force:true}));
-  return {root,socketPath:join(root,'d.sock')};
+  const root=await mkdtemp('/tmp/kb-recovery-'),children=[];
+  t.after(async()=>{
+    // After hooks run in registration order. Stop every writer before removal.
+    await Promise.all(children.map(child=>kill(child,'SIGTERM')));
+    await rm(root,{recursive:true,force:true});
+  });
+  return {root,socketPath:join(root,'d.sock'),children};
 }
 async function until(check){
   const deadline=Date.now()+10000;
   while(Date.now()<deadline){if(await check())return;await delay(20);}
   assert.fail('Recovery condition timed out');
 }
-async function owner(t,socketPath){
+async function owner({socketPath,children}){
   const code=`import {startLocalBridge} from ${JSON.stringify(module)};await startLocalBridge({socketPath:process.argv[1],dispatch:()=>({owner:process.pid})});console.log('ready');`;
   const child=spawn(process.execPath,['--input-type=module','-e',code,socketPath],{stdio:['ignore','pipe','pipe']});
+  children.push(child);
   let ready=false,error='';child.stdout.on('data',()=>ready=true);child.stderr.on('data',data=>error+=data);
-  t.after(async()=>{if(child.exitCode===null&&child.signalCode===null){const exited=once(child,'exit');child.kill('SIGKILL');await exited;}});
   await until(()=>{assert.equal(child.exitCode,null,error);return ready;});return child;
 }
-async function kill(child){const exited=once(child,'exit');child.kill('SIGKILL');await exited;}
+async function kill(child,signal='SIGKILL'){
+  if(child.exitCode!==null||child.signalCode!==null)return;
+  const exited=once(child,'exit',{signal:AbortSignal.timeout(3000)});
+  const fallback=setTimeout(()=>child.kill('SIGKILL'),1000);fallback.unref();
+  try{child.kill(signal);await exited;}finally{clearTimeout(fallback);}
+}
+
+test('recovery fixture stops its child before deleting the directory',async t=>{
+  let root,child,directoryAtExit;
+  await t.test('owned child',async inner=>{
+    const fixtureState=await fixture(inner);root=fixtureState.root;
+    child=await owner(fixtureState);
+    child.once('exit',()=>directoryAtExit=existsSync(root));
+  });
+  assert.equal(directoryAtExit,true,'child cleanup must run before directory removal');
+  assert.notEqual(child.signalCode,null);
+  assert.equal(existsSync(root),false);
+});
 
 test('a killed owner leaves a stale socket that the next bridge safely recovers',async t=>{
-  const {socketPath}=await fixture(t),child=await owner(t,socketPath);await kill(child);
+  const f=await fixture(t),{socketPath}=f,child=await owner(f);await kill(child);
   assert((await lstat(socketPath)).isSocket());
   const stop=await startLocalBridge({socketPath,dispatch:()=>({connected:true})});t.after(stop);
   assert.equal((await desktopBridgeRequest(socketPath,'status')).connected,true);
@@ -39,7 +62,7 @@ test('a killed owner leaves a stale socket that the next bridge safely recovers'
 });
 
 test('simultaneous reconnects recover one socket and preserve the live winner',async t=>{
-  const {socketPath}=await fixture(t),child=await owner(t,socketPath);await kill(child);
+  const f=await fixture(t),{socketPath}=f,child=await owner(f);await kill(child);
   const results=await Promise.allSettled(Array.from({length:8},(_,owner)=>startLocalBridge({socketPath,dispatch:()=>({owner})})));
   const winners=results.filter(result=>result.status==='fulfilled');assert.equal(winners.length,1);t.after(winners[0].value);
   const first=await desktopBridgeRequest(socketPath,'status'),inode=(await lstat(socketPath)).ino;
@@ -48,12 +71,11 @@ test('simultaneous reconnects recover one socket and preserve the live winner',a
 });
 
 test('independent proxies contend for an abandoned startup lock and automatically take over after a crash',async t=>{
-  const {socketPath}=await fixture(t),previous=await owner(t,socketPath);await kill(previous);
+  const f=await fixture(t),{socketPath,children}=f,previous=await owner(f);await kill(previous);
   await symlink(previous.pid+':11111111-1111-4111-8111-111111111111',socketPath+'.lock');
-  const proxyModule=fileURLToPath(new URL('./desktop-proxy.mjs',import.meta.url)),children=[];
+  const proxyModule=fileURLToPath(new URL('./desktop-proxy.mjs',import.meta.url));
   const code=`import {startLocalBridge} from ${JSON.stringify(module)};import {maintainDesktopBridge} from ${JSON.stringify(proxyModule)};
 setInterval(()=>{},10000);maintainDesktopBridge({ready:()=>true,retryMs:20,start:()=>startLocalBridge({socketPath:process.argv[1],dispatch:()=>({owner:process.pid})})}).ensure();`;
-  t.after(async()=>{await Promise.all(children.map(child=>child.exitCode===null&&child.signalCode===null?kill(child):null));});
   for(let n=0;n<6;n++){
     const child=spawn(process.execPath,['--input-type=module','-e',code,socketPath],{stdio:'ignore'});children.push(child);
   }
@@ -75,7 +97,7 @@ test('unsafe paths and foreign startup locks are preserved',async t=>{
 });
 
 test('a startup lock left by a dead process recovers without deleting a live claim',async t=>{
-  const {socketPath}=await fixture(t),child=await owner(t,socketPath);await kill(child);
+  const f=await fixture(t),{socketPath}=f,child=await owner(f);await kill(child);
   await symlink(child.pid+':11111111-1111-4111-8111-111111111111',socketPath+'.lock');
   const stop=await startLocalBridge({socketPath,dispatch:()=>({connected:true})});t.after(stop);
   assert.equal((await desktopBridgeRequest(socketPath,'status')).connected,true);
@@ -118,7 +140,7 @@ test('shutdown while bridge startup is pending closes the eventual listener and 
 });
 
 test('native backend failure exits its proxy despite open Desktop stdin, and a new proxy reconnects',async t=>{
-  const {root,socketPath}=await fixture(t),driver=join(root,'native.mjs');
+  const {root,socketPath,children:proxies}=await fixture(t),driver=join(root,'native.mjs');
   await writeFile(driver,`#!${process.execPath}
 import readline from 'node:readline';
 for await(const line of readline.createInterface({input:process.stdin})){
@@ -126,7 +148,6 @@ for await(const line of readline.createInterface({input:process.stdin})){
   console.log(JSON.stringify({id:m.id,result:m.method==='thread/resume'?{thread:{id:m.params.threadId,ephemeral:false,parentThreadId:null}}:{}}));
 }
 `,{mode:0o700});
-  const proxies=[];t.after(async()=>{for(const child of proxies)if(child.exitCode===null&&child.signalCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}});
   async function launch(){
     const child=spawn(process.execPath,[fileURLToPath(new URL('./desktop-proxy.mjs',import.meta.url)),'app-server'],
       {env:{...process.env,KANBAN_REAL_CODEX:driver,KANBAN_BRIDGE_SOCKET:socketPath,KANBAN_FLOW_ROOT:''},stdio:['pipe','pipe','pipe']});
@@ -140,7 +161,7 @@ for await(const line of readline.createInterface({input:process.stdin})){
 });
 
 test('only the elected proxy starts Auto organize, and a standby starts it after takeover',async t=>{
-  const {root,socketPath}=await fixture(t),driver=join(root,'native.mjs'),trace=join(root,'requests.jsonl');
+  const {root,socketPath,children}=await fixture(t),driver=join(root,'native.mjs'),trace=join(root,'requests.jsonl');
   await installFlowSettings(root);
   await writeFile(driver,`#!${process.execPath}
 import readline from 'node:readline';import {appendFileSync} from 'node:fs';
@@ -150,7 +171,6 @@ for await(const line of readline.createInterface({input:process.stdin})){
   console.log(JSON.stringify({id:m.id,result:['thread/resume','thread/read'].includes(m.method)?{thread:{id:m.params.threadId,ephemeral:m.method!=='thread/resume',parentThreadId:null}}:{}}));
 }
 `,{mode:0o700});
-  const children=[];t.after(async()=>{for(const child of children)if(child.exitCode===null&&child.signalCode===null){const exited=once(child,'exit');child.kill('SIGTERM');await exited;}});
   for(let n=0;n<2;n++){
     const child=spawn(process.execPath,[fileURLToPath(new URL('./desktop-proxy.mjs',import.meta.url)),'app-server'],
       {env:{...process.env,KANBAN_REAL_CODEX:driver,KANBAN_BRIDGE_SOCKET:socketPath,KANBAN_FLOW_ROOT:root,RECOVERY_TEST_TRACE:trace},stdio:['pipe','pipe','pipe']});

@@ -55,18 +55,15 @@ Ask an agent with terminal access to run this on the supported Mac. Use the publ
 
 Run these read-only checks after restarting and opening a local chat:
 
+**Installation result:** the installer reports whether the bridge is ready, a restart is required, or a local chat/group initialization is still pending. After restarting, double-click `Check Codex Kanban.command` in `$CODEX_HOME/kanban-desktop` (default `~/.codex/kanban-desktop`) to check again. The check is read-only and does not enable grouping or create tasks.
+
+For agents, run the same check with JSON output:
+
 ```sh
-"/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" plugin list --json
-"/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node" --input-type=module <<'JS'
-import {homedir} from 'node:os';
-import {join} from 'node:path';
-import {pathToFileURL} from 'node:url';
-const root=join(process.env.CODEX_HOME||join(homedir(),'.codex'),'kanban-desktop');
-const {desktopBridgeRequest}=await import(pathToFileURL(join(root,'runtime','bridge-transport.mjs')));
-const {connected,groupActions,autoFlow}=await desktopBridgeRequest(join(root,'desktop.sock'),'status');
-console.log(JSON.stringify({connected,groupActions,autoFlow},null,2));
-JS
+"${CODEX_HOME:-$HOME/.codex}/kanban-desktop/Check Codex Kanban.command" --json </dev/null
 ```
+
+Exit codes: `0` means the bridge is ready, `2` means a user step is pending, and `1` means attention is needed. The result includes the installed version and always reports `guiVerified: false`; open the sidebar board to finish GUI acceptance.
 
 Report **ready** only when `codex-kanban@codex-kanban` is installed and enabled, `connected` and `groupActions` are true, and the sidebar board opens. For automatic grouping, also require `autoFlow.available`, `autoFlow.enabled`, and `autoFlow.initialization.state === "ready"`; confirm In Progress, For Review, and For Later are visible. An existing disabled policy stays disabled and must be reported as such.
 

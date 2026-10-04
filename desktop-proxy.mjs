@@ -1,11 +1,17 @@
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {realpathSync} from 'node:fs';
+import {realpathSync,readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {isAbsolute} from 'node:path';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
 import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
 import {bridgeError} from './bridge-transport.mjs';
+
+// Capture at module load: updating files must not make an old process look current.
+const bridgeVersion=(()=>{
+  try{return JSON.parse(readFileSync(new URL('../connection.json',import.meta.url),'utf8')).pluginVersion??null;}
+  catch{return null;}
+})();
 
 // Preserve Desktop's original stdio handshake and RPC IDs. Added calls can only
 // call a small tool whitelist. Explicit create_thread is the sole new-task
@@ -147,7 +153,7 @@ export async function startDesktopProxy(){
     if(!autoFlow)throw Error('Auto organize is not ready.');return autoFlow.change(enabled);
   }};
   bridge=maintainDesktopBridge({ready,report:diagnostic,start:async()=>{
-    const stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,autoFlow:flow,runExclusive,
+    const stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,bridgeVersion,autoFlow:flow,runExclusive,
       ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),request:(method,params)=>relay.request(method,params)});
     try{
       // Only the elected socket owner observes events or performs auto grouping.
