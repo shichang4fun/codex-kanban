@@ -10,7 +10,7 @@ import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
 // call a small tool whitelist. Explicit create_thread is the sole new-task
 // entry point; arbitrary model execution methods remain unavailable.
 export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
-  const prefix='kanban:'+randomUUID()+':',pending=new Map(),listeners=new Set(),lists=new Map();
+  const prefix='kanban:'+randomUUID()+':',pending=new Map(),listeners=new Set(),contexts=new Set(),lists=new Map();
   let ready=false,initializeId,sequence=0,contextThreadId=null;const loading=new Set();
   function send(method,params){
     if(!ready)return Promise.reject(Error('Desktop handshake not ready'));
@@ -31,13 +31,16 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
       toServer(message);
     },
     fromServer(message){
+      const wasReady=ready;
       if(initializeId!==undefined&&message.id===initializeId&&!message.method)ready=!message.error;
-      if(!message.method&&loading.delete(message.id)&&!message.error&&typeof message.result?.thread?.id==='string')contextThreadId=message.result.thread.id;
+      let loadedContext=false;
+      if(!message.method&&loading.delete(message.id)&&!message.error&&typeof message.result?.thread?.id==='string'){contextThreadId=message.result.thread.id;loadedContext=true;}
       if(typeof message.id==='string'&&message.id.startsWith(prefix)&&!message.method){
         const operation=pending.get(message.id);if(!operation)return;
         pending.delete(message.id);clearTimeout(operation.timer);message.error?operation.reject(Error('Desktop RPC failed')):operation.resolve(message.result);return;
       }
       toDesktop(message);
+      if(ready&&contextThreadId&&(loadedContext||!wasReady))for(const listener of contexts){try{Promise.resolve(listener(contextThreadId)).catch(()=>{});}catch{}}
       if(ready&&message.id==null&&message.method)for(const listener of listeners){
         try{Promise.resolve(listener(message)).catch(()=>{});}catch{}
       }
@@ -57,7 +60,9 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
     },
     flowRequest(method,params={}){
       if(method==='mcpServer/tool/call'){
-        if(params.server!=='codex_app'||!['list_threads','read_thread','move_thread_to_sidebar_section'].includes(params.tool)
+        const create=params.tool==='create_sidebar_section'&&params.arguments&&Object.keys(params.arguments).length===1
+          &&['In Progress','For Review','For Later'].includes(params.arguments.name);
+        if(params.server!=='codex_app'||!(['list_threads','read_thread','move_thread_to_sidebar_section'].includes(params.tool)||create)
           ||typeof params.threadId!=='string')return Promise.reject(Error('Auto organize tool not allowed'));
       }else if(!['thread/read','thread/list','thread/loaded/list','threadSection/list'].includes(method)
         ||method==='thread/read'&&(params.includeTurns!==false||typeof params.threadId!=='string'))
@@ -69,7 +74,8 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
       return result;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
-    close(){ready=false;contextThreadId=null;loading.clear();listeners.clear();lists.clear();for(const operation of pending.values()){clearTimeout(operation.timer);operation.reject(Error('Desktop connection closed'));}pending.clear();}
+    subscribeContext(listener){contexts.add(listener);if(ready&&contextThreadId)queueMicrotask(()=>{if(contexts.has(listener)){try{Promise.resolve(listener(contextThreadId)).catch(()=>{});}catch{}}});return ()=>contexts.delete(listener);},
+    close(){ready=false;contextThreadId=null;loading.clear();listeners.clear();contexts.clear();lists.clear();for(const operation of pending.values()){clearTimeout(operation.timer);operation.reject(Error('Desktop connection closed'));}pending.clear();}
   };
 }
 function jsonLines(stream,accept,raw,onEnd=()=>{}){

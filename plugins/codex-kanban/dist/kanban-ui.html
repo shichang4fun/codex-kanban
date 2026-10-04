@@ -1313,8 +1313,8 @@ function syncFlowSettings(){
   control.checked=setting?.enabled===true;
   control.disabled=!available||!!taskActionPending();
   control.setAttribute('aria-busy',String(flowSettingsBusy));
-  hint.dataset.error=String(!!flowSettingsError);
-  hint.textContent=flowSettingsError||(flowSettingsBusy?'Saving automatic grouping…':!available?'Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.':setting.enabled?'Running tasks move to In Progress; completed tasks move to For Review.':'Automatic grouping is off. Existing groups and rules are preserved.');
+  hint.dataset.error=String(!!flowSettingsError||setting?.enabled&&setting?.initialization?.state==='error');
+  hint.textContent=flowSettingsError||(flowSettingsBusy?'Saving automatic grouping…':!available?'Connect the integrated Codex Kanban Desktop runtime to enable automatic grouping.':setting.enabled?(setting.initialization?.message||'Running tasks move to In Progress; completed tasks move to For Review.'):'Automatic grouping is off. Existing groups and rules are preserved.');
 }
 $('auto-organize').onchange=async()=>{
   const enabled=$('auto-organize').checked;
