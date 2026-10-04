@@ -184,7 +184,8 @@ a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 .board-wrap{padding:18px 24px 16px}.board:not(.list){height:100%;min-height:0;gap:16px}
 .board:not(.list) .column{display:flex;flex-direction:column;flex:0 0 360px;min-width:360px;width:360px;height:100%;max-height:100%}
 .board:not(.list) .column:only-child{flex:0 1 360px;width:360px}
-.board:not(.list) .cards{flex:1;min-height:0;overflow-y:auto;overflow-anchor:none;overscroll-behavior-y:contain;padding:2px 4px 8px;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent}
+/* Reserve scrollbar space so overflow changes never resize or rewrap cards. */
+.board:not(.list) .cards{flex:1;min-height:0;overflow-y:auto;scrollbar-gutter:stable;overflow-anchor:none;overscroll-behavior-y:contain;padding:2px 4px 8px;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent}
 .board:not(.list) .cards>*{flex-shrink:0}
 .board:not(.list) .column.collapsed{flex:0 0 48px;min-width:48px;height:auto}
 .board:not(.list) .column.collapsed .cards{display:none}
