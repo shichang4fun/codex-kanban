@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Script,createContext} from 'node:vm';
 import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
 import {createKanbanServer} from './serve.mjs';
+import {createKanbanService} from './kanban-service.mjs';
 
 const id='11111111-1111-4111-8111-111111111111';
 const task={id,hostId:'local',title:'Fixture task'};
@@ -80,16 +81,96 @@ test('polls wait for archive completion and concurrent archives cannot duplicate
 
 const html=readFileSync(new URL('./ui.html',import.meta.url),'utf8');
 function ui(fetch){
-  const messages=[],renders=[];
+  const messages=[],renders=[],timers=new Map();let timerId=0;
   const context=createContext({nativeConnected:true,nativeToken:'csrf',nativeEpoch:0,nativePending:false,selectedTask:null,
     DATA:{tasks:[task],sync:{archiveLocal:true}},taskKey:t=>t.hostId+':'+t.id,taskUrl:t=>t.hostId==='local'?'codex://fixture':null,
     render:options=>renders.push(options),refreshSummary(){},refreshNativeBoard:async()=>{},
     $:()=>({replaceChildren(){},append(){}}),
     el:()=>({append(){},setAttribute(){}}),icon:()=>({}),
+    setTimeout:(callback,delay)=>{const key=++timerId;timers.set(key,{callback,delay});return key;},clearTimeout:key=>timers.delete(key),
     applyNativeBoard:board=>context.DATA=board,announce:message=>messages.push(message),fetch});
   const api=new Script(html.match(/let archivingKey=null;[\s\S]*?(?=let nativeMessage)/)[0]+'\n({archiveTask,canArchive,get pending(){return archivingKey;}})').runInContext(context);
-  return {api,context,messages,renders};
+  return {api,context,messages,renders,timers};
 }
+test('confirmed archive overrides stale board reads and prevents a second archive write',async t=>{
+  let visible=true,writes=0;
+  const remote={...task,hostId:'durable'};
+  const board=()=>({tasks:visible?[task,remote]:[remote],sections:[{sectionId:'review',itemKeys:['codex:thread:local:'+id,'codex:thread:durable:'+id]}],sync:{connected:true}});
+  const service=createKanbanService({getBoard:async()=>board(),archiveTask:async()=>{writes++;return {archived:true,threadId:id};},
+    restoreTask:async()=>({restored:true,threadId:id}),settingsStore:{read:async()=>({})}});
+  t.after(()=>service.close());
+  const result=await service.action('archive',params);
+  assert.deepEqual(result.board.tasks,[remote]);
+  assert.deepEqual(result.board.sections[0].itemKeys,['codex:thread:durable:'+id]);
+  assert.deepEqual((await service.read()).board.tasks,[remote]);
+  await assert.rejects(service.action('archive',params),{status:409});
+  assert.equal(writes,1);assert.equal((await service.read()).undoArchives.length,1);
+  visible=false;await service.read();
+  visible=true; // An external restore after the reader caught up must be visible.
+  assert.equal((await service.read()).board.tasks.length,2);
+  const again=await service.action('archive',params);
+  assert.equal(writes,2);assert.equal((await service.read()).undoArchives.length,1);
+  await assert.rejects(service.action('unarchive',{undoToken:result.undoToken}),{status:409});
+  await service.action('unarchive',{undoToken:again.undoToken});
+  assert.equal((await service.read()).board.tasks.length,2);
+});
+test('verified Undo stays visible through stale reads, preserves metadata and follows later external archive',async t=>{
+  const original={...task,nativeSectionId:'review',localSectionId:'review',projectId:'project',projectName:'Fixture project'};
+  const remote={...original,hostId:'durable'};let visible=true,writes=0,restores=0;
+  const service=createKanbanService({getBoard:async()=>({tasks:visible?[original,remote]:[remote],sections:[],sync:{connected:true}}),
+    archiveTask:async()=>{writes++;return {archived:true,threadId:id};},restoreTask:async()=>{restores++;return {restored:true,threadId:id};},settingsStore:{read:async()=>({})}});
+  t.after(()=>service.close());
+  const archived=await service.action('archive',params);visible=false;await service.read();
+  const result=await service.action('unarchive',{undoToken:archived.undoToken});
+  assert.deepEqual(result.board.tasks,[remote,original]);assert.equal((await service.read()).undoArchives.length,0);
+  assert.deepEqual((await service.read()).board.tasks,[remote,original]);
+  await assert.rejects(service.action('unarchive',{undoToken:archived.undoToken}),{status:409});assert.equal(restores,1);
+  const again=await service.action('archive',params);assert.deepEqual(again.board.tasks,[remote]);assert.equal(writes,2);
+  await service.action('unarchive',{undoToken:again.undoToken});
+  visible=true;assert.deepEqual((await service.read()).board.tasks,[original,remote]);
+  visible=false;assert.deepEqual((await service.read()).board.tasks,[remote]);
+});
+test('a restored recovery snapshot cannot authorize metadata edits until the reader catches up',async t=>{
+  let visible=true,renames=0;const service=createKanbanService({getBoard:async()=>({tasks:visible?[task]:[],sync:{connected:true}}),
+    archiveTask:async()=>({archived:true,threadId:id}),restoreTask:async()=>({restored:true,threadId:id}),
+    renameTask:async p=>{renames++;return {threadId:id,title:p.title,changed:true};},settingsStore:{read:async()=>({})}});
+  t.after(()=>service.close());
+  const archived=await service.action('archive',params);visible=false;await service.read();
+  await service.action('unarchive',{undoToken:archived.undoToken});
+  for(const action of ['rename','project','move','pin'])await assert.rejects(service.action(action,{...params,title:'New',expectedTitle:task.title}),{status:409,message:'The restored task is still syncing. Refresh and try again.'});
+  assert.equal(renames,0);assert.equal((await service.read()).board.tasks[0].title,task.title);
+  visible=true;await service.action('rename',{...params,title:'New',expectedTitle:task.title});assert.equal(renames,1);
+});
+test('UI removes the confirmed task even when the archive response board is stale',async()=>{
+  let calls=0;const remote={...task,hostId:'durable'};
+  const f=ui(async()=>{calls++;return {ok:true,json:async()=>({archived:true,threadId:id,undoToken:'token',board:{tasks:[task,remote],sync:{archiveLocal:true}}})};});
+  await f.api.archiveTask(task);
+  assert.equal(f.context.DATA.tasks.length,1);assert.equal(f.context.DATA.tasks[0].hostId,'durable');
+  await f.api.archiveTask(task);assert.equal(calls,1);
+});
+test('Undo notices expire once without returning on polling; duplicate task tokens show one notice',async()=>{
+  const f=ui(async()=>({ok:true,json:async()=>({archived:true,threadId:id,undoToken:'token'})}));
+  await f.api.archiveTask(task);
+  const notices=new Script('archiveNotices').runInContext(f.context);
+  assert.equal(notices.size,1);assert.equal(f.timers.size,1);
+  const timer=[...f.timers.values()][0];assert.equal(timer.delay,8000);
+  new Script("syncArchiveNotices([{undoToken:'token',task:DATA.tasks[0]??{id:'"+id+"',hostId:'local',title:'Fixture task'}},{undoToken:'duplicate',task:{id:'"+id+"',hostId:'local',title:'Fixture task'}}])").runInContext(f.context);
+  assert.equal(notices.size,1);assert.equal(f.timers.size,1);
+  [...f.timers.values()][0].callback();assert.equal(notices.size,0);
+  new Script("syncArchiveNotices([{undoToken:'duplicate',task:{id:'"+id+"',hostId:'local',title:'Fixture task'}}])").runInContext(f.context);
+  assert.equal(notices.size,0);
+});
+test('Undo stays available while restoring and a failed Undo remains retryable',async()=>{
+  let finish;
+  const f=ui(async endpoint=>endpoint==='/api/archive'?{ok:true,json:async()=>({archived:true,threadId:id,undoToken:'token'})}:new Promise(resolve=>finish=resolve));
+  await f.api.archiveTask(task);
+  const undo=new Script('undoArchive').runInContext(f.context),notices=new Script('archiveNotices').runInContext(f.context);
+  const restoring=undo('token');assert.equal(f.timers.size,0);assert.equal(notices.size,1);
+  finish({ok:false,json:async()=>({error:'Retry Undo'})});await restoring;
+  assert.equal(notices.size,1);assert.equal(f.timers.size,0);assert.equal(notices.get('token').error,'Retry Undo');
+  const retry=undo('token');finish({ok:true,json:async()=>({restored:true,threadId:id})});await retry;
+  assert.equal(notices.size,0);assert.equal(f.context.DATA.tasks.length,1);
+});
 test('UI keeps cards until confirmation, blocks duplicate clicks, and removes only the local identity',async()=>{
   let finish;const f=ui(async()=>await new Promise(resolve=>finish=resolve));
   f.context.DATA.tasks.push({...task,hostId:'durable'});

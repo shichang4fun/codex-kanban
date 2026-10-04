@@ -19,6 +19,9 @@ const settingsStore={read:async()=>structuredClone(defaults),update:async change
 let archived=false,reads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
 const moves=[];
 let groupActions=true,moveFailure=false,desktopConnected=true;
+let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false;
+const archives=[];
+const renames=[];
 const projects=[{projectId:'project-a',desktopProjectId:'desktop-a',hostId:'local',label:'Fixture A'},{projectId:'project-b',desktopProjectId:'desktop-b',hostId:'local',label:'Fixture B'}];
 task.projectId='desktop-a';
 const passiveTasks=Array.from({length:Math.max(0,Number(process.env.KANBAN_TEST_TASK_COUNT??1)-1)},(_,index)=>({...task,
@@ -74,19 +77,35 @@ if(process.env.KANBAN_TEST_UI_CLEANUP==='1'){
   passiveTasks.splice(0,passiveTasks.length,...cases.map((entry,index)=>({...task,
     id:'22222222-2222-4222-8222-'+String(index).padStart(12,'0'),nativeSectionId:'group-0',localSectionId:'group-0',placementSource:'localThreadSection',...entry})));
 }
-const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived?[]:[{...task}]),...passiveTasks].map(t=>({...t,
+const getBoard=async()=>{reads++;const capturedAt=new Date().toISOString();return {tasks:[...(archived&&!staleArchiveBoard||restored&&staleRestoreBoard?[]:[{...task}]),...passiveTasks].map(t=>({...t,
   ...(t.runtimeStatusSource?{runtimeCapturedAt:capturedAt}:{}),...(t.git?{git:{...t.git,checkedAt:t.fixtureBranchStale?new Date(Date.now()-120000).toISOString():capturedAt,pullRequests:{...t.git.pullRequests,
     checkedAt:t.fixtureGitStale?new Date(Date.now()-120000).toISOString():capturedAt}}}:{})})),
   projects,sections,capturedAt,runtimeCapturedAt:process.env.KANBAN_TEST_CARD_INFO==='1'?capturedAt:null,
   runtimeSnapshotMaxAgeMs:15000,coverage:'Synthetic fixture only',unavailableHosts:[],sync:{connected:true,scope:'localSections',runtimeLive:false,projectCatalogConnected:true}};};
+const renameFixture=async(params,transport)=>{
+  renames.push({...params,transport});
+  if(renameFailures>0){renameFailures--;throw Object.assign(Error('Synthetic rename conflict. Retry with your draft preserved.'),{status:409});}
+  if(params.threadId!==id||params.expectedTitle!==task.title)throw Error('Unexpected fixture rename request');
+  task.title=params.title;return {threadId:id,title:task.title,changed:true};
+};
 const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'synthetic',
   bridgeRequest:async(_socket,method,params)=>{
-    if(method==='status')return {connected:desktopConnected,groupActions,taskCreation:true,creationOperations:[],autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};
+    if(method==='status')return {connected:desktopConnected,groupActions,renameActions:true,taskCreation:true,creationOperations:[],autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};
+    if(method==='rename')return renameFixture(params,'desktop');
     if(method==='flowSettings'){flowEnabled=params.enabled;return {autoFlow:{available:true,enabled:flowEnabled,mode:'all-local'}};}
     if(method==='creationCatalog')return {projects:projects.map(p=>({projectId:p.desktopProjectId,label:p.label,isGitRepository:true,nativeProjectId:p.projectId})),
       sections:[...sections.filter(s=>s.sectionId!=='chats'),{sectionId:null,name:'Ungrouped'}]};
     if(method==='archive'){
+      archives.push(params);
+      if(params.archived){
+        await new Promise(resolve=>setTimeout(resolve,archiveDelayMs));
+        if(archiveFailure)throw Object.assign(Error('Synthetic archive failure'),{status:409});
+      }else{
+        await new Promise(resolve=>setTimeout(resolve,restoreDelayMs));
+        if(restoreFailures>0){restoreFailures--;throw Object.assign(Error('Synthetic Undo failure'),{status:409});}
+      }
       archived=params.archived;
+      restored=!archived;
       return {threadId:id,...(archived?{archived:true}:{restored:true})};
     }
     throw Error('Unexpected fixture bridge request');
@@ -102,11 +121,7 @@ const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'s
     return {threadId:id,sectionId:params.sectionId,changed:true};},
   pinTask:async params=>{task.pinned=params.pinned;task.nativeTaskPinned=params.pinned;task.localSectionId=params.pinned?'group-3':null;task.nativeSectionId=params.pinned?'group-3':'chats';
     task.placementSource=params.pinned?'localThreadSection':'localDefault';return {threadId:id,pinned:params.pinned};},
-  renameTask:async params=>{
-    if(renameFailures>0){renameFailures--;throw Object.assign(Error('Synthetic rename conflict. Retry with your draft preserved.'),{status:409});}
-    if(params.threadId!==id||params.expectedTitle!==task.title)throw Error('Unexpected fixture rename request');
-    task.title=params.title;return {threadId:id,title:task.title,changed:true};
-  },
+  renameTask:params=>renameFixture(params,'local'),
   setProject:async params=>{if(params.threadId!==id||params.expectedProjectId!==task.localProjectId)throw Error('Unexpected fixture project request');
     const project=projects.find(p=>p.projectId===params.projectId);
     if(params.projectId!==null&&!project)throw Error('Unknown fixture project');
@@ -148,15 +163,21 @@ const server=createServer(async(req,res)=>{
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}
       const params=JSON.parse(body);res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await client.callTool({name:params.name,arguments:params.arguments})));return;
     }
-    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,moves,navigationUrls}));return;}
+    if(req.url==='/status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({reads,archived,title:task.title,flowEnabled,sectionId:task.localSectionId,projectId:task.projectId,moves,archives,renames,navigationUrls}));return;}
     if(req.url==='/fixture/reset'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>1024)throw Error('Too large');}
       const options=body?JSON.parse(body):{};
+      // Reset the shared synthetic service as well as the fixture task.
+      restoreDelayMs=0;restoreFailures=0;staleRestoreBoard=false;
+      for(const entry of (await service.read()).undoArchives)await service.action('unarchive',{undoToken:entry.undoToken});
+      archiveDelayMs=options.archiveDelayMs??0;staleArchiveBoard=options.staleArchiveBoard===true;archiveFailure=options.archiveFailure===true;
+      staleRestoreBoard=options.staleRestoreBoard===true;restoreDelayMs=options.restoreDelayMs??0;restoreFailures=options.restoreFailures??0;restored=false;
+      task.title='Sidebar integration fixture';
       groupActions=options.groupActions!==false;moveFailure=options.moveFailure===true;
       desktopConnected=options.desktopConnected!==false;
       Object.assign(task,{localSectionId:null,nativeSectionId:'chats',placementSource:'localDefault',pinned:false,nativeTaskPinned:false});
       if(options.inheritedProject)Object.assign(task,{nativeSectionId:'group-3',placementSource:'desktopProject',pinned:true});
-      moves.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
+      moves.length=0;archives.length=0;renames.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
     }
     if(req.url==='/fixture/navigation'&&req.method==='POST'){
       let body='';for await(const chunk of req){body+=chunk;if(body.length>8192)throw Error('Too large');}

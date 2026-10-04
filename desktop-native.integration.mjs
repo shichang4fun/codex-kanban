@@ -24,6 +24,7 @@ const child=spawn(cli,['--disable','hooks','app-server','--listen','stdio://'],{
 child.stderr.on('data',()=>{});child.stdout.setEncoding('utf8');
 let sequence=0,buffer='',desktopSequence=0,stop,server,autoFlow,fixtureProject=null,simulatedCreations=0,simulatedGroupCreations=0;const pending=new Map(),desktopPending=new Map();
 const creationDesktopProjectId='desktop-creation-project';
+const desktopRenames=[];
 child.stdout.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);let m;try{m=JSON.parse(line);}catch{continue;}
   const p=pending.get(m.id);if(!p)continue;pending.delete(m.id);clearTimeout(p.timer);m.error?p.reject(Error(m.error.message)):p.resolve(m.result);
 }});
@@ -36,6 +37,10 @@ const relay=createDesktopRelay({toDesktop:message=>{const p=desktopPending.get(m
       if(!isTool)return nativeRpc(message.method,message.params);
       const {tool,arguments:args}=message.params;
       if(tool==='set_thread_archived')return nativeRpc(args.archived?'thread/archive':'thread/unarchive',{threadId:args.threadId});
+      if(tool==='set_thread_title'){
+        desktopRenames.push(args);
+        return nativeRpc('thread/name/set',{threadId:args.threadId,name:args.title});
+      }
       if(tool==='list_projects')return {projects:fixtureProject?[{projectId:creationDesktopProjectId,projectKind:'local',hostId:'local',label:'Disposable Kanban project',path:fixtureHome,isGitRepository:false}]:[]};
       if(tool==='create_sidebar_section'){simulatedGroupCreations++;return nativeRpc('threadSection/create',{name:args.name});}
       if(tool==='create_thread'){
@@ -146,6 +151,8 @@ try{
   const renamedTitle='Disposable renamed task';
   const renameResponse=await post('/api/rename',{...params,title:renamedTitle,expectedTitle:beforeRename.name}),renamed=await renameResponse.json();
   assert.equal(renameResponse.status,200,JSON.stringify(renamed));assert.equal(renamed.title,renamedTitle);
+  assert.deepEqual(desktopRenames,[{threadId:thread.id,source:'codex',title:renamedTitle}]);
+  assert.equal(renamed.board.sync.renameTransport,'desktop');
   assert.equal(renamed.board.tasks[0].title,renamedTitle);
   const afterRename=(await nativeRpc('thread/read',{threadId:thread.id,includeTurns:true})).thread;
   assert.equal(afterRename.name,renamedTitle);assert.equal(afterRename.projectId,beforeRename.projectId);

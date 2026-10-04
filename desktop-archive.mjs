@@ -1,5 +1,6 @@
 import {openLocalReader} from './local-read.mjs';
 import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
+import {renameLocalTask} from './rename.mjs';
 import {startLocalBridge,bridgeError} from './bridge-transport.mjs';
 import {createDesktopGroups} from './desktop-groups.mjs';
 import {createDesktopRuntime} from './desktop-runtime.mjs';
@@ -19,11 +20,25 @@ export function createDesktopArchive({call,ready=()=>true,openReader=openLocalRe
         await call('set_thread_archived',{threadId:params.threadId,hostId:'local',source:'codex',archived:method==='thread/archive'});
         return {};
       }
+      if(method==='thread/name/set'){
+        if(signal?.aborted)throw bridgeError('Rename cancelled before writing.',409);
+        await call('set_thread_title',{threadId:params.threadId,source:'codex',title:params.name});
+        return {};
+      }
       return reader.request(method,params);
     }};
   };
   return {
-    status:()=>({connected:ready(),archiveTransport:'desktop'}),
+    status:()=>({connected:ready(),archiveTransport:'desktop',renameActions:true}),
+    async rename(params,{signal}={}){
+      if(!ready())throw bridgeError('Codex is still connecting. Try again after it opens.');
+      if(busy)throw bridgeError('Another desktop task action is in progress.',409);
+      busy=true;
+      try{
+        return await renameLocalTask(params,{tasks:[{id:params?.threadId,hostId:params?.hostId,title:params?.expectedTitle}]},
+          {open:openFor(signal),signal});
+      }finally{busy=false;}
+    },
     async change(params,{signal}={}){
       if(!ready())throw bridgeError('Codex is still connecting. Try again after it opens.');
       if(busy)throw bridgeError('Another desktop archive action is in progress.',409);
@@ -56,10 +71,10 @@ export async function startDesktopArchiveBridge({socketPath,...options}){
       if(typeof params?.enabled!=='boolean'||!options.autoFlow)throw bridgeError('An available auto organize runtime and explicit switch are required.',400);
       return {autoFlow:await options.autoFlow.change(params.enabled)};
     }
-    if(!['archive','move','pin','create','retryCreationGroup'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore, task group changes and explicit task creation.',400);
+    if(!['archive','rename','move','pin','create','retryCreationGroup'].includes(method))throw bridgeError('This bridge only supports status, runtime, archive, restore, rename, task group changes and explicit task creation.',400);
     if(busy)throw bridgeError('Another desktop task action is in progress.',409);
     busy=true;
-    const change=()=>method==='archive'?controller.change(params,context):method==='create'?creation.create(params,context):method==='retryCreationGroup'?creation.retryGroup(params,context):groups[method](params,context);
+    const change=()=>method==='archive'?controller.change(params,context):method==='rename'?controller.rename(params,context):method==='create'?creation.create(params,context):method==='retryCreationGroup'?creation.retryGroup(params,context):groups[method](params,context);
     try{return await (options.runExclusive?options.runExclusive(change):change());}
     finally{busy=false;}
   }});
