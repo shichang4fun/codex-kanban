@@ -20,6 +20,15 @@ html{font-size:calc(16px * var(--font-scale,1))}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}.running .state-ring{animation:none}}
 .card-heading{display:flex;align-items:flex-start;gap:8px;min-width:0}
 .card-heading .card-title{flex:1;min-width:0}
+.time{position:relative;z-index:1;cursor:pointer}
+.card-info{min-width:0;margin-top:7px;pointer-events:none}
+.card-attention{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px}
+.card-attention:last-child{margin-bottom:0}
+.attention-badge{display:inline-flex;max-width:100%;padding:1px 5px;border:1px solid currentColor;border-radius:4px;color:var(--state-later);font-size:0.6875rem;line-height:1.5;overflow-wrap:anywhere}
+.attention-badge.runtime-error{color:var(--state-error)}
+.card-preview{margin:0;color:var(--muted);font-size:0.75rem;line-height:1.5;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.list .card-info{grid-column:1 / -1;grid-row:2;margin-top:0}
+.list .card-preview{-webkit-line-clamp:1}
 .card-actions{position:absolute;top:10px;right:10px;z-index:2;display:flex;gap:0;opacity:0;pointer-events:none;transition:opacity 160ms ease}
 .card:hover .card-actions,.card:focus-within .card-actions{opacity:1;pointer-events:auto}
 .card.has-actions .card-heading{padding-right:48px}
@@ -58,6 +67,9 @@ html{font-size:calc(16px * var(--font-scale,1))}
 .pr-badge{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;padding:1px 5px;border:1px solid var(--line);border-radius:4px;font-size:0.625rem;pointer-events:auto;white-space:nowrap}
 a.pr-badge:hover{background:var(--hover);text-decoration:underline}
 .pr-open{color:var(--state-review)}.pr-merged{color:var(--state-pinned)}.pr-closed{color:var(--state-error)}.pr-draft{color:var(--state-muted)}
+.git-line.pr-attention{margin-top:4px;flex-wrap:wrap}
+.pr-alert{max-width:100%;white-space:normal;overflow-wrap:anywhere;border-color:currentColor;color:var(--state-later)}
+.pr-alert-ci,.pr-alert-changes{color:var(--state-error)}
 .list .git-line{grid-column:1 / -1;margin:0}.list .card{row-gap:4px}
 .git-detail{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
 .git-detail[hidden]{display:none}.git-detail h3{margin:0 0 18px;font-size:0.75rem;font-weight:550}
@@ -647,6 +659,24 @@ function updateRuntimeDetail(task){
     currentStatus:runtimeLabel(task),lastObservedStatus:task.lastObservedStatus??null,lastObservedAt:task.lastObservedAt??null
   }:task.rawStatus??null,null,2);
 }
+function removeExpiredCardRuntime(){
+  const stale=new Map(DATA.tasks.filter(t=>t.runtimeStatusStale).map(t=>[taskKey(t),t]));
+  for(const card of $('board').querySelectorAll('.card')){
+    const task=stale.get(card.dataset.taskKey);if(!task)continue;
+    const info=card.querySelector('.card-info');
+    card.querySelector('.card-attention')?.remove();
+    if(info&&!info.children.length)info.remove();
+    const ring=card.querySelector('.progress-ring');
+    if(ring){
+      for(const animation of ring.getAnimations())animation.cancel();ring.remove();
+      if(task.isUnread&&!card.querySelector('.unread')){
+        const unread=el('span','unread');unread.title=task.unreadSource==='desktopPersistedReadState'?'Unread reply':'Unread reply (snapshot)';
+        unread.setAttribute('role','img');unread.setAttribute('aria-label','Unread reply');
+        const heading=card.querySelector('.card-heading');heading.replaceChildren(unread,...heading.children);card.classList.add('is-unread');
+      }
+    }
+  }
+}
 let draggedKey=null,draggedTaskGroup=null,suppressClickUntil=0,toastTimer;
 let nativeConnected=false,nativeWritable=false,nativeToken='',nativeEpoch=0,nativePending=false,nativeReads=0;
 let archivingKey=null;
@@ -947,6 +977,7 @@ function applyNativeBoard(board,{skipUnchanged=false}={}){
   expireRuntimeSnapshot();
   refreshSummary();
   if(previous!==null&&previous===boardRenderKey(DATA)){
+    syncPrAlertFreshness();
     nativeNotice();
     if(selectedTask&&$('detail').open){selectedTask=DATA.tasks.find(t=>taskKey(t)===taskKey(selectedTask))??selectedTask;updateDetailProperties(selectedTask);}
   }else render({animate:true});
@@ -1120,6 +1151,26 @@ function expireGitSnapshots(now=Date.now()){
   }
   return changed;
 }
+function prAttention(git){
+  if(!git||git.pr.status!=='ready')return [];
+  return git.items.flatMap(pr=>{
+    const notices=[];
+    if(['OPEN','DRAFT'].includes(pr.state)&&pr.checks==='failed')notices.push({kind:'ci',text:'CI failed'});
+    if(pr.state==='OPEN'&&pr.review==='CHANGES_REQUESTED')notices.push({kind:'changes',text:'Changes requested'});
+    if(pr.state==='OPEN'&&pr.review==='REVIEW_REQUIRED')notices.push({kind:'review',text:'Review required'});
+    return notices.map(notice=>({...notice,pr}));
+  });
+}
+function syncPrAlertFreshness(){
+  const cached=new Set((DATA?.tasks??[]).filter(task=>{const git=gitDisplay(task);return git&&(git.cached||git.gitCached);}).map(taskKey));
+  for(const card of $('board').querySelectorAll('.card')){
+    const suffix=cached.has(card.dataset.taskKey)?' · Cached':'';
+    for(const badge of card.querySelectorAll('.pr-alert')){
+      badge.textContent=badge.dataset.prAlertText+suffix;
+      badge.title=badge.title.replace(/ · Cached$/,'')+suffix;
+    }
+  }
+}
 function appendGitDetail(task){
   const display=gitDisplay(task),meta=$('detail-git-meta'),technical=$('detail-tech-meta');
   $('detail-git').hidden=!display||(!display.branch&&!display.items.length);
@@ -1139,17 +1190,33 @@ function appendGitDetail(task){
     if(value)technical.append(el('dt','',name),el('dd','',value));
   }
 }
+function cardPreviewText(value){
+  if(typeof value!=='string')return '';
+  let text=value.trim(),removedContext=false;
+  // Only strip recognized leading ambient context, never markup inside the request.
+  while(/^<in-app-browser-context\b/i.test(text)){
+    const end=/<\/in-app-browser-context\s*>/i.exec(text);
+    if(!end)return ''; // A truncated context contains no recoverable request.
+    text=text.slice(end.index+end[0].length).trim();removedContext=true;
+  }
+  if(/^# (?:Chrome tabs|In app browser):\s*\n- The user has the (?:Chrome extension side panel|in-app browser) open\b/.test(text)){
+    const request=/^## My request:\s*$/m.exec(text);
+    if(!request)return '';
+    text=text.slice(request.index+request[0].length).trim();removedContext=true;
+  }
+  if(removedContext)text=text.replace(/^## My request:\s*/, '');
+  return text.replace(/\s+/g,' ').trim();
+}
 function makeCard(task,groupId){
   const status=runtimeLabel(task),progress=task.column==='running'&&status!==null;
   const card=el('article','card'),url=taskUrl(task),action=el(url?'a':'button','card-open');
-  if(url){action.href=url;action.setAttribute('aria-label','Open task: '+task.title);action.title='Open this chat in Codex';}
+  if(url){action.href=url;action.setAttribute('aria-label','Open task: '+task.title);}
   else{action.type='button';action.setAttribute('aria-label',task.title);action.onclick=()=>showDetail(task);}
   action.draggable=false;
   action.addEventListener('click',e=>{if(performance.now()<suppressClickUntil){e.preventDefault();e.stopImmediatePropagation();}},true);
   card.dataset.taskKey=taskKey(task);
   card.dataset.groupId=groupId;
-  card.draggable=true;action.title+=(url?'; ':'')+'Drag within this group to reorder · Alt + Up/Down';
-  if(nativeCanMove(task))action.title+=' · Drag between sidebar groups';
+  card.draggable=true;
   card.addEventListener('dragstart',e=>{if(taskActionPending()||e.target.closest('.card-actions,.card-details,.project,.pr-badge')){e.preventDefault();return;}e.stopPropagation();draggedKey=taskKey(task);draggedTaskGroup=groupId;++nativeEpoch;$('board').classList.add('task-dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-codex-kanban-task',draggedKey);card.classList.add('dragging');});
   card.addEventListener('dragend',finishDrag);
   enableTaskOrderDrop(card,task,groupId);
@@ -1183,6 +1250,27 @@ function makeCard(task,groupId){
   heading.append(title);
   const projectName=project(task);
   card.append(heading);
+  const info=el('div','card-info'),labels=[];
+  if(status!==null){
+    if(task.column==='error')labels.push('Runtime error');
+    if(task.column==='attention'){
+      const flags=task.rawStatus?.activeFlags??[];
+      if(flags.includes('waitingOnUserInput'))labels.push('Waiting for input');
+      if(flags.includes('waitingOnApproval'))labels.push('Waiting for approval');
+      if(!labels.length)labels.push('Needs attention');
+    }
+  }
+  if(labels.length){
+    const attention=el('div','card-attention');
+    for(const label of labels)attention.append(el('span','attention-badge'+(task.column==='error'?' runtime-error':''),label+(runtimeIsLive(task)?'':' (snapshot)')));
+    info.append(attention);
+  }
+  const summary=cardPreviewText(task.summary);
+  if(summary&&summary!==task.title.replace(/\s+/g,' ').trim()){
+    const preview=el('p','card-preview');preview.append(el('span','preview-text',summary));
+    info.append(preview);
+  }
+  if(info.children.length)card.append(info);
   const git=gitDisplay(task);
   if(git&&(git.branch||git.items.length)){
     const line=el('div','git-line');
@@ -1199,6 +1287,14 @@ function makeCard(task,groupId){
       const badge=el('button','pr-badge',git.items.length+' PRs'+(git.cached?' · Cached':''));badge.type='button';badge.onclick=()=>showDetail(task);line.append(badge);
     }
     card.append(line);
+    const attention=el('div','git-line pr-attention');
+    for(const {pr,kind,text} of prAttention(git)){
+      const label=(git.items.length>1?'#'+pr.number+' · ':'')+text,cached=git.cached||git.gitCached;
+      const badge=el('a','pr-badge pr-alert pr-alert-'+kind,label+(cached?' · Cached':''));
+      badge.dataset.prAlertText=label;badge.title='PR #'+pr.number+' · '+text+(cached?' · Cached':'');
+      badge.href=pr.url;badge.target='_blank';badge.rel='noopener noreferrer';badge.draggable=false;attention.append(badge);
+    }
+    if(attention.children.length)card.append(attention);
   }
   const foot=el('div','card-footer');
   if(task.hostId!=='local'){
@@ -1213,7 +1309,10 @@ function makeCard(task,groupId){
     if(task.hostId==='local'){label.type='button';label.draggable=false;label.disabled=!!projectDisabledReason(task);label.setAttribute('aria-label',(projectName?'Change project: ':'Set project: ')+task.title);label.setAttribute('aria-haspopup','menu');label.setAttribute('aria-expanded','false');label.setAttribute('aria-controls','task-menu');label.title=projectDisabledReason(task)||label.title;label.onclick=e=>{e.stopPropagation();openTaskMenu(task,label,'project');};}
     line.append(label);line.title=projectName||'';foot.append(line);
   }
-  foot.append(el('span','time',date(task.updatedAt)),detail);card.append(foot);return card;
+  const time=el('span','time',date(task.updatedAt));time.title='Task updated at '+date(task.updatedAt)+' · Not the summary or last reply time';
+  time.onclick=e=>{e.stopPropagation();action.click();};
+  time.setAttribute('aria-label','Task updated at '+date(task.updatedAt));
+  foot.append(time,detail);card.append(foot);return card;
 }
 const refreshAnimations=new Set();
 function captureBoardLayout(){
@@ -1663,9 +1762,12 @@ else{
 }
 refreshNativeBoard();
 setInterval(()=>{
-  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('creation').open&&!$('rename-task').open){
-    const runtimeChanged=expireRuntimeSnapshot(),gitChanged=expireGitSnapshots();
-    if(runtimeChanged||gitChanged){refreshSummary();render();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);}
+  const runtimeChanged=expireRuntimeSnapshot();
+  if(runtimeChanged){removeExpiredCardRuntime();if(selectedTask&&$('detail').open)updateRuntimeDetail(selectedTask);}
+  syncPrAlertFreshness();
+  if(!draggedKey&&!draggedGroup&&!taskMenu&&!$('view-options').open&&!$('creation').open&&!$('rename-task').open){
+    const gitChanged=expireGitSnapshots();
+    if(runtimeChanged||gitChanged){refreshSummary();render();}
   }
   refreshNativeBoard();
 },3000);

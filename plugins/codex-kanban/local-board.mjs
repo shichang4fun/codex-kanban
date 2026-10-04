@@ -80,6 +80,7 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
       const pinned=destination.name==='Pinned';
       rows.push({...desktop,id:t.id,kind:'codex',hostId:'local',
         title:t.name??desktop?.title??'Untitled task',summary:desktop?.summary??t.preview??'',
+        summarySource:desktop?.summary!=null?'desktopSnapshot':t.preview!=null?'threadPreview':null,
         cwd:t.cwd,updatedAt:t.updatedAt,projectId,localProjectId:t.projectId??null,
         isUnread:unreadState.known?unreadIds.has(t.id):desktop?.isUnread===true,
         unreadSource:unreadState.known?'desktopPersistedReadState':desktop?'desktopSnapshot':'unavailable',
