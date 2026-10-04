@@ -235,7 +235,7 @@ test('Desktop disconnect shows affected actions and recovery, while reconnect cl
   h.api.applyNativeBoard(board);
   assert(!banner.hidden);assert.match(note.textContent,/Desktop disconnected/);
   assert.match(note.textContent,/Cross-group dragging and Pin\/Unpin are unavailable/);
-  assert.match(note.textContent,/Restart Codex.*open a local chat/);assert.match(note.textContent,/rechecks automatically/);
+  assert.match(note.textContent,/reconnects automatically.*open a local chat/);assert.match(note.textContent,/rechecks automatically/);
   board.sync.desktopArchiveConnected=true;h.api.applyNativeBoard(board);
   assert.match(note.textContent,/Desktop group connection unavailable/);assert.doesNotMatch(note.textContent,/Desktop disconnected/);
   board.sync.moveWritable=true;h.api.applyNativeBoard(board);assert(banner.hidden);assert(note.hidden);

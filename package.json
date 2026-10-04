@@ -1,6 +1,6 @@
 {
   "name": "codex-kanban",
-  "version": "0.4.53",
+  "version": "0.4.54",
   "private": true,
   "description": "A local Codex task board with native groups, pinning and archive Undo.",
   "type": "module",

@@ -83,6 +83,29 @@ function jsonLines(stream,accept,raw,onEnd=()=>{}){
   stream.on('data',chunk=>{buffer+=chunk;let end;while((end=buffer.indexOf('\n'))>=0){const line=buffer.slice(0,end);buffer=buffer.slice(end+1);try{accept(JSON.parse(line));}catch{raw(line+'\n');}}});
   stream.once('end',()=>{if(buffer)raw(buffer);onEnd();});
 }
+// A standby proxy never replaces a live owner. It retries when a Desktop-loaded
+// context is available, so a temporary bind conflict cannot disable the bridge.
+export function maintainDesktopBridge({start,ready,report=()=>{},retryMs=1000}){
+  let stopped=false,pending=null,stopBridge=null,timer=null,lastError=null,closing=null;
+  function schedule(){if(!stopped){timer=setTimeout(()=>{timer=null;ensure();},retryMs);timer.unref();}}
+  function ensure(){
+    if(stopped||stopBridge||pending||!ready()){if(!stopped&&!stopBridge&&!pending&&!timer)schedule();return pending;}
+    clearTimeout(timer);timer=null;
+    pending=Promise.resolve().then(start).then(async stop=>{
+      if(stopped)await stop();else{stopBridge=stop;lastError=null;report('KANBAN_BRIDGE_CONNECTED');}
+    }).catch(error=>{
+      const code=error.code??'START_FAILED';
+      if(!stopped&&code!==lastError){lastError=code;report('KANBAN_BRIDGE_WAITING '+code);}
+    }).finally(()=>{pending=null;if(!stopped&&!stopBridge)schedule();});
+    return pending;
+  }
+  return {ensure,stop(){
+    if(closing)return closing;
+    stopped=true;clearTimeout(timer);timer=null;
+    closing=Promise.resolve(pending).then(async()=>{const stop=stopBridge;stopBridge=null;await stop?.();});
+    return closing;
+  }};
+}
 export async function startDesktopProxy(){
   const executable=process.env.KANBAN_REAL_CODEX;
   if(!executable||!isAbsolute(executable)||realpathSync(executable)===realpathSync(fileURLToPath(import.meta.url)))throw Error('Native CLI required');
@@ -93,20 +116,35 @@ export async function startDesktopProxy(){
   for(const key of Object.keys(env))if(key.startsWith('KANBAN_')||key.startsWith('SIDEBAR_FLOW_'))delete env[key];
   const child=spawn(executable,args,{stdio:['pipe','pipe','inherit'],env});
   const relay=createDesktopRelay({toServer:message=>child.stdin.write(JSON.stringify(message)+'\n'),toDesktop:message=>process.stdout.write(JSON.stringify(message)+'\n')});
-  let stopBridge,autoFlow,ended=false;
-  const stop=()=>{autoFlow?.stop();stopBridge?.();};
+  let bridge,autoFlow,ended=false;
+  const diagnostic=value=>process.stderr.write(value+'\n');
+  const stop=()=>{
+    if(ended)return;
+    ended=true;relay.close();autoFlow?.stop();process.stdin.destroy();
+    bridge?.stop().catch(()=>diagnostic('KANBAN_BRIDGE_STOP_FAILED'));
+  };
   for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));
-  child.once('error',()=>{ended=true;relay.close();stop();process.exitCode=1;});
-  child.once('exit',(code,signal)=>{ended=true;relay.close();stop();process.exitCode=code??(signal?1:0);});
-  child.stdin.on('error',()=>relay.close());process.stdout.on('error',()=>{relay.close();child.kill();});
+  child.once('error',()=>{stop();process.exitCode=1;});
+  child.once('exit',(code,signal)=>{diagnostic('KANBAN_NATIVE_EXIT code='+(code??'null')+' signal='+(signal??'none'));stop();process.exitCode=code??(signal?1:0);});
+  child.stdin.on('error',()=>{stop();child.kill();});process.stdout.on('error',()=>{stop();child.kill();});
   const runExclusive=createTransactionGate();
-  if(process.env.KANBAN_FLOW_ROOT)autoFlow=await startAutoFlow({root:process.env.KANBAN_FLOW_ROOT,relay,runExclusive});
-  jsonLines(process.stdin,relay.fromDesktop,value=>child.stdin.write(value),()=>{autoFlow?.stop();child.stdin.end();});
+  jsonLines(process.stdin,message=>{if(!ended)relay.fromDesktop(message);},value=>{if(!ended)child.stdin.write(value);},()=>{stop();child.stdin.end();});
   jsonLines(child.stdout,relay.fromServer,value=>process.stdout.write(value));
-  try{stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,autoFlow,runExclusive,
-    ready:()=>relay.ready&&relay.contextThreadId!==null,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),
-    request:(method,params)=>relay.request(method,params)});}
-  catch{process.stderr.write('KANBAN_BRIDGE_NOT_STARTED\n');}
-  if(ended){autoFlow?.stop();await stopBridge?.();}
+  const ready=()=>!ended&&relay.ready&&relay.contextThreadId!==null;
+  const flow={status:()=>autoFlow?.status()??{available:false},change:enabled=>{
+    if(!autoFlow)throw Error('Auto organize is not ready.');return autoFlow.change(enabled);
+  }};
+  bridge=maintainDesktopBridge({ready,report:diagnostic,start:async()=>{
+    const stopBridge=await startDesktopArchiveBridge({socketPath:process.env.KANBAN_BRIDGE_SOCKET,autoFlow:flow,runExclusive,
+      ready,call:(tool,args)=>relay.call(tool,args,relay.contextThreadId),request:(method,params)=>relay.request(method,params)});
+    try{
+      // Only the elected socket owner observes events or performs auto grouping.
+      if(!ended&&process.env.KANBAN_FLOW_ROOT)autoFlow=await startAutoFlow({root:process.env.KANBAN_FLOW_ROOT,relay,runExclusive});
+      if(ended)autoFlow?.stop();
+      return async()=>{autoFlow?.stop();autoFlow=null;await stopBridge();};
+    }catch(error){await stopBridge();throw error;}
+  }});
+  relay.subscribeContext(()=>bridge.ensure());
+  if(ended)await bridge.stop();else bridge.ensure();
 }
 if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))startDesktopProxy().catch(()=>{process.stderr.write('KANBAN_PROXY_START_FAILED\n');process.exitCode=1;});
