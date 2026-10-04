@@ -26,8 +26,8 @@ export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./d
   service??=createKanbanService({getBoard:source.getBoard});
   const server=new McpServer({name:'codex-kanban',version:'0.4.54',icons:boardIcons},
     {instructions:'This plugin provides a local Codex task board through an app-only sidebar UI. Local placement is authoritative; a connected Desktop bridge supplies live runtime observations, with expiring snapshots otherwise. Task actions require explicit user interaction in the app.'});
-  const read=async()=>{
-    try{return result(await service.read());}
+  const read=async(params={})=>{
+    try{return result(await service.read(params));}
     catch{return result({error:'Local groups unavailable. Check the local Codex connection and refresh.',status:503});}
   };
   registerAppTool(server,'open_board',{
@@ -37,7 +37,7 @@ export function createKanbanMcp({service,source,readUi=()=>readFile(new URL('./d
   },read);
   server.registerTool('get_board',{
     title:'Refresh Codex board',description:'Read current local groups, branch/PR information and Desktop runtime observations.',
-    inputSchema:z.object({}).strict(),annotations:{readOnlyHint:true,openWorldHint:false},_meta:appOnly
+    inputSchema:z.object({forceGit:z.boolean().optional()}).strict(),annotations:{readOnlyHint:true,openWorldHint:false},_meta:appOnly
   },read);
   for(const [name,method,fields] of [
     ['get_creation_options','creationOptions',{}],
