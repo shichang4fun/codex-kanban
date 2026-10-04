@@ -1,19 +1,36 @@
 // Exercise the actual CLI, installed package and proxy in a disposable CODEX_HOME.
 // No Desktop tool calls, model turns or existing user task changes.
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,readFile} from 'node:fs/promises';
-import {spawn} from 'node:child_process';
+import {mkdtemp,mkdir,rm,readFile,realpath} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
+import {spawn,execFileSync} from 'node:child_process';
 import {once} from 'node:events';
-import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {installKanban} from './install.mjs';
-import {readDesktopBridgeConfig} from './setup-desktop-bridge.mjs';
+import {readDesktopBridgeConfig,installDesktopBridge} from './setup-desktop-bridge.mjs';
 import {desktopBridgeRequest} from './bridge-transport.mjs';
 
-const root=await mkdtemp(join(tmpdir(),'kb-in-')),home=join(root,'home');
+// Canonicalize macOS /tmp without exceeding the Unix-domain socket path limit.
+const root=await realpath(await mkdtemp('/tmp/kb-in-')),home=join(root,'home');
 const source=process.env.KANBAN_MARKETPLACE_SOURCE||resolve('dist/marketplace');
 const ref=process.env.KANBAN_MARKETPLACE_REF||null;
 let child,buffer='',sequence=0,diagnostic='';const pending=new Map();
+// Exercise the real installed shim, but keep GUI launchd completely isolated.
+const jobs=new Map();let guiCli='';
+function run(bin,args,options){
+  if(bin!=='/bin/launchctl')return execFileSync(bin,args,options);
+  if(args[0]==='getenv')return Buffer.from(guiCli);
+  if(args[0]==='setenv'){guiCli=args[2];return '';}
+  if(args[0]==='unsetenv'){guiCli='';return '';}
+  if(args[0]==='bootstrap'){
+    const text=readFileSync(args[2],'utf8'),label=text.match(/<key>Label<\/key><string>(.*?)<\/string>/)[1];
+    const argv=[...text.match(/<key>ProgramArguments<\/key><array>(.*?)<\/array>/s)[1].matchAll(/<string>(.*?)<\/string>/g)].map(m=>m[1].replaceAll('&amp;','&').replaceAll('&lt;','<').replaceAll('&gt;','>'));
+    jobs.set(`${args[1]}/${label}`,`${args[1]}/${label} = {\n\tpath = ${args[2]}\n\tprogram = ${argv[0]}\n\targuments = {\n${argv.map(a=>'\t\t'+a).join('\n')}\n\t}\n}\n`);return '';
+  }
+  if(args[0]==='print'){if(!jobs.has(args[1]))throw Error('No fixture job');return Buffer.from(jobs.get(args[1]));}
+  if(args[0]==='bootout'){jobs.delete(args[1]);return '';}
+  throw Error('Unexpected fixture launchctl action');
+}
 function request(method,params={}){
   const id=++sequence;
   return new Promise((resolve,reject)=>{
@@ -23,16 +40,19 @@ function request(method,params={}){
 }
 try{
   await mkdir(home,{mode:0o700});
-  const options={home,marketplaceSource:source,ref};
+  const options={home,homeDir:root,marketplaceSource:source,ref,run};
   const installed=await installKanban(options);
-  const config=await readDesktopBridgeConfig(join(home,'kanban-desktop'));
+  let config=await readDesktopBridgeConfig(join(home,'kanban-desktop'));
+  // No access to the user's Sidebar configuration from this acceptance fixture.
+  config=await installDesktopBridge({...config,chainedCli:join(config.app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex')});
   assert(!('contextThreadId' in config));
   assert.equal(config.codexHome,home);
   const manifest=JSON.parse(await readFile(join(installed.pluginPath,'plugin.json'),'utf8'));
   assert.equal(installed.version,manifest.version);
   const reinstalled=await installKanban(options);assert.equal(reinstalled.version,installed.version);
   assert.equal((await readDesktopBridgeConfig(config.root)).chainedCli,config.chainedCli);
-  child=spawn(config.proxy,['--disable','hooks','app-server','--listen','stdio://'],{
+  assert.equal(jobs.size,1);assert.equal(guiCli,reinstalled.startup.shim);
+  child=spawn(guiCli,['--disable','hooks','app-server','--listen','stdio://'],{
     env:{...process.env,CODEX_HOME:home},stdio:['pipe','pipe','pipe']});
   child.stderr.on('data',data=>diagnostic+=data);
   child.stdout.on('data',data=>{
@@ -57,7 +77,7 @@ try{
   assert.equal(Object.keys(entry.tools).length,12);
   assert.equal(entry.serverInfo.version,manifest.version);
   assert(Object.values(entry.tools).every(tool=>tool._meta.ui.visibility[0]==='app'));
-  console.log(`PASS: native installer ${installed.version}, repeat install, private bridge, dynamic context and 12 app-only tools; zero model turns.`);
+  console.log(`PASS: native installer ${installed.version}, repeat install, original-icon shim, single simulated login agent, private bridge, dynamic context and 12 app-only tools; zero model turns, no GUI launchd changes.`);
 }finally{
   for(const operation of pending.values())clearTimeout(operation.timer);
   if(child&&child.exitCode===null){const ended=once(child,'exit');child.stdin.end();child.kill();await ended;}

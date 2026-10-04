@@ -1,4 +1,4 @@
-# Codex 看板 0.4.42
+# Codex 看板 0.4.43
 
 从 Codex 侧栏查看本机任务，支持看板、列表、项目分组和原生新建入口。
 
@@ -7,8 +7,8 @@
 当前支持 macOS 与安装在 `/Applications/ChatGPT.app` 的 Codex Desktop。无需终端命令、全局 Codex CLI、单独安装 Node 或 npm 依赖：
 
 1. [下载安装包 ZIP](https://github.com/shichang4fun/codex-kanban/archive/refs/heads/marketplace.zip)，解压。
-2. 双击 **Install Codex Kanban.command**，自动安装插件并配置 Desktop 桥接；重复运行会升级插件及桥接，并保留已有代理链。
-3. 如果 Codex 正在运行，正常退出后，双击 Finder 中已选中的 **Launch Codex with Kanban.command**。打开任意本机聊天，再从侧栏打开「Codex 看板」。以后也使用此启动器，普通应用入口不会启用桥接。
+2. 双击 **Install Codex Kanban.command**，自动安装插件、配置 Desktop 桥接并接入原来的 Codex 图标；重复运行会升级插件及桥接，并保留已有 Sidebar Flow。
+3. 如果 Codex 正在运行，正常退出（⌘Q）后，点击原来的 Codex 图标打开。打开任意本机聊天，再从侧栏打开「Codex 看板」。以后照常从 Dock、Finder 或 Spotlight 启动，无需专用启动器。
 
 首次打开下载的脚本若被 macOS 拦截，右键选择「打开」并按系统提示确认。已有 `codex-kanban@codex-kanban-local` 开发副本时，先在 Codex 中禁用它，避免重复入口。
 
@@ -19,7 +19,13 @@ codex plugin marketplace add shichang4fun/codex-kanban --ref marketplace
 codex plugin add codex-kanban@codex-kanban
 ```
 
-这两条 CLI 命令只安装基础插件；双击安装器则一并完成桥接配置，无需填写任务 ID、路径或编辑配置文件。首次启用需要正常重启，安装器不会退出正在运行的客户端。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。
+这两条 CLI 命令只安装基础插件；双击安装器则一并完成桥接及原图标接入，无需填写任务 ID、路径或编辑配置文件。首次启用需要正常退出并重新打开客户端，无需重启电脑，安装器不会退出正在运行的客户端。没有全局 `codex` 命令时，查看下方 [安装详情](#github-安装两条命令)。
+
+安装器使用一个用户级 LaunchAgent，在登录时恢复 `CODEX_CLI_PATH`。已有 Sidebar Flow 原图标接入时，复用它的同一个任务和稳定入口，保留原有 manifest／plist，并备份辅助脚本；没有 Sidebar Flow 时只启用 Kanban。不会修改应用包、签名或 Dock 图标。启动链为原图标 → Kanban → 已安装且健康的 Sidebar Flow → 官方 CLI。`CODEX_HOME` 在子进程中使用安装时的目录，不设置 GUI 全局 `CODEX_HOME`。
+
+启动前检查运行时及模块链接；Kanban 不可用时跳过它，Sidebar Flow 不可用时直接使用应用内官方 CLI。Node 或路由配置缺失也有原生启动回退。进程开始处理输入后不会自动重启或重放请求。官方 CLI 本身不可用时明确退出，不启动未知程序。
+
+需要撤销接入时，打开 `~/Library/Application Support/Codex Sidebar Flow Original Icon/Disable Kanban Original Icon.command`（无 Sidebar Flow 时目录为 `Codex Kanban Original Icon`）；它恢复原来的 Sidebar Flow 接入或移除 Kanban 自己的登录任务，不删除插件数据。若 Node 或模块损坏，使用同目录的 **Emergency Disable Original Icon.command**：它停用整条原图标自动接入并保留文件，随后正常退出并重新打开客户端。重装 Kanban 可恢复接入。旧版 Sidebar Flow 更新器可能恢复其原始辅助脚本；此时重跑 Kanban 安装器恢复，两者不需要各自增加后台任务。检测到不认识的启动设置或文件修改时会停止并保留现场。
 
 发布者合并到 `main` 后，在 [Publish marketplace](https://github.com/shichang4fun/codex-kanban/actions/workflows/publish.yml) 点击 **Run workflow** 即可发布新版；完整步骤见 [发布说明](#发布者一键发布新版)。
 
@@ -115,15 +121,15 @@ Create & run 通过当前 Desktop 连接调用原生 `create_thread`，会启动
 
 可选桥接让现有 Codex Desktop 的 App Server 调用 `codex_app.set_thread_archived`，由客户端执行 Archive／Undo；独立连接只负责读取并验证同一任务 ID。健康桥接连接后，服务自动选择此通道，并在 Undo 令牌中记录原通道；已派发的客户端操作失败时不会自动改用独立写入进程。未连接时保留原来的本机独立归档功能，它仍可能遇到 active writer 拒绝。
 
-安装只生成私有目录中的代理和启动器，不覆盖原来的 Sidebar Flow 代理、不修改全局设置或应用签名。启动链为 Kanban → 已有 Sidebar Flow → 官方 CLI；网页提供归档、恢复、任务分组、Pin、显式新增任务及只读运行状态；已有任务移动允许三个流程分组、Pinned 及清除自身分组，新增任务可归入唯一可映射的原生自定义分组。Create & run 调用原生任务创建；项目容器移动保持关闭。代理保留原始初始化、请求 ID 和事件，等待客户端成功加载一个本机任务后才启用桥接。
+安装在私有目录中生成代理及备用启动器；一键安装还配置用户级原图标接入。不会覆盖 Sidebar Flow 的 Desktop 代理或修改应用签名。启动链为 Kanban → 已有 Sidebar Flow → 官方 CLI；网页提供归档、恢复、任务分组、Pin、显式新增任务及只读运行状态；已有任务移动允许三个流程分组、Pinned 及清除自身分组，新增任务可归入唯一可映射的原生自定义分组。Create & run 调用原生任务创建；项目容器移动保持关闭。代理保留原始初始化、请求 ID 和事件，等待客户端成功加载一个本机任务后才启用桥接。
 
 ```sh
 node setup-desktop-bridge.mjs
 ```
 
-正常退出 Codex 后，打开 `~/.codex/kanban-desktop/Launch Codex with Kanban.command`。启动器发现 Codex 正在运行时只提示需要退出，不终止任何进程。启动后打开一个本机任务；`GET /api/board` 的 `sync.desktopArchiveConnected` 表示归档连接状态；`sync.desktopGroupsConnected` 与 `sync.moveWritable` 为 true 才启用任务分组及 Pin 写入。旧桥接、未连接或断线时禁止这些写入，明确提示使用更新后的启动器；不自动回退。连接状态不替代真实客户端工具及侧栏显示验收。看板服务需在安装后启动，以加载连接设置；以后每次检查连接，无需为客户端重连重启服务。普通方式启动 Codex 不启用此代理。
+一键安装后正常退出 Codex，再点击原图标启动。上面的源码命令只配置桥接，可通过备用 `~/.codex/kanban-desktop/Launch Codex with Kanban.command` 启动；备用启动器发现 Codex 正在运行时只提示需要退出，不终止任何进程。启动后打开一个本机任务；`GET /api/board` 的 `sync.desktopArchiveConnected` 表示归档连接状态；`sync.desktopGroupsConnected` 与 `sync.moveWritable` 为 true 才启用任务分组及 Pin 写入。旧桥接、未连接或断线时禁止这些写入；不自动回退写入。连接状态不替代真实客户端工具及侧栏显示验收。看板服务需在安装后启动，以加载连接设置；以后每次检查连接，无需为客户端重连重启服务。
 
-已通过模拟 MCP、私有 socket、HTTP Archive／Undo 和安装器测试；隔离的真实 App Server 实验还复现了占用写入者拒绝，并通过同一写入连接完成归档和恢复，未启动模型任务、未更改现有用户任务。该实验的 Desktop MCP 分发部分仍为模拟，真实客户端工具授权及侧边栏即时刷新必须在使用启动器后另行验收。私有 socket 若因异常退出残留，应在确认代理已退出后清理该目录内的 desktop.sock；安装器不会替换仍在运行的连接。
+自动测试覆盖隔离的安装／卸载、登录刷新、旧 Sidebar Flow 重装、启动链、故障回退及真实 App Server；Desktop MCP 分发部分仍为模拟。真实客户端工具授权、侧边栏即时刷新，以及完整退出再打开／重新登录后的 GUI 启动时序需要现场验收，不会为了测试强制退出客户端。私有 socket 若因异常退出残留，应在确认代理已退出后清理该目录内的 desktop.sock；安装器不会替换仍在运行的连接。
 
 卡片右下角使用「⋯」打开就地菜单，提供 Pin／Unpin、Project、Section、View details 和 Archive；原有右上角 Pin／Archive 快捷按钮保留。Project 和 Section 悬停时在旁边展开，保留点击、触屏和方向键操作；悬停不抢键盘焦点，移向子菜单时保留短暂缓冲。子菜单自动向可用的一侧展开并限制在视口内，窄屏提供 Back。直接选择并保存，当前项带选中标记，不打开详情；不可写项目和分组置灰并说明原因。项目列表底部提供带文件夹移除图标的「Remove from 项目名」，无归属时隐藏移除项；详情选择器也可移除。HTTP 使用 null 表示清除，转换为原生协议的空 projectId，写前核对来源、写后回读确认；原生项目目录可用时，包括 null 在内的项目字段为权威，旧快照不会恢复已移除归属；只有明确不支持项目目录的旧读取器回退桌面快照。目录临时失败保留上一份界面数据。工作目录与自身分组不改变。图标按原生菜单的文件夹移动、文件夹移除、斜向图钉、列表及归档样式绘制。菜单支持方向键、Home／End、Esc 及 Tab，点击外部、滚动看板或切换布局时关闭。菜单打开时暂缓轮询刷新，避免打断选择。此菜单使用已有接口，不直接调用 Codex 原生菜单，也未增加 Rename、Unread、Fork 或 Share。
 

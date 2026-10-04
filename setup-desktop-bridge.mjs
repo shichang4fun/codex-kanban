@@ -4,12 +4,13 @@ import {homedir} from 'node:os';
 import {dirname,join,isAbsolute,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
+import {fallbackShell} from './startup-runtime.mjs';
 
 const source=dirname(fileURLToPath(import.meta.url));
 const defaultRoot=join(process.env.CODEX_HOME||join(homedir(),'.codex'),'kanban-desktop');
 const appPath='/Applications/ChatGPT.app';
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
-const files=['desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','move.mjs','pin.mjs','local-read.mjs'];
+const files=['desktop-startup.mjs','startup-runtime.mjs','desktop-proxy.mjs','desktop-archive.mjs','desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','bridge-transport.mjs','archive.mjs','move.mjs','pin.mjs','local-read.mjs'];
 export async function installDesktopBridge({root=defaultRoot,app=appPath,chainedCli,nodePath,
   codexHome=process.env.CODEX_HOME||join(homedir(),'.codex')}={}){
   if(!isAbsolute(root)||Buffer.byteLength(join(root,'desktop.sock'))>100)throw Error('A short, absolute installation directory is required.');
@@ -37,10 +38,12 @@ export async function installDesktopBridge({root=defaultRoot,app=appPath,chained
   const config={version:1,root,app,nodePath,chainedCli,codexHome,socketPath:join(root,'desktop.sock'),proxy:join(root,'codex-proxy')};
   await writeFile(join(root,'connection.json'),JSON.stringify(config,null,2)+'\n',{mode:0o600});
   await writeFile(config.proxy,'#!/bin/sh\n# codex-kanban-desktop-v1\n'+
-    `if [ ! -x ${quote(nodePath)} ] || [ ! -r ${quote(join(runtime,'desktop-proxy.mjs'))} ]; then exec ${quote(chainedCli)} "$@"; fi\n`+
-    `export KANBAN_REAL_CODEX=${quote(chainedCli)}\nexport KANBAN_BRIDGE_SOCKET=${quote(config.socketPath)}\n`+
-    `exec ${quote(nodePath)} ${quote(join(runtime,'desktop-proxy.mjs'))} "$@"\n`,{mode:0o700});
+    `export CODEX_HOME=${quote(codexHome)}\n`+
+    `# Selected chain: ${quote(chainedCli)}\n`+
+    `if [ -x ${quote(nodePath)} ] && [ -r ${quote(join(runtime,'desktop-startup.mjs'))} ] && [ -r ${quote(join(runtime,'startup-runtime.mjs'))} ]; then exec ${quote(nodePath)} ${quote(join(runtime,'desktop-startup.mjs'))} "$@"; fi\n`+
+    fallbackShell(app),{mode:0o700});
   await copyFile(join(source,'setup-desktop-bridge.mjs'),join(root,'setup-desktop-bridge.mjs'));
+  await copyFile(join(source,'startup-runtime.mjs'),join(root,'startup-runtime.mjs'));
   await writeFile(join(root,'Launch Codex with Kanban.command'),'#!/bin/sh\n'+
     `export CODEX_HOME=${quote(codexHome)}\n`+
     `exec ${quote(nodePath)} ${quote(join(root,'setup-desktop-bridge.mjs'))} --root ${quote(root)} --launch\n`,{mode:0o700});

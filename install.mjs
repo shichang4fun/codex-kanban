@@ -8,7 +8,7 @@ import {parseArgs} from 'node:util';
 
 // The official CLI owns plugin registration and cache paths. No config.toml editing.
 export async function installKanban({app='/Applications/ChatGPT.app',home=process.env.CODEX_HOME||join(homedir(),'.codex'),
-  marketplaceSource='shichang4fun/codex-kanban',ref='marketplace',launch=false,run=execFileSync}={}){
+  marketplaceSource='shichang4fun/codex-kanban',ref='marketplace',launch=false,originalIcon=true,homeDir=homedir(),run=execFileSync}={}){
   if(!isAbsolute(app)||!isAbsolute(home))throw Error('Absolute app and CODEX_HOME paths are required.');
   const cli=join(app,'Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex');
   const nodePath=join(app,'Contents/Resources/cua_node/bin/node');
@@ -28,11 +28,16 @@ export async function installKanban({app='/Applications/ChatGPT.app',home=proces
   const previous=existing&&(await setup.readDesktopBridgeConfig(root));
   const config=await setup.installDesktopBridge({root,codexHome:home,app:previous?.app??app,
     nodePath:previous?.nodePath??nodePath,chainedCli:previous?.chainedCli});
+  let startup;
+  if(originalIcon){
+    const integration=await import(pathToFileURL(join(plugin.installedPath,'original-icon.mjs')));
+    startup=await integration.installKanbanOriginalIcon({root,pluginPath:plugin.installedPath,pluginId:plugin.pluginId,homeDir},{run});
+  }
   const launcher=join(root,'Launch Codex with Kanban.command');
-  const result={version:plugin.version,pluginPath:plugin.installedPath,launcher,phase:'installed'};
+  const result={version:plugin.version,pluginPath:plugin.installedPath,launcher,phase:'installed',startup};
   if(launch){
     Object.assign(result,await setup.launchDesktopBridge(config.root,{run}));
-    if(result.phase==='restart-required')run('/usr/bin/open',['-R',launcher],{stdio:'ignore'});
+    if(result.phase==='restart-required'&&!originalIcon)run('/usr/bin/open',['-R',launcher],{stdio:'ignore'});
   }
   return result;
 }
@@ -42,9 +47,9 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
     console.log('Installing Codex Kanban and its Desktop bridge…');
     const result=await installKanban({launch:values.launch});
     console.log(`Codex Kanban ${result.version}: plugin and Desktop bridge installed.`);
-    if(result.phase==='restart-required')console.log('Quit Codex normally, then double-click the selected launcher in Finder.');
+    if(result.phase==='restart-required')console.log('Quit Codex normally, then reopen it using its original icon. Kanban and any installed Sidebar Flow will be enabled automatically.');
     else if(result.phase==='launching')console.log('Codex is starting. Open a local chat, then open Codex 看板 in the sidebar.');
-    else console.log(`Start Codex using: ${result.launcher}`);
+    else console.log('Open Codex using its original icon. No dedicated launcher is required.');
     console.log('No task ID or manual bridge configuration is required.');
   }catch(error){
     console.error(`Installation did not complete: ${error.message}`);
