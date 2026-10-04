@@ -46,7 +46,7 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
       }
     },
     call(tool,args,contextThreadId){
-      if(!['list_threads','read_thread','list_projects','create_thread','set_thread_archived','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
+      if(!['list_threads','read_thread','list_projects','create_thread','set_thread_archived','set_thread_title','move_thread_to_sidebar_section'].includes(tool))return Promise.reject(Error('Tool not allowed'));
       return send('mcpServer/tool/call',{threadId:contextThreadId,server:'codex_app',tool,arguments:args}).then(result=>{
         const blocks=result?.content?.filter(block=>block.type==='text');
         if(result?.isError||blocks?.length!==1)throw Error('Invalid Desktop tool reply');

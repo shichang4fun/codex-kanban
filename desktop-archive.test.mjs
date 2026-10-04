@@ -114,7 +114,7 @@ test('installer preserves the selected CLI chain and refuses to stop a running C
     assert((await readFile(config.proxy,'utf8')).includes(chainedCli));assert.equal((await lstat(config.proxy)).mode&0o777,0o700);
     const installed=await import(join(root,'runtime','desktop-archive.mjs'));
     assert.equal(typeof installed.startDesktopArchiveBridge,'function');
-    for(const file of ['desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs'])
+    for(const file of ['desktop-groups.mjs','desktop-runtime.mjs','desktop-creation.mjs','creation-store.mjs','creation-options.mjs','build.mjs','local-board.mjs','rename.mjs'])
       assert.equal((await readFile(join(root,'runtime',file),'utf8')),await readFile(new URL('./'+file,import.meta.url),'utf8'));
     const calls=[];const run=(bin,args)=>{calls.push({bin,args});return bin==='/bin/ps'?join(app,'Contents/MacOS/ChatGPT'):'';};
     assert.equal((await launchDesktopBridge(root,{run})).phase,'restart-required');assert.equal(calls.length,1);

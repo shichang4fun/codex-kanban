@@ -40,8 +40,8 @@ html{font-size:calc(16px * var(--font-scale,1))}
 .card-pin[data-pinned=true] .icon{fill:currentColor}
 .task-menu{position:fixed;z-index:8;width:240px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;padding:5px;border:1px solid var(--strong);border-radius:8px;background:var(--raised);box-shadow:0 8px 28px var(--shadow);color:var(--ink)}
 .task-menu[hidden]{display:none}
-#rename-task{width:min(380px,calc(100vw - 32px));height:auto;max-height:calc(100dvh - 32px);margin:auto;padding:20px;border:1px solid var(--strong);border-radius:10px;box-shadow:0 12px 40px var(--shadow)}
-#rename-task h2{font-size:1.0625rem;margin-bottom:16px}#rename-form label{display:block;font-size:0.75rem;color:var(--muted)}
+#rename-task{width:min(360px,calc(100vw - 32px));height:fit-content;min-height:0;max-height:calc(100dvh - 32px);inset:0;margin:auto;padding:16px;border:1px solid var(--strong);border-radius:10px;box-shadow:0 12px 40px var(--shadow)}
+#rename-task h2{font-size:1rem;margin-bottom:12px}#rename-form label{display:block;font-size:0.75rem;color:var(--muted)}
 #rename-title{width:100%;margin:8px 0 12px;padding:9px 10px;border:1px solid var(--strong);border-radius:5px;background:var(--bg);color:var(--ink);font:inherit}
 #rename-form .dialog-actions{justify-content:flex-end;margin:16px 0 0}#rename-error{margin:0;color:var(--state-error);font-size:0.75rem}
 .task-menu-item{display:flex;align-items:center;gap:9px;width:100%;min-height:34px;padding:7px 9px;border-radius:4px;text-align:left;font-size:0.75rem}
@@ -582,13 +582,24 @@ let creationBusy=false,creationSession=null,creationOptions=null,nextCreationTar
 let renamingTask=null,renameBusy=false;
 const archiveNotices=new Map();
 const dismissedArchiveTokens=new Set();
+function removeArchiveNotice(token,dismiss=false){
+  clearTimeout(archiveNotices.get(token)?.timer);archiveNotices.delete(token);
+  if(dismiss)dismissedArchiveTokens.add(token);
+}
+function addArchiveNotice(token,task){
+  if(dismissedArchiveTokens.has(token)||archiveNotices.has(token))return;
+  for(const [previous,notice]of archiveNotices)if(taskKey(notice.task)===taskKey(task))removeArchiveNotice(previous,true);
+  const notice={task,error:null};
+  archiveNotices.set(token,notice);
+  notice.timer=setTimeout(()=>{removeArchiveNotice(token,true);renderArchiveNotices();},8000);
+}
 function syncArchiveNotices(entries){
   if(!Array.isArray(entries))return;
   const known=new Set(entries.map(entry=>entry.undoToken));
-  for(const token of archiveNotices.keys())if(!known.has(token))archiveNotices.delete(token);
+  for(const token of archiveNotices.keys())if(!known.has(token))removeArchiveNotice(token);
   for(const {undoToken,task} of entries){
     if(typeof undoToken!=='string'||!task?.id||dismissedArchiveTokens.has(undoToken)||archiveNotices.has(undoToken))continue;
-    archiveNotices.set(undoToken,{task,error:null});
+    addArchiveNotice(undoToken,task);
   }
   renderArchiveNotices();
 }
@@ -628,7 +639,8 @@ async function saveTaskName(e){
   }catch(error){$('rename-error').textContent=error.message;$('rename-error').hidden=false;}
   finally{renameBusy=false;$('rename-title').disabled=false;$('rename-save').disabled=false;$('rename-cancel').disabled=false;$('rename-save').textContent='Save';if($('rename-task').open)$('rename-title').focus();}
 }
-function canArchive(task){return nativeConnected&&DATA.sync?.archiveLocal===true&&!!nativeToken&&!!taskUrl(task);}
+function canArchive(task){return nativeConnected&&DATA.sync?.archiveLocal===true&&!!nativeToken&&!!taskUrl(task)
+  &&DATA.tasks.some(t=>taskKey(t)===taskKey(task));}
 function taskPinned(task){return task.nativeTaskPinned??task.pinned;}
 function canPin(task){return nativeConnected&&DATA.sync?.pinLocal===true&&!!nativeToken&&!!taskUrl(task)
   &&DATA.sections.filter(s=>s.name==='Pinned').length===1;}
@@ -755,12 +767,13 @@ function renderArchiveNotices(){
     undo.setAttribute('aria-label','Undo archive: '+notice.task.title);undo.disabled=!!taskActionPending();undo.onclick=()=>undoArchive(token);
     const dismiss=el('button','notice-dismiss');dismiss.type='button';dismiss.append(icon('close'));
     dismiss.setAttribute('aria-label','Dismiss archive notice: '+notice.task.title);dismiss.title='Dismiss';dismiss.disabled=restoringToken===token;
-    dismiss.onclick=()=>{dismissedArchiveTokens.add(token);archiveNotices.delete(token);renderArchiveNotices();};
+    dismiss.onclick=()=>{removeArchiveNotice(token,true);renderArchiveNotices();};
     row.append(copy,undo,dismiss);root.append(row);
   }
 }
 async function undoArchive(token){
   const notice=archiveNotices.get(token);if(!notice||taskActionPending())return;
+  clearTimeout(notice.timer);
   restoringToken=token;++nativeEpoch;render();renderArchiveNotices();
   try{
     const response=await fetch('/api/unarchive',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},body:JSON.stringify({undoToken:token})});
@@ -769,7 +782,7 @@ async function undoArchive(token){
     restoringToken=null;
     if(payload.board)applyNativeBoard(payload.board);
     else{if(!DATA.tasks.some(t=>taskKey(t)===taskKey(notice.task)))DATA={...DATA,tasks:[...DATA.tasks,notice.task]};refreshSummary();render({animate:true});}
-    archiveNotices.delete(token);renderArchiveNotices();announce('Archive undone');
+    removeArchiveNotice(token);renderArchiveNotices();announce('Archive undone');
   }catch(error){restoringToken=null;notice.error=error.message;render();renderArchiveNotices();await refreshNativeBoard(true);}
 }
 async function setTaskPinned(task){
@@ -787,7 +800,7 @@ async function setTaskPinned(task){
 }
 async function archiveTask(task){
   if(!canArchive(task)||taskActionPending())return;
-  archivingKey=taskKey(task);++nativeEpoch;render();renderArchiveNotices();
+  archivingKey=taskKey(task);++nativeEpoch;render();renderArchiveNotices();announce('Archiving…');
   try{
     const response=await fetch('/api/archive',{method:'POST',headers:{'Content-Type':'application/json','X-Kanban-Token':nativeToken},
       body:JSON.stringify({threadId:task.id,hostId:task.hostId})});
@@ -795,10 +808,10 @@ async function archiveTask(task){
     if(!response.ok||payload.archived!==true||payload.threadId!==task.id)throw Error(payload.error||'Archive could not be confirmed.');
     archivingKey=null;
     // Keep the recovery action even if the subsequent board rendering fails.
-    if(typeof payload.undoToken==='string')archiveNotices.set(payload.undoToken,{task,error:null});
+    if(typeof payload.undoToken==='string')addArchiveNotice(payload.undoToken,task);
     renderArchiveNotices();
     if(selectedTask&&taskKey(selectedTask)===taskKey(task)){$('detail').close();selectedTask=null;}
-    if(payload.board)applyNativeBoard(payload.board);
+    if(payload.board)applyNativeBoard({...payload.board,tasks:payload.board.tasks.filter(t=>taskKey(t)!==taskKey(task))});
     else{DATA={...DATA,tasks:DATA.tasks.filter(t=>taskKey(t)!==taskKey(task))};refreshSummary();render({animate:true});}
     if(typeof payload.undoToken!=='string')announce('Task archived');
     renderArchiveNotices();

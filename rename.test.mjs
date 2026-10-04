@@ -7,6 +7,12 @@ import {createKanbanMcp} from './mcp-server.mjs';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js';
 import {createMcpFetch} from './mcp-ui-transport.mjs';
+import {createDesktopArchive,startDesktopArchiveBridge} from './desktop-archive.mjs';
+import {createDesktopRelay} from './desktop-proxy.mjs';
+import {desktopBridgeRequest} from './bridge-transport.mjs';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 const id='11111111-1111-4111-8111-111111111111';
 const params={threadId:id,hostId:'local',title:'新任务名称',expectedTitle:'Original'};
@@ -22,6 +28,63 @@ function fixture({confirm=true}={}){
   },close(){closed=true;}});
   return {open,thread,calls,get closed(){return closed;}};
 }
+function desktopFixture(options={}){
+  const f=fixture(options),writes=[];
+  return {...f,get closed(){return f.closed;},writes,options:{openReader:f.open,call:async(tool,args)=>{
+    assert.equal(tool,'set_thread_title');writes.push(args);
+    if(options.confirm!==false)f.thread.name=args.title;return {};
+  }}};
+}
+test('Desktop rename dispatches once through the client and verifies the title with a read-only reader',async()=>{
+  const f=desktopFixture(),before={...f.thread},controller=createDesktopArchive(f.options);
+  assert.equal(controller.status().renameActions,true);
+  assert.deepEqual(await controller.rename(params),{threadId:id,title:params.title,changed:true});
+  assert.deepEqual(f.writes,[{threadId:id,source:'codex',title:params.title}]);
+  assert.deepEqual(f.calls.map(c=>c.method),['thread/list','thread/read','thread/read']);
+  assert.deepEqual(f.thread,{...before,name:params.title});assert(f.closed);
+});
+test('Desktop rename rejects stale, archived and protected tasks; failure never dispatches a second write',async()=>{
+  for(const fields of [{name:'Changed elsewhere'},{ephemeral:true},{parentThreadId:'parent'}]){
+    const f=desktopFixture();Object.assign(f.thread,fields);
+    await assert.rejects(createDesktopArchive(f.options).rename(params));assert.equal(f.writes.length,0);
+  }
+  const archived=desktopFixture();
+  await assert.rejects(createDesktopArchive({...archived.options,openReader:async()=>({request:async()=>({data:[]}),close(){}})}).rename(params),/archived/);
+  assert.equal(archived.writes.length,0);
+  const failed=desktopFixture({confirm:false});await assert.rejects(createDesktopArchive(failed.options).rename(params),/confirmed/);
+  assert.equal(failed.writes.length,1);
+  const cancelled=desktopFixture(),abort=new AbortController();abort.abort();
+  await assert.rejects(createDesktopArchive(cancelled.options).rename(params,{signal:abort.signal}),/cancelled/);
+  assert.equal(cancelled.writes.length,0);assert.equal(cancelled.calls.length,0);
+});
+test('service selects Desktop rename without using the independent writer, including dispatch failure',async t=>{
+  let fail=false;const calls=[];
+  const service=createKanbanService({getBoard:async()=>board,desktopBridgeSocket:'fixture',settingsStore:{read:async()=>({})},
+    renameTask:async()=>{assert.fail('Independent writer must not run');},bridgeRequest:async(_socket,method,p)=>{
+      if(method==='status')return {connected:true,renameActions:true};
+      assert.equal(method,'rename');calls.push(p);if(fail)throw Error('Disconnected after dispatch');
+      return {threadId:id,title:params.title,changed:true};
+    }});t.after(()=>service.close());
+  assert.equal((await service.read()).board.sync.renameTransport,'desktop');
+  assert.equal((await service.action('rename',params)).title,params.title);
+  fail=true;await assert.rejects(service.action('rename',params),/could not be confirmed/);
+  assert.deepEqual(calls,[params,params]);
+});
+test('private Desktop socket and relay permit only the explicit task-title operation',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'kb-rename-')),socketPath=join(root,'desktop.sock'),f=desktopFixture();
+  const stop=await startDesktopArchiveBridge({socketPath,...f.options});
+  t.after(async()=>{await stop();await rm(root,{recursive:true,force:true});});
+  assert.equal((await desktopBridgeRequest(socketPath,'rename',params)).title,params.title);
+  assert.equal(f.writes.length,1);
+  const sent=[],forwarded=[],relay=createDesktopRelay({toServer:m=>sent.push(m),toDesktop:m=>forwarded.push(m)});t.after(()=>relay.close());
+  relay.fromDesktop({id:1,method:'initialize'});relay.fromServer({id:1,result:{}});
+  const renamed=relay.call('set_thread_title',{threadId:id,title:params.title,source:'codex'},'context'),request=sent.at(-1);
+  assert.equal(request.params.arguments.threadId,id);assert.equal(request.params.threadId,'context');
+  relay.fromServer({id:request.id,result:{content:[{type:'text',text:'{}'}]}});await renamed;
+  const notification={method:'thread/name/updated',params:{threadId:id,name:params.title}};
+  relay.fromServer(notification);assert.deepEqual(forwarded.at(-1),notification);
+  await assert.rejects(relay.call('send_message_to_thread',{},'context'),/not allowed/);
+});
 
 test('rename uses only the native name setter, verifies persistence and leaves other metadata intact',async()=>{
   const f=fixture(),before={...f.thread};
