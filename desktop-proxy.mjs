@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {isAbsolute} from 'node:path';
 import {startDesktopArchiveBridge} from './desktop-archive.mjs';
 import {startAutoFlow,createTransactionGate} from './flow-runtime.mjs';
+import {bridgeError} from './bridge-transport.mjs';
 
 // Preserve Desktop's original stdio handshake and RPC IDs. Added calls can only
 // call a small tool whitelist. Explicit create_thread is the sole new-task
@@ -27,17 +28,28 @@ export function createDesktopRelay({toServer,toDesktop,timeoutMs=35000}){
     get contextThreadId(){return contextThreadId;},
     fromDesktop(message){
       if(message.method==='initialize')initializeId=message.id;
-      if(['thread/start','thread/resume'].includes(message.method)&&message.id!=null&&loading.size<64)loading.add(message.id);
+      if(['thread/start','thread/resume'].includes(message.method)&&message.params?.ephemeral!==true&&message.id!=null&&loading.size<64)loading.add(message.id);
       toServer(message);
     },
     fromServer(message){
       const wasReady=ready;
       if(initializeId!==undefined&&message.id===initializeId&&!message.method)ready=!message.error;
       let loadedContext=false;
-      if(!message.method&&loading.delete(message.id)&&!message.error&&typeof message.result?.thread?.id==='string'){contextThreadId=message.result.thread.id;loadedContext=true;}
+      // Title generation also starts threads, then discards them. Only a
+      // persistent top-level local chat can supply the Desktop tool context.
+      const thread=message.result?.thread;
+      if(!message.method&&loading.delete(message.id)&&!message.error&&typeof thread?.id==='string'
+        &&thread.ephemeral===false&&thread.parentThreadId==null&&(thread.hostId===undefined||thread.hostId==='local')){
+        contextThreadId=thread.id;loadedContext=true;
+      }
       if(typeof message.id==='string'&&message.id.startsWith(prefix)&&!message.method){
         const operation=pending.get(message.id);if(!operation)return;
-        pending.delete(message.id);clearTimeout(operation.timer);message.error?operation.reject(Error('Desktop RPC failed')):operation.resolve(message.result);return;
+        pending.delete(message.id);clearTimeout(operation.timer);
+        if(message.error)operation.reject(message.error.message?.startsWith('thread not found:')
+          ?bridgeError('Desktop task context expired. Open a local chat and try again; the action was not repeated.')
+          :Error('Desktop RPC failed'));
+        else operation.resolve(message.result);
+        return;
       }
       toDesktop(message);
       if(ready&&contextThreadId&&(loadedContext||!wasReady))for(const listener of contexts){try{Promise.resolve(listener(contextThreadId)).catch(()=>{});}catch{}}

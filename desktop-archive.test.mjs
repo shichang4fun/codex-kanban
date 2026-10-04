@@ -101,9 +101,42 @@ test('relay restricts added tools in the existing context and preserves Desktop 
 test('relay tracks only a successful Desktop-loaded context and does not change the archive target',async()=>{
   const relay=createDesktopRelay({toServer(){},toDesktop(){}});
   relay.fromDesktop({id:1,method:'thread/resume',params:{threadId:contextId}});
-  relay.fromServer({id:1,result:{thread:{id:contextId}}});assert.equal(relay.contextThreadId,contextId);
+  relay.fromServer({id:1,result:{thread:{id:contextId,ephemeral:false}}});assert.equal(relay.contextThreadId,contextId);
   relay.fromDesktop({id:2,method:'thread/resume',params:{threadId:id}});
   relay.fromServer({id:2,error:{code:1}});assert.equal(relay.contextThreadId,contextId);relay.close();
+});
+test('title generation and unsuitable loaded threads preserve the persistent Desktop context',async()=>{
+  const server=[],desktop=[],contexts=[],relay=createDesktopRelay({toServer:m=>server.push(m),toDesktop:m=>desktop.push(m)});
+  relay.subscribeContext(value=>contexts.push(value));
+  relay.fromDesktop({id:0,method:'initialize'});relay.fromServer({id:0,result:{}});
+  relay.fromDesktop({id:1,method:'thread/resume',params:{threadId:contextId}});
+  relay.fromServer({id:1,result:{thread:{id:contextId,ephemeral:false}}});
+  let sequence=1;
+  for(const thread of [{id,ephemeral:true},{id,ephemeral:false,parentThreadId:contextId},
+    {id,ephemeral:false,hostId:'remote'},{id}]){
+    const requestId=++sequence;
+    relay.fromDesktop({id:requestId,method:'thread/start',params:{}});
+    relay.fromServer({id:requestId,result:{thread}});
+    assert.equal(relay.contextThreadId,contextId);
+  }
+  relay.fromDesktop({id:++sequence,method:'thread/start',params:{ephemeral:true}});
+  relay.fromServer({id:sequence,result:{thread:{id,ephemeral:false}}});
+  assert.equal(relay.contextThreadId,contextId);assert.deepEqual(contexts,[contextId]);
+  const moving=relay.call('move_thread_to_sidebar_section',{threadId:id,sectionId:'review'},relay.contextThreadId),request=server.at(-1);
+  assert.equal(request.params.threadId,contextId);assert.equal(request.params.arguments.threadId,id);
+  relay.fromServer({id:request.id,result:{content:[{type:'text',text:'{}'}]}});await moving;
+  assert.equal(desktop.length,sequence+1);
+  relay.fromDesktop({id:++sequence,method:'thread/resume',params:{threadId:id}});
+  relay.fromServer({id:sequence,result:{thread:{id,ephemeral:false}}});
+  assert.equal(relay.contextThreadId,id);assert.deepEqual(contexts,[contextId,id]);relay.close();
+});
+test('expired Desktop contexts report a recoverable error without replaying the tool',async()=>{
+  const server=[],relay=createDesktopRelay({toServer:m=>server.push(m),toDesktop(){}});
+  relay.fromDesktop({id:0,method:'initialize'});relay.fromServer({id:0,result:{}});
+  const moving=relay.call('move_thread_to_sidebar_section',{threadId:id,sectionId:'review'},contextId),request=server.at(-1);
+  relay.fromServer({id:request.id,error:{code:-32600,message:'thread not found: '+contextId}});
+  await assert.rejects(moving,error=>error.status===503&&/Open a local chat/.test(error.message));
+  assert.equal(server.length,2);relay.close();
 });
 test('installer preserves the selected CLI chain and refuses to stop a running Codex',async()=>{
   const root=await mkdtemp(join(tmpdir(),'kb-')),runtimeRoot=await mkdtemp(join(tmpdir(),'kb-r-')),app=join(runtimeRoot,'ChatGPT.app');
@@ -128,7 +161,7 @@ test('proxy starts without a configured task ID and waits for Desktop to load a 
 import readline from 'node:readline';
 for await (const line of readline.createInterface({input:process.stdin})){
   const request=JSON.parse(line);
-  console.log(JSON.stringify({id:request.id,result:request.method==='thread/resume'?{thread:{id:request.params.threadId}}:{}}));
+  console.log(JSON.stringify({id:request.id,result:request.method==='thread/resume'?{thread:{id:request.params.threadId,ephemeral:false}}:{}}));
 }
 `,{mode:0o700});
   const env={...process.env,KANBAN_REAL_CODEX:driver,KANBAN_BRIDGE_SOCKET:socketPath};delete env.KANBAN_CONTEXT_THREAD;
