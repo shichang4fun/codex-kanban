@@ -272,7 +272,7 @@ test('a context loaded before initialize acknowledgment is delivered once transp
   try{
     relay.subscribeContext(id=>contexts.push(id));
     relay.fromDesktop({id:1,method:'initialize'});relay.fromDesktop({id:2,method:'thread/resume',params:{threadId:'task'}});
-    relay.fromServer({id:2,result:{thread:{id:'task'}}});assert.deepEqual(contexts,[]);
+    relay.fromServer({id:2,result:{thread:{id:'task',ephemeral:false}}});assert.deepEqual(contexts,[]);
     relay.fromServer({id:1,result:{}});assert.deepEqual(contexts,['task']);
   }finally{relay.close();}
 });
