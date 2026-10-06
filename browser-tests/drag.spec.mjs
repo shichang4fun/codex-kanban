@@ -96,6 +96,20 @@ test('a pinned project task moves independently of its project',async({page})=>{
 });
 
 for(const view of ['Board','List']){
+  test(`${view}: pending project migration displays in Pinned and moves independently`,async({page})=>{
+    await page.request.post('/fixture/reset',{data:{pendingProject:true}});await open(page);
+    const app=page.frameLocator('iframe');await app.getByRole('button',{name:view+' view',exact:true}).click();
+    await expect(group(app,'group-3').locator(`[data-task-key="${key}"]`)).toBeVisible();
+    await app.getByRole('switch',{name:'Project view: Pinned',exact:true}).click();
+    await expect(group(app,'group-3').locator('.project-name')).toHaveText('Fixture A');
+    await card(app).locator('.project').click();
+    await expect(app.getByRole('menuitem',{name:/Remove from/})).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await card(app).locator('.card-open').dragTo(group(app,'group-2').locator('.col-name'));
+    await expect(group(app,'group-2').locator(`[data-task-key="${key}"]`)).toBeVisible();
+    const state=await status(page);expect(state.moves).toHaveLength(1);expect(state.moves[0].expectedSectionId).toBeNull();
+    expect(state.localProjectId).toBeNull();expect(state.projectId).toBe('desktop-a');
+  });
   test(`${view}: worktree project displays with no explicit assignment or removal action`,async({page})=>{
     await page.request.post('/fixture/reset',{data:{worktreeProject:true}});await open(page);
     const app=page.frameLocator('iframe');

@@ -4,6 +4,64 @@ import {createLocalBoard,runtimeSnapshotFresh} from './local-board.mjs';
 
 const id='11111111-1111-4111-8111-111111111111';
 
+function pinnedProjectFixture(){
+  const row={id,name:'Legacy task',ephemeral:false,parentThreadId:null,section:null,projectId:null};
+  const projectState={known:true,projects:[{projectId:'tools',nativeProjectId:'native-tools',label:'Tools',rootPaths:['/a','/b']}],
+    assignments:{[id]:'tools'},pinnedProjectIds:['tools'],pendingThreadIds:[id],projectlessThreadIds:[]};
+  const snapshot={threads:[],projects:[{projectId:'tools',hostId:'local',label:'Tools',path:'/a'},
+    {projectId:'second',hostId:'local',label:'Second project',path:'/b'}],sections:[]};
+  const reader={async request(method){
+    if(method==='project/list')return {data:[{id:'native-tools',name:'Tools',roots:[{path:'/a'},{path:'/b'}]},
+      {id:'native-second',name:'Second project',roots:[{path:'/b'}]}]};
+    if(method==='threadSection/list')return {data:[{id:'local-pinned',name:'Pinned'},{id:'local-review',name:'For Review'}]};
+    if(method==='thread/read')return {thread:row};
+    assert.equal(method,'thread/list');return {data:[row]};
+  }};
+  const read=()=>createLocalBoard(reader,snapshot,{projectState}).getBoard();
+  return {row,projectState,snapshot,reader,read};
+}
+test('multi-root pinned projects use the persisted ID mapping and retain native assignment',async()=>{
+  const f=pinnedProjectFixture();f.row.projectId='native-tools';
+  const board=await f.read(),task=board.tasks[0];
+  assert.equal(task.projectId,'tools');assert.equal(task.projectName,'Tools');assert.equal(task.nativeSectionId,'local-pinned');
+  assert.equal(task.pinned,true);assert.equal(task.nativeTaskPinned,false);assert.equal(task.localProjectId,'native-tools');
+  assert.equal(board.projects.find(p=>p.projectId==='native-tools').desktopProjectId,'tools');
+});
+test('pending local assignments inherit pinned projects without changing native fields or overriding individual groups',async()=>{
+  const f=pinnedProjectFixture(),before=structuredClone(f.row);
+  let task=(await f.read()).tasks[0];
+  assert.equal(task.projectId,'tools');assert.equal(task.nativeSectionId,'local-pinned');
+  assert.equal(task.projectSource,'desktopPendingMigration');assert.equal(task.localProjectId,null);
+  assert.equal(task.nativeTaskPinned,false);assert.deepEqual(f.row,before);
+  f.row.section={id:'local-review',name:'For Review'};task=(await f.read()).tasks[0];
+  assert.equal(task.nativeSectionId,'local-review');assert.equal(task.pinned,false);
+  f.row.section=null;f.projectState.pinnedProjectIds=[];
+  f.snapshot.sections=[{sectionId:'pinned',name:'Pinned',itemKeys:['codex:project:tools']}];
+  assert.equal((await f.read()).tasks[0].nativeSectionId,'threads','current unpin overrides stale snapshot');
+});
+test('removed, migrated, foreign and unregistered project assignments never revive from legacy state',async()=>{
+  for(const alter of [f=>f.projectState.pendingThreadIds=[],f=>f.projectState.projectlessThreadIds=[id],
+    f=>f.projectState.known=false,f=>f.projectState.assignments[id]='deleted',f=>f.projectState.projects=[]]){
+    const f=pinnedProjectFixture();alter(f);assert.equal((await f.read()).tasks[0].projectId,null);
+  }
+  const f=pinnedProjectFixture();f.row.projectId='native-second';
+  assert.equal((await f.read()).tasks[0].localProjectId,'native-second');
+  assert.equal((await f.read()).tasks[0].projectSource,'native');
+});
+test('older pinned project tasks outside the recent page are read and verified, with archived and subagent tasks excluded',async()=>{
+  const f=pinnedProjectFixture(),reader={async request(method,params){
+    if(method==='thread/list'){
+      assert.equal(params.archived,false);assert.equal(params.useStateDbOnly,true);
+      return {data:params.limit===100&&!params.sectionId&&!f.row.archived?[f.row]:[]};
+    }
+    return f.reader.request(method,params);
+  }};
+  const read=()=>createLocalBoard(reader,f.snapshot,{projectState:f.projectState}).getBoard();
+  assert.equal((await read()).tasks[0].nativeSectionId,'local-pinned');
+  f.row.archived=true;assert.equal((await read()).tasks.length,0);
+  f.row.archived=false;f.row.parentThreadId='parent';assert.equal((await read()).tasks.length,0);
+});
+
 test('native project removal stays authoritative across stale snapshots and fresh readers',async()=>{
   const f=fixture();f.row.projectId='native-a';f.row.section=null;
   f.desktop.threads[0].projectId='desktop-a';f.desktop.projects=[{projectId:'desktop-a',hostId:'local',label:'Old project',path:'/a'}];

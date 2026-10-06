@@ -96,10 +96,10 @@ test('native-null worktree tasks inherit project display without changing assign
   assert.equal(task.projectId,'explicit-project');assert.equal(task.projectSource,'native');assert.equal(task.localProjectId,'explicit-project');
 });
 
-test('worktree inheritance is displayed in Board and List without offering a no-op native removal',()=>{
+for(const source of ['worktree','desktopPendingMigration'])test(`${source} inheritance is displayed in Board and List without offering a no-op native removal`,()=>{
   const board=uiFixture();board.sync.projectLocal=true;
   board.projects=[{projectId:'native-project',desktopProjectId:'desktop-project',hostId:'local',label:'Registered project'}];
-  board.tasks=[{...board.tasks[0],projectId:'desktop-project',localProjectId:null,projectName:'Registered project',projectSource:'worktree'}];
+  board.tasks=[{...board.tasks[0],projectId:'desktop-project',localProjectId:null,projectName:'Registered project',projectSource:source}];
   const h=harness(board);new Script("nativeConnected=true;nativeToken='fixture'").runInContext(h.context);
   for(const view of ['board','list']){
     h.api.setView(view);

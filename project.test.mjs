@@ -38,6 +38,14 @@ test('No project translates to the native clear operation, checks stale sources 
   assert(!native.calls.some(c=>c.method==='thread/metadata/update'));
   const same=fixture();same.thread.projectId=null;assert.equal((await setLocalProject({...clear,expectedProjectId:null},board,same)).changed,false);
 });
+test('verified project removal records a migration exclusion and reassignment clears it; failed writes never record one',async()=>{
+  const entries={},removalStore={update:async change=>change(entries)},f=fixture();
+  await setLocalProject({...params,projectId:null},board,{...f,removalStore});
+  assert.deepEqual(entries,{[id]:'project-a'});
+  await setLocalProject({...params,expectedProjectId:null},board,{...f,removalStore});assert.deepEqual(entries,{});
+  const failed=fixture({confirm:false});
+  await assert.rejects(setLocalProject({...params,projectId:null},board,{...failed,removalStore}));assert.deepEqual(entries,{});
+});
 
 test('setting an unassigned task and changing it both use exact native project IDs',async()=>{
   const f=fixture();f.thread.projectId=null;
