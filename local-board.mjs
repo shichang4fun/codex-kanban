@@ -9,7 +9,7 @@ export function runtimeSnapshotFresh(capturedAt,now){
 
 // Local section IDs and Desktop logical IDs are different namespaces. Local
 // thread.section is authoritative for local task placement; never combine the IDs.
-export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().toISOString(),unreadState={known:false}}={}){
+export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().toISOString(),unreadState={known:false},projectState={known:false}}={}){
   let queue=Promise.resolve();
   const unreadIds=new Set(unreadState.ids??[]);
   const desktopTasks=new Map([...desktopSnapshot.threads??[],...desktopSnapshot.pinnedThreads??[]]
@@ -39,9 +39,11 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
         ||new Set(nativeProjects.map(p=>p.id)).size!==nativeProjects.length)throw Error('Invalid local project catalog.');
     }
     const projectCatalog=(nativeProjects??[]).map(p=>{
+      const persisted=projectState.known?projectState.projects.filter(d=>d.nativeProjectId===p.id):[];
       const matches=(desktopSnapshot.projects??[]).filter(d=>d.hostId==='local'&&typeof d.path==='string'&&p.roots.some(r=>r.path===d.path));
       const unique=matches.length===1&&nativeProjects.filter(n=>n.roots.some(r=>r.path===matches[0].path)).length===1;
-      return {projectId:p.id,hostId:'local',label:p.name,...(unique?{desktopProjectId:matches[0].projectId}:{})};
+      const desktopProjectId=persisted.length===1?persisted[0].projectId:unique?matches[0].projectId:null;
+      return {projectId:p.id,hostId:'local',label:p.name,...(desktopProjectId?{desktopProjectId}:{})};
     });
     const projectNames=[...(desktopSnapshot.projects??[]),...projectCatalog,
       ...projectCatalog.filter(p=>p.desktopProjectId).map(p=>({...p,projectId:p.desktopProjectId}))];
@@ -52,6 +54,17 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
       archived:false,useStateDbOnly:true,sectionId:section.id,limit:100,sortKey:'updated_at'
     })));
     const byId=new Map([...recent.data,...grouped.flat()].filter(t=>t.ephemeral===false&&t.parentThreadId==null).map(t=>[t.id,t]));
+    // Project pinning does not put its children into threadSection/list pages.
+    // Read older children through the unarchived listing; thread/read does not
+    // expose an archive flag and cannot prove a task is still on the sidebar.
+    const pinnedIds=projectState.known?Object.keys(projectState.assignments).filter(id=>!byId.has(id)
+      &&!projectState.projectlessThreadIds.includes(id)&&projectState.pinnedProjectIds.includes(projectState.assignments[id])
+      &&projectCatalog.some(p=>p.desktopProjectId===projectState.assignments[id])):[];
+    if(pinnedIds.length>5000)throw Error('Pinned projects exceed the current read limit.');
+    if(pinnedIds.length){
+      const wanted=new Set(pinnedIds),older=await pages('thread/list',{archived:false,useStateDbOnly:true,limit:100,sortKey:'updated_at'});
+      for(const t of older)if(wanted.has(t.id)&&t.ephemeral===false&&t.parentThreadId==null&&!t.archived&&!t.isArchived)byId.set(t.id,t);
+    }
     const worktreeProjects=await readWorktreeProjects([...new Set([...byId.values()]
       .filter(t=>t.projectId===null&&typeof t.cwd==='string'&&t.cwd.startsWith('/')).map(t=>t.cwd))],nativeProjects??[]);
     const sections=nativeSections.map(s=>({sectionId:s.id,name:s.name,itemKeys:[]}));
@@ -63,11 +76,14 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
     for(const t of byId.values()){
       if(typeof t.id!=='string'||t.section===undefined)throw Error('Local task is missing its group field.');
       const desktop=desktopTasks.get(`local:${t.id}`);
+      const pendingProject=projectState.known&&t.projectId===null&&projectState.pendingThreadIds.includes(t.id)
+        &&!projectState.projectlessThreadIds.includes(t.id)
+        ?projectCatalog.find(p=>p.desktopProjectId===projectState.assignments[t.id]):null;
       const inheritedProjectId=t.projectId===null?worktreeProjects.get(t.cwd):null;
-      const resolvedProjectId=t.projectId??inheritedProjectId;
+      const resolvedProjectId=t.projectId??pendingProject?.projectId??inheritedProjectId;
       const nativeProject=projectCatalog.find(p=>p.projectId===resolvedProjectId);
-      // Native assignment wins. Linked worktrees may inherit a verified project
-      // without a native assignment; stale Desktop associations never fill null.
+      // Native assignment wins; only verified pending migration or a linked
+      // worktree may fill null. A stale Desktop snapshot never does.
       const projectId=resolvedProjectId?(nativeProject?.desktopProjectId??resolvedProjectId)
         :t.projectId!==undefined?null:desktop?.projectId??null;
       let destination;
@@ -77,7 +93,8 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
       }else if(projectId){
         // Project containers remain a Desktop concept. Use exact project keys,
         // never infer an association by title or folder name.
-        const parents=(desktopSnapshot.sections??[]).filter(s=>s.itemKeys.includes(`codex:project:${projectId}`));
+        const parents=projectState.known&&projectState.pinnedProjectIds.includes(projectId)?[{name:'Pinned'}]
+          :(desktopSnapshot.sections??[]).filter(s=>(!projectState.known||s.name!=='Pinned')&&s.itemKeys.includes(`codex:project:${projectId}`));
         const matches=parents.length===1?sections.filter(s=>s.name===parents[0].name):[];
         destination=matches.length===1?matches[0]:projectsSection;
       }else destination=tasksSection;
@@ -87,7 +104,7 @@ export function createLocalBoard(reader,desktopSnapshot,{clock=()=>new Date().to
         title:t.name??desktop?.title??'Untitled task',summary:desktop?.summary??t.preview??'',
         summarySource:desktop?.summary!=null?'desktopSnapshot':t.preview!=null?'threadPreview':null,
         cwd:t.cwd,updatedAt:t.updatedAt,projectId,localProjectId:t.projectId??null,
-        projectSource:inheritedProjectId?'worktree':t.projectId?'native':projectId?'desktopSnapshot':null,
+        projectSource:t.projectId?'native':pendingProject?'desktopPendingMigration':inheritedProjectId?'worktree':projectId?'desktopSnapshot':null,
         isUnread:unreadState.known?unreadIds.has(t.id):desktop?.isUnread===true,
         unreadSource:unreadState.known?'desktopPersistedReadState':desktop?'desktopSnapshot':'unavailable',
         unreadCapturedAt:unreadState.known?unreadState.capturedAt:desktop?desktopSnapshot.capturedAt:null,
