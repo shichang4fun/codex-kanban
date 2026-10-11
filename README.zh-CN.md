@@ -1,4 +1,4 @@
-# Codex Kanban 0.4.57
+# Codex Kanban 0.4.58
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 

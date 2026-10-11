@@ -5,7 +5,7 @@ const failure=(message,status=409)=>Object.assign(Error(message),{status});
 
 // Explicit assignment changes only the native project field. It never changes
 // cwd, starts execution, or edits a project container or its sidebar position.
-export async function setLocalProject(params,board,{open=openLocalProjectEditor,signal}={}){
+export async function setLocalProject(params,board,{open=openLocalProjectEditor,signal,removalStore}={}){
   const {threadId,hostId,projectId,expectedProjectId}=params??{};
   if(hostId!=='local'||typeof threadId!=='string'||!uuid.test(threadId)
     ||(projectId!==null&&(typeof projectId!=='string'||!projectId||projectId.length>128))
@@ -43,6 +43,11 @@ export async function setLocalProject(params,board,{open=openLocalProjectEditor,
     await client.request('thread/metadata/update',{threadId,projectId:projectId??''});
     const {thread}=await client.request('thread/read',{threadId,includeTurns:false});
     if(thread?.id!==threadId||thread.projectId!==projectId)throw failure('Project change could not be confirmed. Refresh before trying again.');
+    // A pending Desktop migration may still retain the old assignment. Keep
+    // explicit Kanban removal authoritative across fresh readers and restarts.
+    if(removalStore)await removalStore.update(entries=>{
+      if(projectId===null)entries[threadId]=expectedProjectId;else delete entries[threadId];
+    });
     return {threadId,projectId,changed:true};
   }finally{client.close();}
 }
