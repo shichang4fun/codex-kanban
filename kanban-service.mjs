@@ -3,6 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {openLocalReader} from './local-read.mjs';
 import {createLocalBoard} from './local-board.mjs';
 import {readLocalUnread} from './desktop-unread.mjs';
+import {readLocalProjects,defaultProjectRemovalStore} from './desktop-projects.mjs';
 import {archiveLocalTask,restoreArchivedTask} from './archive.mjs';
 import {desktopBridgeRequest} from './bridge-transport.mjs';
 import {readBoardRuntime} from './desktop-runtime.mjs';
@@ -14,7 +15,7 @@ import {creationSettings} from './creation-options.mjs';
 
 // Installed plugins keep user data outside the immutable plugin package.
 export function createBoardSource({snapshotPath=new URL('./snapshot.json',import.meta.url),openReader=openLocalReader,
-  readUnread=readLocalUnread,allowMissingSnapshot=false,gitStatus=createGitStatusReader()}={}){
+  readUnread=readLocalUnread,readProjects=readLocalProjects,allowMissingSnapshot=false,gitStatus=createGitStatusReader()}={}){
   let reader,reading,closed=false;
   return {
     getBoard({forceGit=false}={}){
@@ -22,13 +23,13 @@ export function createBoardSource({snapshotPath=new URL('./snapshot.json',import
       const metadata=reading??=(async()=>{
         reader??=await openReader();
         if(closed){reader.close();throw Error('The board connection is closed.');}
-        const [snapshot,unreadState]=await Promise.all([
+        const [snapshot,unreadState,projectState]=await Promise.all([
           readFile(snapshotPath,'utf8').then(JSON.parse).catch(error=>{
             if(allowMissingSnapshot&&error.code==='ENOENT')return {capturedAt:null,threads:[],pinnedThreads:[],sections:[],projects:[]};
             throw error;
-          }),readUnread()
+          }),readUnread(),readProjects()
         ]);
-        return createLocalBoard(reader,snapshot,{unreadState}).getBoard();
+        return createLocalBoard(reader,snapshot,{unreadState,projectState}).getBoard();
       })().catch(error=>{reader?.close();reader=null;throw error;}).finally(()=>reading=null);
       return metadata.then(board=>gitStatus.enrich(board,{waitForFresh:false,force:forceGit}));
     },
@@ -40,7 +41,7 @@ const failure=(message,status)=>Object.assign(Error(message),{status});
 
 // HTTP and MCP share one write lock and one token-bound Undo registry.
 export function createKanbanService({getBoard,archiveTask=archiveLocalTask,restoreTask=restoreArchivedTask,
-  pinTask=null,moveTask=null,setProject=setLocalProject,renameTask=renameLocalTask,settingsStore=defaultCreationSettingsStore(),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
+  pinTask=null,moveTask=null,setProject=setLocalProject,renameTask=renameLocalTask,settingsStore=defaultCreationSettingsStore(),projectRemovalStore=defaultProjectRemovalStore(),desktopBridgeSocket=null,bridgeRequest=desktopBridgeRequest}={}){
   const csrf=randomUUID(),undoArchives=new Map(),pendingArchives=new Set(),pendingRestores=new Map(),lifetime=new AbortController();let mutating=null,closed=false;
   const currentBoard=async options=>{
     const board=await getBoard(options);
@@ -152,7 +153,7 @@ export function createKanbanService({getBoard,archiveTask=archiveLocalTask,resto
           }
           if(name==='project'){
             if(current.sync?.projectCatalogConnected!==true)throw failure('Local projects are unavailable. Refresh and try again.',503);
-            return setProject(params,current,{signal});
+            return setProject(params,current,{signal,removalStore:projectRemovalStore});
           }
           archivedTask=current.tasks.find(t=>t.id===params?.threadId&&t.hostId==='local');
           if(name==='archive'&&(!archivedTask||archivedTask.sidebarOnly||params?.hostId!=='local'))

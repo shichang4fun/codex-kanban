@@ -19,7 +19,7 @@ const settingsStore={read:async()=>structuredClone(defaults),update:async change
 let archived=false,reads=0,forcedGitReads=0,flowEnabled=true,renameFailures=Number(process.env.KANBAN_TEST_RENAME_FAILURES??0);
 const moves=[];
 let groupActions=true,moveFailure=false,desktopConnected=true;
-let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false,worktreeProject=false;
+let archiveDelayMs=0,staleArchiveBoard=false,archiveFailure=false,staleRestoreBoard=false,restoreDelayMs=0,restoreFailures=0,restored=false,worktreeProject=false,pendingProject=false;
 const projectWrites=[];
 const archives=[];
 const renames=[];
@@ -127,9 +127,9 @@ const service=createKanbanService({getBoard,settingsStore,desktopBridgeSocket:'s
     const project=projects.find(p=>p.projectId===params.projectId);
     if(params.projectId!==null&&!project)throw Error('Unknown fixture project');
     projectWrites.push(params);
-    const displayed=project??(worktreeProject?projects[0]:null);
+    const displayed=project??(worktreeProject||pendingProject?projects[0]:null);
     task.localProjectId=params.projectId;task.projectId=displayed?.desktopProjectId??null;task.projectName=displayed?.label??null;
-    task.projectSource=project?'native':worktreeProject?'worktree':null;
+    task.projectSource=project?'native':pendingProject?'desktopPendingMigration':worktreeProject?'worktree':null;
     return {threadId:id,projectId:params.projectId,changed:true};}
 });
 const app=createKanbanMcp({service});const client=new Client({name:'browser-fixture-host',version:'1'},{});
@@ -180,10 +180,12 @@ const server=createServer(async(req,res)=>{
       groupActions=options.groupActions!==false;moveFailure=options.moveFailure===true;
       desktopConnected=options.desktopConnected!==false;
       worktreeProject=options.worktreeProject===true;
+      pendingProject=options.pendingProject===true;
       Object.assign(task,{localSectionId:null,nativeSectionId:'chats',placementSource:'localDefault',pinned:false,nativeTaskPinned:false,
         localProjectId:'project-a',projectId:'desktop-a',projectName:'Fixture A',projectSource:'native'});
       if(options.inheritedProject)Object.assign(task,{nativeSectionId:'group-3',placementSource:'desktopProject',pinned:true});
       if(options.worktreeProject)Object.assign(task,{localProjectId:null,projectSource:'worktree'});
+      if(options.pendingProject)Object.assign(task,{localProjectId:null,projectSource:'desktopPendingMigration',nativeSectionId:'group-3',placementSource:'desktopProject',pinned:true});
       projectWrites.length=0;moves.length=0;archives.length=0;renames.length=0;navigationUrls.length=0;archived=false;res.writeHead(204).end();return;
     }
     if(req.url==='/fixture/navigation'&&req.method==='POST'){
